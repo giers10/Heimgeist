@@ -1,5 +1,5 @@
 
-const { app, BrowserWindow, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
 const path = require('path')
 const { is } = require('@electron-toolkit/utils')
 const fs = require('fs')
@@ -44,6 +44,8 @@ async function createMainWindow () {
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 720,
+    minWidth: 680,
+    minHeight: 300,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -62,6 +64,11 @@ async function createMainWindow () {
   } else {
     await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 }
 
 async function createSettingsWindow () {
@@ -164,6 +171,16 @@ ipcMain.handle('set-setting', (event, key, value) => {
   appSettings[key] = value
   saveSettings()
   return true
+})
+
+ipcMain.handle('update-settings', (event, settings) => {
+  appSettings = { ...appSettings, ...settings }
+  saveSettings()
+  return true
+})
+
+ipcMain.on('open-external-link', (event, url) => {
+  shell.openExternal(url)
 })
 
 app.on('window-all-closed', () => {

@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+// /Users/giers/Heimgeist/src/App.jsx
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import GeneralSettings from './GeneralSettings'
 import InterfaceSettings from './InterfaceSettings'
@@ -9,6 +11,8 @@ const COLOR_SCHEME_KEY = 'colorScheme';
 
 // Initial API value will be set by useEffect after settings are loaded
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
+const TOP_ALIGN_OFFSET = 48; // match .chat padding + header height for exact top alignment (should be more dynamic depending on header height)
+const BOTTOM_EPSILON = 24; // px tolerance for treating as bottom
 
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])
@@ -24,16 +28,46 @@ export default function App() {
   const textareaRef = useRef(null); // Ref for the textarea
   const [ollamaApiUrl, setOllamaApiUrl] = useState(API); // State for Ollama API URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
+  const [streamOutput, setStreamOutput] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [loading, setLoading] = useState(true); // Loading state for initial session fetch
   const [unreadSessions, setUnreadSessions] = useState([]); // Track unread messages
-  const activeRequestSessionId = useRef(null); // Ref to track the session ID of the active request
+  const [scrollPositions, setScrollPositions] = useState({}); // Store scroll positions for each session
+
+  // Persist userScrolledUp state per session + live ref for closures (streaming)
+  const [userScrolledUpState, setUserScrolledUpState] = useState({});
+  const userScrolledUpRef = useRef({});
+
+  // When a response arrives in a non-active chat, remember to scroll to the new ASSISTANT message on open
+  const [pendingScrollToLastUser, setPendingScrollToLastUser] = useState({}); // { [sessionId]: assistantMsgId }
+
+  // Live per-session scrollTop tracker to avoid races
+  const scrollTopsRef = useRef({});
+
+  // Tip state: { [sessionId]: messageId }
+  const [newMsgTip, setNewMsgTip] = useState({});
+
+  const setUserScrolledUp = React.useCallback((sessionId, value) => {
+    setUserScrolledUpState(prev => {
+      const next = { ...prev, [sessionId]: value };
+      userScrolledUpRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const activeRequestSessionId = useRef(null);
+  const justSentMessage = useRef(false);
+  const lastSentSessionRef = useRef(null);
   const activeSessionIdRef = useRef(activeSessionId);
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
 
+  // Flag to ensure we only restore once per open of a chat
+  const restoredForRef = useRef(null);
+
   // Sidebar resizing state
-  const [sidebarWidth, setSidebarWidth] = useState(280); // Initial sidebar width
+  const [sidebarWidth, setSidebarWidth] = useState(230);
   const [isResizing, setIsResizing] = useState(false);
 
   const startResizing = React.useCallback((mouseDownEvent) => {
@@ -74,6 +108,8 @@ export default function App() {
       setOllamaApiUrl(settings.ollamaApiUrl);
       setColorScheme(settings.colorScheme);
       setModel(settings.chatModel || ''); // Load the selected model, with a fallback
+      setStreamOutput(settings.streamOutput || false);
+      setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
       applyColorScheme(settings.colorScheme); // Apply initial scheme
     });
   }, []);
@@ -171,80 +207,373 @@ export default function App() {
     fetchHistory(activeSessionId);
   }, [activeSessionId]);
 
+  const handleSidebarClick = (mode) => {
+    // Saving happens in the centralized cleanup effect below
+    setActiveSidebarMode(mode);
+  };
+
+  const handleSelectChat = (sessionId) => {
+    // Saving happens in the centralized cleanup effect below
+    selectChat(sessionId);
+  };
+
   const messages = useMemo(() => {
     return chatSessions.find(s => s.session_id === activeSessionId)?.messages || [];
   }, [activeSessionId, chatSessions]);
 
+  // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)
   useEffect(() => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+    const leavingSessionId = activeSessionId;
+    const leavingMode = activeSidebarMode;
+
+    return () => {
+      if (leavingMode === 'chats' && leavingSessionId) {
+        const top = typeof scrollTopsRef.current[leavingSessionId] === 'number'
+          ? scrollTopsRef.current[leavingSessionId]
+          : (chatRef.current ? chatRef.current.scrollTop : 0);
+
+        setScrollPositions(prev => {
+          const updated = { ...prev, [leavingSessionId]: top };
+          window.electronAPI.updateSettings({ scrollPositions: updated });
+          return updated;
+        });
+      }
+    };
+  }, [activeSessionId, activeSidebarMode]);
+
+  // Track scroll + whether user left bottom
+  useEffect(() => {
+    const chatDiv = chatRef.current;
+    if (!chatDiv) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatDiv;
+      const isAtBottom = (scrollHeight - scrollTop - clientHeight) <= BOTTOM_EPSILON;
+      if (activeSessionId) {
+        scrollTopsRef.current[activeSessionId] = scrollTop;
+      }
+      setUserScrolledUp(activeSessionId, !isAtBottom);
+    };
+
+    chatDiv.addEventListener('scroll', handleScroll);
+    return () => chatDiv.removeEventListener('scroll', handleScroll);
+  }, [activeSessionId, setUserScrolledUp]);
+
+  // Auto-hide the tip if user returns to bottom in the active chat
+  useEffect(() => {
+    const sid = activeSessionId;
+    if (!sid) return;
+    if (userScrolledUpState[sid] === false) {
+      setNewMsgTip(prev => {
+        if (!(sid in prev)) return prev;
+        const rest = { ...prev };
+        delete rest[sid];
+        return rest;
+      });
+    }
+  }, [activeSessionId, userScrolledUpState]);
+
+  // --- Robust restoration: do it before paint, exactly once per open ---
+  useLayoutEffect(() => {
+    if (activeSidebarMode !== 'chats' || !activeSessionId) return;
+
+    const div = chatRef.current;
+    if (!div) return;
+
+    restoredForRef.current = null;
+
+    const applyRestore = () => {
+      if (restoredForRef.current === activeSessionId) return;
+
+      const liveSaved = typeof scrollTopsRef.current[activeSessionId] === 'number'
+        ? scrollTopsRef.current[activeSessionId]
+        : undefined;
+      const saved = typeof liveSaved === 'number'
+        ? liveSaved
+        : scrollPositions[activeSessionId];
+
+      if (typeof saved === 'number') {
+        div.scrollTop = saved;
+        restoredForRef.current = activeSessionId;
+        return;
+      }
+      if (messages.length > 0) {
+        // default: bottom when no saved position
+        div.scrollTop = div.scrollHeight;
+        restoredForRef.current = activeSessionId;
+      }
+    };
+
+    // Run immediately (pre-paint) and also schedule a fallback rAF
+    applyRestore();
+    const r0 = requestAnimationFrame(applyRestore);
+
+    // If content size/DOM changes after first paint, apply once
+    const onDomChange = () => {
+      if (restoredForRef.current !== activeSessionId) {
+        requestAnimationFrame(applyRestore);
+      }
+    };
+
+    const mo = new MutationObserver(onDomChange);
+    mo.observe(div, { childList: true, subtree: true });
+
+    const ro = new ResizeObserver(onDomChange);
+    ro.observe(div);
+
+    return () => {
+      cancelAnimationFrame(r0);
+      mo.disconnect();
+      ro.disconnect();
+    };
+  }, [activeSessionId, activeSidebarMode, messages.length, scrollPositions]);
+
+  // If there is no saved scroll and content arrives later (e.g., on first app load),
+  // default to bottom exactly once for this open chat.
+  useEffect(() => {
+    if (activeSidebarMode !== 'chats' || !activeSessionId) return;
+    if (restoredForRef.current === activeSessionId) return; // already applied
+
+    const liveSaved = typeof scrollTopsRef.current[activeSessionId] === 'number'
+      ? scrollTopsRef.current[activeSessionId]
+      : undefined;
+    const savedScrollTop = typeof liveSaved === 'number'
+      ? liveSaved
+      : scrollPositions[activeSessionId];
+
+    // Only when there is no saved position and we now have content
+    if (typeof savedScrollTop !== 'number' && messages.length > 0) {
+      requestAnimationFrame(() => {
+        const div = chatRef.current;
+        if (!div) return;
+        div.scrollTop = div.scrollHeight;
+        restoredForRef.current = activeSessionId;
+      });
+    }
+  }, [messages.length, activeSessionId, activeSidebarMode, scrollPositions]);
+
+  // Session-aware scroll helpers
+  const scrollToBottom = (behavior = 'smooth', sessionId = null) => {
+    const chatDiv = chatRef.current;
+    if (!chatDiv) return;
+    const target = sessionId ?? activeSessionIdRef.current;
+    if (activeSessionIdRef.current !== target) return;
+    chatDiv.scrollTo({ top: chatDiv.scrollHeight, behavior });
+    setUserScrolledUp(target, false);
+  };
+
+  const scrollMessageToTop = (msgId, behavior = 'auto', sessionId = null) => {
+    const chatDiv = chatRef.current;
+    if (!chatDiv) return;
+    const target = sessionId ?? activeSessionIdRef.current;
+    if (activeSessionIdRef.current !== target) return;
+    const el = document.getElementById(msgId);
+    if (el) {
+      const top = Math.max(0, el.offsetTop - TOP_ALIGN_OFFSET);
+      chatDiv.scrollTo({ top, behavior });
+    }
+  };
+
+  // Handler for new message tip click
+  const handleNewMsgTipClick = () => {
+    const sid = activeSessionIdRef.current;
+    const msgId = newMsgTip[sid];
+    if (msgId) {
+      scrollMessageToTop(msgId, 'smooth', sid);
+      setNewMsgTip(prev => {
+        const { [sid]: _omit, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
 
   async function sendMessage() {
-    let targetSessionId = activeSessionId;
-    let isNewChat = false;
-
     if (!input.trim() || !model) return;
 
+    let targetSessionId = activeSessionId;
+    let isNewChat = false;
     if (!targetSessionId) {
       const newSession = await createNewChat();
+      await new Promise(resolve => setTimeout(resolve, 200));
       targetSessionId = newSession.session_id;
       isNewChat = true;
     } else {
-      // Check if it's an existing "New Chat" receiving its first message
       const currentSession = chatSessions.find(s => s.session_id === targetSessionId);
-      if (currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0) {
-        isNewChat = true;
-      }
+      isNewChat = currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0;
     }
-    const currentActiveSessionAtSend = activeSessionId; // Capture activeSessionId at send time
-
-    const userMsg = { role: 'user', content: input.trim() };
     
-    // Optimistically add user message
-    setChatSessions(prevSessions =>
-      prevSessions.map(session =>
-        session.session_id === targetSessionId
-          ? { ...session, messages: [...(session.messages || []), userMsg] }
-          : session
-      )
-    );
-    setInput('');
+    const userMsg = { role: 'user', content: input.trim(), id: `msg-${Date.now()}-${Math.random()}` };
+    justSentMessage.current = true;
+    lastSentSessionRef.current = targetSessionId;
+    setUserScrolledUp(targetSessionId, false);
 
-    try {
-      const res = await fetch(`${ollamaApiUrl}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: targetSessionId,
-          model,
-          message: userMsg.content
-        })
-      });
-      const data = await res.json();
-      const assistantMsg = { role: 'assistant', content: data.reply };
+    // Cancel any pending restore for the active session (we're about to control the scroll)
+    if (activeSessionIdRef.current === targetSessionId) {
+      restoredForRef.current = activeSessionIdRef.current; // mark as already restored
+    }
 
-      // Update messages with assistant's reply
+    // Optimistic add and flush DOM, then scroll to bottom
+    flushSync(() => {
       setChatSessions(prevSessions =>
         prevSessions.map(session =>
           session.session_id === targetSessionId
-            ? { ...session, messages: [...(session.messages || []), assistantMsg] }
+            ? { ...session, messages: [...(session.messages || []), userMsg] }
             : session
         )
       );
+      setInput('');
+    });
+    requestAnimationFrame(() => scrollToBottom('auto', targetSessionId));
 
-      // Handle unread status: only set if the chat was NOT active when the message was sent
+    setIsSending(true);
+    try {
+      if (streamOutput) {
+        const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
+        const assistantMsg = { role: 'assistant', content: '', id: assistantMsgId };
+        setChatSessions(prevSessions =>
+          prevSessions.map(session =>
+            session.session_id === targetSessionId
+              ? { ...session, messages: [...(session.messages || []), assistantMsg] }
+              : session
+          )
+        );
+
+        (async () => {
+          try {
+            const res = await fetch(`${ollamaApiUrl}/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                session_id: targetSessionId,
+                model,
+                message: userMsg.content,
+                stream: true
+              })
+            });
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let fullReply = '';
+            let pendingMarked = false;
+
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) {
+                setChatSessions(prevSessions =>
+                  prevSessions.map(session =>
+                    session.session_id === targetSessionId
+                      ? {
+                          ...session,
+                          messages: session.messages.map(m =>
+                            m.id === assistantMsgId ? { ...m, content: fullReply } : m
+                          )
+                        }
+                      : session
+                  )
+                );
+
+                if (activeSessionIdRef.current === targetSessionId) {
+                  if (!userScrolledUpRef.current[targetSessionId]) {
+                    // user stayed at bottom -> reveal the message immediately
+                    requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
+                  } else {
+                    // user scrolled away while it was generating -> show tip instead of auto-scroll
+                    setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+                  }
+                } else {
+                  setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+                  setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
+                }
+
+                break;
+              }
+              const chunk = decoder.decode(value, { stream: true });
+              fullReply += chunk;
+              const messageElement = document.getElementById(assistantMsgId)?.firstChild;
+              if (messageElement) {
+                messageElement.innerHTML = markdownToHTML(fullReply);
+              }
+              // Keep sticky-bottom *only* when streaming in the active chat and user is at/near bottom.
+              // This restores the old "push down while generating" behavior without fighting user scrolls.
+              if (
+                activeSessionIdRef.current === targetSessionId &&
+                !userScrolledUpRef.current[targetSessionId]
+              ) {
+                // use 'auto' so it stays snappy during streaming
+                scrollToBottom('auto', targetSessionId);
+              }
+              // If streaming in a background chat, prepare a one-time guided scroll
+              if (activeSessionIdRef.current !== targetSessionId && !pendingMarked) {
+                setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+                pendingMarked = true;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to send message:", e);
+            const errorMsg = { role: 'assistant', content: 'Error: ' + e.message, id: `msg-${Date.now()}-${Math.random()}` };
+            setChatSessions(prevSessions =>
+              prevSessions.map(session =>
+                session.session_id === targetSessionId
+                  ? { ...session, messages: [...session.messages.slice(0, -1), errorMsg] }
+                  : session
+              )
+            );
+          } finally {
+            setIsSending(false);
+          }
+        })();
+      } else {
+        const res = await fetch(`${ollamaApiUrl}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: targetSessionId,
+            model,
+            message: userMsg.content,
+            stream: false
+          })
+        });
+        const data = await res.json();
+        const assistantMsgId = `msg-${Date.now()}`;
+        const assistantMsg = { role: 'assistant', content: data.reply, id: assistantMsgId };
+
+        setChatSessions(prevSessions =>
+          prevSessions.map(session =>
+            session.session_id === targetSessionId
+              ? { ...session, messages: [...(session.messages || []), assistantMsg] }
+              : session
+          )
+        );
+
+        // For non-stream: align new ASSISTANT message to top, unless user scrolled away
+        if (assistantMsgId) {
+          if (activeSessionIdRef.current === targetSessionId) {
+            if (!userScrolledUpRef.current[targetSessionId]) {
+              requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
+            } else {
+              // <<< show the tip if user scrolled away while waiting >>>
+              setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+            }
+          } else {
+            setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+          }
+        }
+        setIsSending(false);
+      }
+
       if (activeSessionIdRef.current !== targetSessionId) {
         setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
       }
 
-      // Generate title if new chat
       if (isNewChat) {
         fetch(`${ollamaApiUrl}/generate-title`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_id: targetSessionId,
-            message: userMsg.content
+            message: userMsg.content,
+            model: model
           })
         })
         .then(r => r.json())
@@ -258,15 +587,15 @@ export default function App() {
       }
     } catch (e) {
       console.error("Failed to send message:", e);
-      // Add error message to chat
-      const errorMsg = { role: 'assistant', content: 'Error: ' + e.message };
+      const errorMsg = { role: 'assistant', content: 'Error: ' + e.message, id: `msg-${Date.now()}-${Math.random()}` };
       setChatSessions(prevSessions =>
         prevSessions.map(session =>
           session.session_id === targetSessionId
-            ? { ...session, messages: [...(session.messages || []), errorMsg] }
+            ? { ...session, messages: [...session.messages, errorMsg] }
             : session
         )
       );
+      setIsSending(false);
     }
   }
 
@@ -286,7 +615,43 @@ export default function App() {
 
   function selectChat(sessionId) {
     setActiveSessionId(sessionId);
+    // Clear unread dot immediately for this chat
     setUnreadSessions(prev => prev.filter(id => id !== sessionId));
+
+    // If we had queued a guided scroll for this chat (from background replies), run it now, smoothly
+    const pendingId = pendingScrollToLastUser[sessionId];
+    if (pendingId) {
+      // Defer until the chat content renders; restoration is gated by restoredForRef, so won't fight
+      requestAnimationFrame(() => {
+        let tries = 12; // ~200ms @ 60fps
+        const attempt = () => {
+          const chatDiv = chatRef.current;
+          if (!chatDiv) return;
+
+          let el = document.getElementById(pendingId);
+          if (!el) {
+            const sess = chatSessions.find(s => s.session_id === sessionId);
+            if (sess && Array.isArray(sess.messages)) {
+              for (let i = sess.messages.length - 1; i >= 0; i--) {
+                const m = sess.messages[i];
+                if (m.role === 'assistant' && m.id) { el = document.getElementById(m.id); break; }
+              }
+            }
+          }
+
+          if (el) {
+            scrollMessageToTop(el.id, 'smooth', sessionId);
+            setPendingScrollToLastUser(prev => {
+              const { [sessionId]: _omit, ...rest } = prev;
+              return rest;
+            });
+          } else if (tries-- > 0) {
+            requestAnimationFrame(attempt);
+          }
+        };
+        requestAnimationFrame(attempt);
+      });
+    }
   }
 
   function handleRename(sessionId, newName) {
@@ -334,19 +699,19 @@ export default function App() {
         <div className="sidebar-header">
           <div
             className={`sidebar-tab ${activeSidebarMode === 'chats' ? 'active' : ''}`}
-            onClick={() => setActiveSidebarMode('chats')}
+            onClick={() => handleSidebarClick('chats')}
           >
             Chats
           </div>
           <div
             className={`sidebar-tab ${activeSidebarMode === 'dbs' ? 'active' : ''}`}
-            onClick={() => setActiveSidebarMode('dbs')}
+            onClick={() => handleSidebarClick('dbs')}
           >
             DBs
           </div>
           <div
             className={`sidebar-tab ${activeSidebarMode === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveSidebarMode('settings')}
+            onClick={() => handleSidebarClick('settings')}
           >
             Settings
           </div>
@@ -358,7 +723,7 @@ export default function App() {
                 <div
                   key={session.session_id}
                   className={`chat-item ${session.session_id === activeSessionId ? 'active' : ''}`}
-                  onClick={() => selectChat(session.session_id)}
+                  onClick={() => handleSelectChat(session.session_id)}
                 >
                   {editingSessionId === session.session_id ? (
                     <input
@@ -434,13 +799,25 @@ export default function App() {
               <strong>Chat - {chatSessions.find(s => s.session_id === activeSessionId)?.name || 'New Chat'}</strong>
             </div>
 
-            <div className="chat" ref={chatRef}>
+            <div key={activeSessionId} className="chat" ref={chatRef}>
               {messages.map((m, i) => (
-                <div key={i} className={'msg ' + (m.role === 'user' ? 'user' : 'assistant')}>
+                <div key={m.id || i} id={m.id} className={'msg ' + (m.role === 'user' ? 'user' : 'assistant')}>
                   <div dangerouslySetInnerHTML={{ __html: markdownToHTML(m.content) }} />
                 </div>
               ))}
             </div>
+
+            {/* New message tip (active chat only) */}
+            {newMsgTip[activeSessionId] && (
+              <button
+                className="new-msg-tip"
+                onClick={handleNewMsgTipClick}
+                title="Jump to the new message"
+                aria-label="Jump to the new message"
+              >
+                New message<span style={{ marginLeft: 6 }}>↓</span>
+              </button>
+            )}
 
             <div className="footer">
               <div className="footer-content-wrapper">
@@ -457,7 +834,9 @@ export default function App() {
                   placeholder="Ask any question..."
                   maxRows={13}
                 />
-                <button className="button" onClick={sendMessage}>Send</button>
+                <button className="button" onClick={sendMessage} disabled={isSending}>
+                  {isSending ? <div className="spinner"></div> : 'Send'}
+                </button>
               </div>
             </div>
           </>
@@ -473,7 +852,13 @@ export default function App() {
             <div className="header">
               <strong>{activeSettingsSubmenu} Settings</strong>
             </div>
-            {activeSettingsSubmenu === 'General' && <GeneralSettings />}
+            {activeSettingsSubmenu === 'General' && (
+              <GeneralSettings
+                onModelChange={setModel}
+                streamOutput={streamOutput}
+                onStreamOutputChange={setStreamOutput}
+              />
+            )}
             {activeSettingsSubmenu === 'Interface' && <InterfaceSettings />}
           </>
         )}

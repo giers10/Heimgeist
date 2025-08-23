@@ -10,6 +10,7 @@ class ChatRequest(BaseModel):
     session_id: str
     model: str
     message: str
+    stream: Optional[bool] = False
 
 class ChatResponse(BaseModel):
     reply: str
@@ -20,6 +21,7 @@ class HistoryResponse(BaseModel):
 class GenerateTitleRequest(BaseModel):
     session_id: str
     message: str
+    model: str
 
 class GenerateTitleResponse(BaseModel):
     title: str

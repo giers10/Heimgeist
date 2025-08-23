@@ -2,17 +2,19 @@ import React, { useState, useEffect } from 'react';
 
 const API_URL_KEY = 'ollamaApiUrl';
 const MODEL_KEY = 'chatModel';
+const STREAM_KEY = 'streamOutput';
 
-export default function GeneralSettings() {
+export default function GeneralSettings({ onModelChange, onStreamOutputChange }) {
   const [ollamaApiUrl, setOllamaApiUrl] = useState('');
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [streamOutput, setStreamOutput] = useState(false);
 
   useEffect(() => {
     window.electronAPI.getSettings().then(settings => {
       setOllamaApiUrl(settings.ollamaApiUrl);
-      // Set selectedModel from settings, or fallback to an empty string if not found
       setSelectedModel(settings.chatModel || '');
+      setStreamOutput(settings.streamOutput || false);
     });
   }, []);
 
@@ -44,6 +46,18 @@ export default function GeneralSettings() {
     const newModel = e.target.value;
     setSelectedModel(newModel);
     window.electronAPI.setSetting(MODEL_KEY, newModel);
+    if (onModelChange) {
+      onModelChange(newModel);
+    }
+  };
+
+  const handleStreamToggle = () => {
+    const newStreamValue = !streamOutput;
+    setStreamOutput(newStreamValue);
+    window.electronAPI.setSetting(STREAM_KEY, newStreamValue);
+    if (onStreamOutputChange) {
+      onStreamOutputChange(newStreamValue);
+    }
   };
 
   return (
@@ -68,6 +82,17 @@ export default function GeneralSettings() {
           {models.length === 0 && <option>— No models available —</option>}
           {models.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
+      </div>
+      <div className="setting-section">
+        <h3>Stream Output</h3>
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            checked={streamOutput}
+            onChange={handleStreamToggle}
+          />
+          <span className="slider"></span>
+        </label>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-
+/* /Users/giers/Heimgeist/src/styles.css */
 :root {
   --bg: #0b1020;
   --panel: #141b34;
@@ -19,7 +19,7 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 
 .app {
   display: grid;
-  grid-template-columns: var(--sidebar-width, 280px) 1fr; /* Sidebar width and main content */
+  grid-template-columns: var(--sidebar-width, 230px) 1fr; /* Sidebar width and main content */
   grid-template-rows: 1fr;
   height: 100%;
 }
@@ -32,6 +32,10 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
   height: 100vh; /* Use viewport height to prevent window scrolling */
   overflow: hidden; /* Prevent the entire sidebar from scrolling */
   position: relative; /* For resizer positioning */
+}
+
+.sidebar span{
+  font-size: 14px;
 }
 
 .resizer {
@@ -50,26 +54,29 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
   display: flex;
   justify-content: space-around;
   padding: 0; /* Remove padding to allow tabs to fill */
-  border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
 
 .sidebar-tab {
   flex-grow: 1;
   text-align: center;
-  padding: 12px 16px;
+  padding: 11px 16px;
   cursor: pointer;
   border-bottom: 3px solid transparent; /* For active indicator */
   transition: background-color 0.2s ease;
 }
 
 .sidebar-tab:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--hover-bg);
 }
 
 .sidebar-tab.active {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--active-bg);
   border-bottom-color: var(--accent);
+}
+
+.sidebar-tab.active:hover {
+  background-color: var(--active-bg);
 }
 
 .sidebar-content {
@@ -94,12 +101,16 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 }
 
 .settings-item.active {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--active-bg);
   border-left-color: var(--accent);
 }
 
+.settings-item.active:hover {
+  background: var(--active-bg);
+}
+
 .settings-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--hover-bg);
 }
 
 .settings-footer-placeholder {
@@ -121,6 +132,7 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 .new-db-button:hover {
   opacity: 0.9;
 }
+
 
 .chat-list {
   overflow-y: auto;
@@ -188,12 +200,16 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 }
 
 .chat-item.active {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--active-bg);
   border-left-color: var(--accent);
 }
 
 .chat-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--hover-bg);
+}
+
+.chat-item.active:hover {
+  background: var(--active-bg);
 }
 
 .rename-input {
@@ -226,7 +242,6 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 
 .sidebar-footer {
   padding: 12px 16px;
-  border-top: 1px solid var(--border);
   background: var(--panel);
 }
 
@@ -244,6 +259,7 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 }
 
 .main-content {
+  position: relative;
   display: grid;
   grid-template-rows: auto 1fr auto;
   height: 100vh; /* Use viewport height to prevent window scrolling */
@@ -293,7 +309,7 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
   padding: 12px 14px;
   border-radius: 12px;
   line-height: 1.5;
-  white-space: pre-wrap;
+  white-space: wrap;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial; /* Match body font */
 }
 
@@ -307,13 +323,37 @@ textarea.input {
 .msg.user {
   background: var(--user-msg-bg);
   margin-left: auto; /* Right-align user messages */
-  max-width: 800px;
+  max-width: 80%;
   border: 1px solid var(--border);
+  margin-right: 5px;
 }
 .msg.assistant {
   background: transparent;
   border: none;
   max-width: none; /* Remove max-width for assistant messages */
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* new message pill */
+.new-msg-tip {
+  position: absolute;
+  right: 24px;
+  bottom: 84px; /* sits just above the footer */
+  padding: 8px 12px;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+
+.new-msg-tip:hover { opacity: .9; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .footer {
@@ -421,4 +461,125 @@ textarea.input {
 .msg pre code {
   padding: 0;
   background-color: transparent;
+}
+
+.msg a {
+  color: var(--text); /* White color */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.msg a span:first-child {
+}
+
+.msg a .tooltip {
+  visibility: hidden;
+  width: auto;
+  background-color: var(--panel);
+  color: var(--text);
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 10px;
+  position: absolute;
+  z-index: 1;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  white-space: nowrap;
+}
+
+.msg a:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.msg a:hover {
+  color: var(--accent);
+}
+
+.msg a svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--text);
+  transition: stroke 0.2s ease;
+}
+
+.msg a:hover svg {
+  stroke: var(--accent);
+}
+
+.msg hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+/* Toggle Switch Styles */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--input-bg);
+  border: 1px solid var(--border);
+  transition: .4s;
+  border-radius: 28px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--muted);
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--accent);
+}
+
+input:checked + .slider:before {
+  transform: translateX(22px);
+  background-color: var(--panel);
+}
+
+/* Spinner Styles */
+.spinner {
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top: 3px solid var(--accent);
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }

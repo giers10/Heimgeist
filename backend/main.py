@@ -1,10 +1,11 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from . import models, schemas
 from .database import Base, engine, SessionLocal
-from .ollama_client import list_models as ollama_list, chat as ollama_chat
+from .ollama_client import list_models as ollama_list, chat as ollama_chat, chat_stream as ollama_chat_stream
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -61,7 +62,7 @@ def history(session_id: str, db: Session = Depends(get_db)):
     msgs = [{"role": r.role, "content": r.content} for r in rows]
     return {"messages": msgs}
 
-@app.post("/chat", response_model=schemas.ChatResponse)
+@app.post("/chat")
 async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
     # Find or create session
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == req.session_id).first()
@@ -81,17 +82,35 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
 
     messages = [{"role": m.role, "content": m.content} for m in last_msgs]
 
-    try:
-        reply = await ollama_chat(req.model, messages)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
+    if req.stream:
+        async def stream_generator():
+            full_reply = ""
+            try:
+                async for chunk in ollama_chat_stream(req.model, messages):
+                    full_reply += chunk
+                    yield chunk
+            except Exception as e:
+                # How to handle errors in a stream? Could yield an error message.
+                yield f"Ollama error: {e}"
 
-    # Save assistant reply
-    as_row = models.ChatMessage(session_pk=session.id, role='assistant', content=reply)
-    db.add(as_row)
-    db.commit()
+            # Save full reply after stream is complete
+            as_row = models.ChatMessage(session_pk=session.id, role='assistant', content=full_reply)
+            db.add(as_row)
+            db.commit()
+        
+        return StreamingResponse(stream_generator(), media_type="text/plain")
+    else:
+        try:
+            reply = await ollama_chat(req.model, messages)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
 
-    return {"reply": reply}
+        # Save assistant reply
+        as_row = models.ChatMessage(session_pk=session.id, role='assistant', content=reply)
+        db.add(as_row)
+        db.commit()
+
+        return {"reply": reply}
 
 @app.post("/generate-title", response_model=schemas.GenerateTitleResponse)
 async def generate_title(req: schemas.GenerateTitleRequest, db: Session = Depends(get_db)):
@@ -102,7 +121,7 @@ async def generate_title(req: schemas.GenerateTitleRequest, db: Session = Depend
     prompt = f"Generate a very short, concise title (5 words or less) for a chat conversation that begins with this user message: \"{req.message}\". Do not use quotation marks in the title."
     
     try:
-        title = await ollama_chat("llama3", [{"role": "user", "content": prompt}])
+        title = await ollama_chat(req.model, [{"role": "user", "content": prompt}])
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
 

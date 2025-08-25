@@ -45,9 +45,7 @@ function splitThinkBlocks(text) {
 // Renders assistant message with a collapsible "Thoughts" block (if present)
 function AssistantMessageContent({ content, streamOutput }) {
   const { think, answer } = splitThinkBlocks(content || '');
-  const [open, setOpen] = React.useState(false); // Closed by default
-
-  // If streaming, the button should appear as soon as 'think' content is detected
+  const [open, setOpen] = React.useState(false);
   const showThinkButton = !!think;
 
   return (
@@ -60,15 +58,24 @@ function AssistantMessageContent({ content, streamOutput }) {
             aria-expanded={open ? 'true' : 'false'}
             aria-controls="think-content"
           >
-            <span className="think-toggle-icon" aria-hidden="true">{open ? '▾' : '▸'}</span>
+            <span className="think-toggle-icon" aria-hidden="true">
+              {open ? '▾' : '▸'}
+            </span>
             Thoughts
           </button>
           {open && (
-            <div id="think-content" className="think-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(think) }} />
+            <div
+              id="think-content"
+              className="think-content"
+              dangerouslySetInnerHTML={{ __html: markdownToHTML(think) }}
+            />
           )}
         </div>
       )}
-      <div className="msg-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(answer || content || '') }} />
+      <div
+        className="msg-content"
+        dangerouslySetInnerHTML={{ __html: markdownToHTML(answer || content || '') }}
+      />
     </div>
   );
 }
@@ -100,6 +107,177 @@ export default function App() {
   const [loading, setLoading] = useState(true); // Loading state for initial session fetch
   const [unreadSessions, setUnreadSessions] = useState([]); // Track unread messages
   const [scrollPositions, setScrollPositions] = useState({}); // Store scroll positions for each session
+  // Editing state for user messages
+  const [editingMessageIndex, setEditingMessageIndex] = useState(null);
+  const [editText, setEditText] = useState('');
+  // Helpers + handlers for message copy/edit/regenerate (must live inside App)
+  function getVisibleTextForCopy(message) {
+    let raw = message.content || '';
+    if (message.role === 'assistant') {
+      try {
+        const { think, answer } = splitThinkBlocks(raw);
+        raw = answer || raw;
+      } catch (_) {}
+    }
+    const html = markdownToHTML(raw);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    tempDiv.querySelectorAll('p,div,li,pre,code,h1,h2,h3,h4,h5,h6,table,tr').forEach(el => {
+      el.insertAdjacentText('beforeend', '\n');
+    });
+    return tempDiv.innerText.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  async function handleCopyMessage(message) {
+    try {
+      await navigator.clipboard.writeText(getVisibleTextForCopy(message));
+    } catch (err) {
+      console.error('Failed to copy message:', err);
+    }
+  }
+
+  function startEditMessage(index, content) {
+    setEditingMessageIndex(index);
+    setEditText(content || '');
+  }
+  function cancelEditMessage() {
+    setEditingMessageIndex(null);
+    setEditText('');
+  }
+
+  async function commitEditMessage(index) {
+    const original = (messages[index]?.content || '').trim();
+    const next = (editText || '').trim();
+    if (next === original) {
+      cancelEditMessage();
+      return;
+    }
+    const sessionId = activeSessionId;
+    if (!sessionId) return;
+
+    // Optimistically update UI: set edited content and prune following messages
+    setChatSessions(prev =>
+      prev.map(s => {
+        if (s.session_id !== sessionId) return s;
+        const old = s.messages || [];
+        // keep up to index (inclusive) and update that item
+        const updated = old.slice(0, index + 1).map((m, j) =>
+          j === index ? { ...m, content: next } : m
+        );
+        return { ...s, messages: updated };
+      })
+    );
+
+    setEditingMessageIndex(null);
+    setEditText('');
+
+    // ⬇️ Scroll the chat frame to the bottom after the DOM updates
+    requestAnimationFrame(() => scrollToBottom('auto', sessionId)); // use 'smooth' if you prefer
+
+    try {
+      const resp = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/messages/${index}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: next })
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    } catch (err) {
+      // Roll back to original content on failure
+      console.error('Failed to update message:', err);
+      setChatSessions(prev =>
+        prev.map(s => {
+          if (s.session_id !== sessionId) return s;
+          const old = s.messages || [];
+          const restored = old.map((m, j) =>
+            j === index ? { ...m, content: original } : m
+          );
+          return { ...s, messages: restored };
+        })
+      );
+      return; // don't regenerate on failure
+    }
+
+    // Continue conversation from the edited message
+    await regenerateFromIndex(index);
+  }
+
+  async function regenerateFromIndex(index) {
+    const sessionId = activeSessionId;
+    if (!sessionId || typeof index !== 'number') return;
+
+    const msgs = (chatSessions.find(s => s.session_id === sessionId)?.messages) || [];
+    let lastUserIdx = index;
+    for (let i = index; i >= 0; i--) {
+      if (msgs[i]?.role === 'user') { lastUserIdx = i; break; }
+    }
+
+    // Prune UI to lastUserIdx
+    setChatSessions(prev =>
+      prev.map(s => s.session_id === sessionId
+        ? { ...s, messages: (s.messages || []).slice(0, lastUserIdx + 1) }
+        : s
+      )
+    );
+
+    setIsSending(true);
+
+    if (streamOutput) {
+      const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
+      setChatSessions(prev =>
+        prev.map(s => s.session_id === sessionId
+          ? { ...s, messages: [...(s.messages || []), { id: assistantMsgId, role: 'assistant', content: '' }] }
+          : s
+        )
+      );
+      try {
+        const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index, model, stream: true })
+        });
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let full = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          full += chunk;
+          setChatSessions(prev =>
+            prev.map(s => s.session_id === sessionId
+              ? { ...s, messages: (s.messages || []).map(m => m.id === assistantMsgId ? { ...m, content: full } : m) }
+              : s
+            )
+          );
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsSending(false);
+      }
+    } else {
+      try {
+        const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index, model, stream: false })
+        });
+        const data = await res.json();
+        setChatSessions(prev =>
+          prev.map(s => s.session_id === sessionId
+            ? { ...s, messages: [...(s.messages || []), { role: 'assistant', content: data.reply, id: `msg-${Date.now()}` }] }
+            : s
+          )
+        );
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsSending(false);
+      }
+    }
+  }
+
 
   // Persist userScrolledUp state per session + live ref for closures (streaming)
   const [userScrolledUpState, setUserScrolledUpState] = useState({});
@@ -891,13 +1069,53 @@ export default function App() {
 
             <div key={activeSessionId} className="chat" ref={chatRef} onClick={handleChatFrameClick}>
               {messages.map((m, i) => (
-                <div key={m.id || i} id={m.id} className={'msg ' + (m.role === 'user' ? 'user' : 'assistant')}>
-                  {m.role === 'assistant'
-                    ? <AssistantMessageContent content={m.content} streamOutput={streamOutput} />
-                    : <div className="msg-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(m.content) }} />
-                  }
-                </div>
-              ))}
+  <div key={m.id || i} id={m.id} className={'msg ' + (m.role === 'user' ? 'user' : 'assistant')}>
+    {m.role === 'assistant' ? (
+      <div className="assistant-message-wrapper">
+        <AssistantMessageContent content={m.content} streamOutput={streamOutput} />
+        {!isSending && (
+          <div className="message-options-bar assistant-options">
+            <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+            <button className="icon-button" title="Regenerate response" onClick={() => regenerateFromIndex(i)}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+            </button>
+          </div>
+        )}
+      </div>
+    ) : (
+      <div className="user-message-wrapper">
+        {editingMessageIndex === i ? (
+          <TextareaAutosize
+            className="edit-message-input"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onBlur={cancelEditMessage}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') { e.preventDefault(); cancelEditMessage(); }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEditMessage(i); }
+            }}
+            autoFocus
+            maxRows={13}
+          />
+        ) : (
+          <div className="msg-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(m.content) }} />
+        )}
+        {!isSending && (
+          <div className="message-options-bar user-options">
+            <button className="icon-button" title="Edit message" onClick={() => startEditMessage(i, m.content)}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            </button>
+            <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+))}
             </div>
 
             {/* New message tip (active chat only) */}

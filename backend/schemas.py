@@ -40,3 +40,11 @@ class ChatSession(BaseModel):
 
 class SessionsResponse(BaseModel):
     sessions: List[ChatSession]
+
+class EditMessageRequest(BaseModel):
+    message: str
+
+class RegenerateRequest(BaseModel):
+    index: int
+    model: Optional[str] = None
+    stream: bool = True

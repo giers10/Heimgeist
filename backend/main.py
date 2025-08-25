@@ -167,4 +167,113 @@ def rename_session(session_id: str, req: schemas.GenerateTitleResponse, db: Sess
     db.commit()
     return {"ok": True}
 
+@app.put("/sessions/{session_id}/messages/{index}")
+def update_user_message(session_id: str, index: int, req: schemas.EditMessageRequest, db: Session = Depends(get_db)):
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    msgs = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.session_pk == session.id)
+        .order_by(models.ChatMessage.created_at.asc())
+        .all()
+    )
+
+    if index < 0 or index >= len(msgs):
+        raise HTTPException(status_code=404, detail="Message index out of range")
+
+    # Only user messages can be edited per spec
+    if msgs[index].role != "user":
+        raise HTTPException(status_code=400, detail="Only user messages can be edited")
+
+    # Update the content
+    msgs[index].content = req.message
+
+    # Drop everything after the edited message
+    for m in msgs[index + 1:]:
+        db.delete(m)
+
+    db.commit()
+    return {"ok": True}
+
+# ADD or REPLACE this whole function
+@app.post("/sessions/{session_id}/regenerate")
+async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Session = Depends(get_db)):
+    """
+    Regenerate an assistant response for the conversation state at/before req.index.
+    If req.index points at an assistant message, we regenerate from the preceding user message.
+    """
+    idx = req.index
+    model = req.model
+    stream = bool(req.stream)
+
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    msgs = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.session_pk == session.id)
+        .order_by(models.ChatMessage.created_at.asc())
+        .all()
+    )
+
+    if idx < 0 or idx >= len(msgs):
+        raise HTTPException(status_code=400, detail="Invalid message index")
+
+    # Find the last user message at/before idx
+    last_user_idx = idx
+    for i in range(idx, -1, -1):
+        if msgs[i].role == "user":
+            last_user_idx = i
+            break
+
+    # Prune everything after last_user_idx
+    if last_user_idx < len(msgs) - 1:
+        for m in msgs[last_user_idx + 1:]:
+            db.delete(m)
+        db.commit()
+
+    # Build the conversation up to & incl. the last user message
+    conversation = [{"role": m.role, "content": m.content} for m in msgs[: last_user_idx + 1]]
+
+    # Avoid DetachedInstanceError during streaming
+    session_pk = session.id
+
+    if stream:
+        async def stream_generator():
+            full_reply = ""
+            try:
+                # ollama_chat_stream must already exist in your codebase (used by /chat)
+                async for chunk in ollama_chat_stream(model, conversation):
+                    full_reply += chunk
+                    yield chunk
+            except Exception as e:
+                yield f"Ollama error: {e}"
+            # Persist with a fresh DB session (streaming context)
+            try:
+                db_sess = SessionLocal()
+                db_sess.add(models.ChatMessage(session_pk=session_pk, role="assistant", content=full_reply))
+                db_sess.commit()
+            finally:
+                try:
+                    db_sess.close()
+                except Exception:
+                    pass
+
+        return StreamingResponse(stream_generator(), media_type="text/plain")
+
+    # Non-streaming
+    try:
+        # ollama_chat must already exist in your codebase (used by /chat)
+        reply = await ollama_chat(model, conversation)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
+
+    db.add(models.ChatMessage(session_pk=session_pk, role="assistant", content=reply))
+    db.commit()
+    return {"reply": reply}
+
+
 # To run standalone: python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000

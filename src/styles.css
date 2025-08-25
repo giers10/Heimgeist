@@ -326,12 +326,59 @@ textarea.input {
   max-width: 80%;
   border: 1px solid var(--border);
   margin-right: 5px;
+  margin-bottom: 15px;
 }
 .msg.assistant {
   background: transparent;
   border: none;
   max-width: none; /* Remove max-width for assistant messages */
   animation: fadeIn 0.3s ease-in-out;
+  margin-bottom: 30px;
+}
+
+.user-message-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* Align content and options to the right */
+  position: relative;
+}
+
+.assistant-message-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Align content and options to the left */
+  position: relative;
+}
+
+.message-options-bar {
+  display: flex;
+  gap: 2px; /* Smaller gap between icons */
+  padding: 0; /* No padding for the container */
+  border-radius: 8px;
+  background-color: transparent; /* No background for the container */
+  border: none; /* No border for the container */
+  position: absolute;
+  bottom: -30px; /* Moved further down */
+  /* Always visible, no opacity or pointer-events changes */
+}
+
+.user-options {
+  right: -10px; /* Align to the right edge of the message content padding */
+  bottom: -40px;
+}
+
+.assistant-options {
+  left: 0px; /* Align to the left edge of the message content padding */
+}
+
+.message-options-bar .icon-button {
+  padding: 4px; /* Smaller padding for individual icons */
+  border-radius: 4px;
+  border: none; /* No border for individual icons */
+}
+
+.message-options-bar .icon-button:hover {
+  background-color: var(--hover-bg);
 }
 
 /* new message pill */
@@ -680,4 +727,24 @@ input:checked + .slider:before {
   white-space: pre-wrap;
 }
 .msg-content { /* container for assistant/user rendered markdown */
+}
+
+
+/* Editing textarea styled like user bubble */
+.edit-message-input {
+  background: var(--user-msg-bg);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-left: auto;
+  margin-right: 5px;
+  margin-bottom: 15px;
+  max-width: 80%;
+  width: 100%;
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+  display: block;
 }

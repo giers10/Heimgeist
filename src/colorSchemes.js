@@ -17,7 +17,7 @@ const colorSchemes = {
     '--panel': '#2a2a2a',
     '--text': '#f0f0f0',
     '--muted': '#aaaaaa',
-    '--accent': '#888888',
+    '--accent': '#f0f0f0',
     '--border': '#4a4a4a',
     '--input-bg': '#202020',
     '--user-msg-bg': '#333333',

@@ -1,9 +1,9 @@
 export function markdownToHTML(text) {
   // 0) Remove <think>...</think>/<thinking>...</thinking> blocks
-  text = text.replace(
-    /(^|\n)\s*<think>[\s\S]*?<\/think(?:ing)?>\s*(\n\s*\n)?/gi,
-    (_, lead) => (lead ? '\n' : '')
-  );
+  // This regex will match an an opening <think> or <thinking> tag,
+  // followed by any characters (non-greedy), until either a closing
+  // </think> or </thinking> tag is found, OR the end of the string ($).
+  text = text.replace(/<think(?:ing)?>[\s\S]*?(?:<\/think(?:ing)?>|$)/gi, '');
 
   // 1) Normalize line endings
   let tmp = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -35,13 +35,25 @@ export function markdownToHTML(text) {
     "$1\n"
   );
 
+  // 4.3) Blockquotes
+  escaped = escaped.replace(
+    /(^|\n)([ \t]*> .+(?:\n[ \t]*> .+)*)/g,
+    (_, lead, blockquoteBlock) => {
+      const lines = blockquoteBlock
+        .split(/\n/)
+        .map(line => line.replace(/^[ \t]*>\s*/, '').trim())
+        .join('\n');
+      return `${lead}<blockquote>${lines}</blockquote>`;
+    }
+  );
+
   // 4.5) Unordered lists
   escaped = escaped.replace(
-    /(^|\n)([ \t]*\* .+(?:\n[ \t]*\* .+)*)/g,
+    /(^|\n)([ \t]*[-*] .+(?:\n[ \t]*[-*] .+)*)/g,
     (_, lead, listBlock) => {
       const items = listBlock
         .split(/\n/)
-        .map(line => line.replace(/^[ \t]*\*\s+/, '').trim())
+        .map(line => line.replace(/^[ \t]*[-*]\s+/, '').trim())
         .map(item => `<li>${item}</li>`)
         .join('');
       return `${lead}<ul>${items}</ul>`;
@@ -49,48 +61,44 @@ export function markdownToHTML(text) {
   );
 
   // 4.6) Markdown tables (GitHub-style). Strict: requires header, separator, ≥2 cols.
-  const mdTableBlockRe =
-    /(^\|[^\n]*\|?\s*\n\|\s*[:\-]+(?:\s*\|\s*[:\-]+)+\s*\|?\s*\n(?:\|[^\n]*\|?\s*(?:\n|$))*)/gm;
+const mdTableBlockRe =
+  /(^\|[^\n]*\|?\s*\n\|\s*[:\-]+(?:\s*\|\s*[:\-]+)+\s*\|?\s*\n(?:\|[^\n]*\|?\s*(?:\n|$))*)/gm;
 
-  escaped = escaped.replace(mdTableBlockRe, (block) => {
-    // Preserve trailing newline so '^---$' can match next line
-    const hadTrailingNewline = /\n$/.test(block);
-    const lines = block.replace(/\n$/, '').split('\n');
+escaped = escaped.replace(mdTableBlockRe, (block) => {
+  const hadTrailingNewline = /\n$/.test(block);
+  const lines = block.replace(/\n$/, '').split('\n');
 
-    const split = (line) => line.replace(/^\||\|$/g, '').split('|').map(s => s.trim());
+  const split = (line) => line.replace(/^\||\|$/g, '').split('|').map(s => s.trim());
 
-    const headers = split(lines[0]);
-    const seps    = split(lines[1]);
-    if (headers.length < 2 || seps.length < 2) return block;
-    if (!seps.every(s => /^[ :\-]+$/.test(s) && /-/.test(s))) return block;
+  const headers = split(lines[0]);
+  const seps    = split(lines[1]);
+  if (headers.length < 2 || seps.length < 2) return block;
+  if (!seps.every(s => /^[ :\-]+$/.test(s) && /-/.test(s))) return block;
 
-    // Alignment per column (default left). Vertical-align top by default.
-    const aligns = seps.map(seg => {
-      const s = seg.replace(/\s+/g,'');
-      const left = s.startsWith(':');
-      const right = s.endsWith(':');
-      if (left && right) return 'center';
-      if (right) return 'right';
-      return 'left';
-    });
-
-    const bodyLines = lines.slice(2).filter(l => /^\|/.test(l.trim()));
-    const cellStyle = (i) =>
-      ` style="text-align:${aligns[i] || 'left'};vertical-align:top;border:1px solid #e5e7eb;padding:.6rem .75rem"`;
-
-    const ths = headers.map((h,i)=>`<th${cellStyle(i)}>${h}</th>`).join('');
-    const rows = bodyLines.map(line => {
-      const cells = split(line);
-      const tds = cells.map((c,i)=>`<td${cellStyle(i)}>${c}</td>`).join('');
-      return `<tr>${tds}</tr>`;
-    }).join('');
-
-    // Wrapper: rounded outer border + top/bottom spacing; inner cells keep their own borders.
-    const wrapperOpen = `<div class="md-table" style="margin:1rem 0;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">`;
-    const table = `<table class="nice" style="border-collapse:separate;border-spacing:0;width:100%"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table></div>`;
-
-    return wrapperOpen + table + (hadTrailingNewline ? '\n' : '');
+  const aligns = seps.map(seg => {
+    const s = seg.replace(/\s+/g,'');
+    const left = s.startsWith(':');
+    const right = s.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    return 'left';
   });
+
+  const bodyLines = lines.slice(2).filter(l => /^\|/.test(l.trim()));
+  const cellStyle = (i) =>
+    ` style="text-align:${aligns[i] || 'left'};vertical-align:top;padding:.6rem .75rem"`;
+
+  const ths = headers.map((h,i)=>`<th${cellStyle(i)}>${h}</th>`).join('');
+  const rows = bodyLines.map(line => {
+    const cells = split(line);
+    const tds = cells.map((c,i)=>`<td${cellStyle(i)}>${c}</td>`).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  const table = `<table class="nice" style="border-collapse:separate;border-spacing:0;width:100%;margin:1rem 0"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+
+  return table + (hadTrailingNewline ? '\n' : '');
+});
 
   // 4.75) Horizontal rules
   escaped = escaped.replace(/^---\s*$/gm, "<hr>");
@@ -109,9 +117,9 @@ export function markdownToHTML(text) {
     const { lang, code } = codeblocks[+idx];
     const title = (lang && lang.trim()) ? lang.trim() : 'code';
     const escapedCode = code.replace(/</g, "<").replace(/>/g, ">");
-    const head = `<div class="md-code-head" style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:.6rem .75rem;font-weight:600">${title}</div>`;
+    const head = `<div class="md-code-head" style="background:var(--panel);border-bottom:1px solid var(--panel);padding:.6rem .75rem;font-weight:600">${title}</div>`;
     const body = `<pre style="margin:0;padding:.75rem;border:0;overflow:auto"><code class="language-${title}">${escapedCode}</code></pre>`;
-    return `<div class="md-code" style="margin:1rem 0;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">${head}${body}</div>`;
+    return `<div class="md-code" style="margin:1rem 0;border:1px solid var(--border);border-radius:12px;overflow:hidden">${head}${body}</div>`;
   });
 
   // 7) Convert line-breaks to <br>
@@ -126,12 +134,16 @@ export function markdownToHTML(text) {
     .replace(/<br>\s*(<div class="md-code"[^>]*>)/g, "$1")
     .replace(/(<\/div>)\s*<br>/g, "$1")
     .replace(/<br>\s*(<table\b[^>]*>)/g, "$1")
-    .replace(/(<\/table>)\s*<br>/g, "$1");
+    .replace(/(<\/table>)\s*<br>/g, "$1")
+    .replace(/<br>\s*(<blockquote>)/g, "$1") // New: Cleanup <br> before blockquote
+    .replace(/(<\/blockquote>)\s*<br>/g, "$1"); // New: Cleanup <br> after blockquote
 
-  // 9) Trim spaces/tabs and remove empty newline(s) immediately after <hr>
+  // 9) Trim spaces/tabs and remove empty newline(s) immediately after <hr>, blockquote, and ul
   html = html
     .replace(/(<hr>)[ \t]+/g, "$1")              // remove spaces/tabs
-    .replace(/(<hr>)(?:[ \t]*<br>)+/g, "$1");    // remove one or more blank lines (now <br>) after <hr>
+    .replace(/(<hr>)(?:[ \t]*<br>)+/g, "$1")    // remove one or more blank lines (now <br>) after <hr>
+    .replace(/(<\/blockquote>)(?:[ \t]*<br>)+/g, "$1") // New: Remove empty lines after blockquote
+    .replace(/(<\/ul>)(?:[ \t]*<br>)+/g, "$1"); // New: Remove empty lines after ul
 
   return html;
 }

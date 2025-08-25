@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
+import re # Import the regex module
+import html # Import the html module for unescaping
 from . import models, schemas
 from .database import Base, engine, SessionLocal
 from .ollama_client import list_models as ollama_list, chat as ollama_chat, chat_stream as ollama_chat_stream
@@ -125,10 +127,22 @@ async def generate_title(req: schemas.GenerateTitleRequest, db: Session = Depend
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
 
-    session.name = title
+    print(f"Original title from LLM: {title}") # Debugging line to see the raw title
+
+    # HTML unescape the title first to handle encoded tags
+    unescaped_title = html.unescape(title)
+    print(f"Unescaped title: {unescaped_title}") # Debugging line to see the unescaped title
+
+    # Remove <think> blocks from the unescaped title
+    # Use re.IGNORECASE to handle potential variations in casing (e.g., <Think>)
+    cleaned_title = re.sub(r'<think>.*?</think>', '', unescaped_title, flags=re.DOTALL | re.IGNORECASE)
+    
+    print(f"Cleaned title before saving: {cleaned_title.strip()}") # Debugging line to see the cleaned title
+
+    session.name = cleaned_title.strip() # Use .strip() to remove any leading/trailing whitespace after removal
     db.commit()
 
-    return {"title": title}
+    return {"title": cleaned_title.strip()}
 
 @app.delete("/sessions/{session_id}")
 def delete_session(session_id: str, db: Session = Depends(get_db)):

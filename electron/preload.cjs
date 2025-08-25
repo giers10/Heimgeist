@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     event.preventDefault();
     const url = event.currentTarget.href;
     ipcRenderer.send('open-external-link', url);
-  }
+  },
+  onWindowFocus: (callback) => ipcRenderer.on('window-focused', callback)
 })

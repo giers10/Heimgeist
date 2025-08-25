@@ -435,6 +435,13 @@ textarea.input {
   color: var(--accent);
 }
 
+.msg blockquote {
+  border-left: 4px solid var(--accent); /* Vertical line */
+  padding-left: 15px;
+  margin-left: 0;
+  color: var(--muted); /* Muted text color for blockquotes */
+}
+
 .msg ul {
   padding-left: 20px;
 }
@@ -520,6 +527,66 @@ textarea.input {
   margin: 20px 0;
 }
 
+/* Rounded-corner tables without wrapper: thick outer outline + light inner grid */
+:root {
+  /* Add these (safe defaults); tweak per theme if you want */
+  --outline-w: 1px; /* outer stroke thickness */
+  --grid-w: 1px;    /* inner grid line thickness (use 0.5px on Retina if you like) */
+  --grid: var(--border); /* lighter than --border */
+}
+
+.msg table.nice {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  margin: 1rem 0;
+
+  /* The outer border (correct color + slightly thicker) */
+  border-radius: 12px;
+  box-shadow: 0 0 0 var(--outline-w) var(--border);
+}
+
+.msg table.nice th,
+.msg table.nice td {
+  border: var(--grid-w) solid var(--grid); /* thinner + lighter cell grid */
+  border-width: 0.5px;
+  padding: .6rem .75rem;
+  vertical-align: top;
+}
+
+/* Remove perimeter borders so only the box-shadow forms the outline */
+.msg table.nice thead tr:first-child th { border-top: 0; }
+.msg table.nice tr th:first-child,
+.msg table.nice tr td:first-child { border-left: 0; }
+.msg table.nice tr th:last-child,
+.msg table.nice tr td:last-child { border-right: 0; }
+.msg table.nice tbody tr:last-child td { border-bottom: 0; }
+
+/* Header background without breaking rounded corners */
+.msg table.nice thead tr:first-child th {
+  background-color: var(--panel);
+}
+
+/* Round the two top corners so the header bg follows the curve */
+.msg table.nice thead tr:first-child th:first-child {
+  border-top-left-radius: 12px;
+  background-clip: padding-box; /* keep bg inside the radius */
+}
+.msg table.nice thead tr:first-child th:last-child {
+  border-top-right-radius: 12px;
+  background-clip: padding-box;
+}
+
+/* Optional: also round the bottom corners for symmetry */
+.msg table.nice tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 12px;
+  background-clip: padding-box;
+}
+.msg table.nice tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 12px;
+  background-clip: padding-box;
+}
+
 /* Toggle Switch Styles */
 .toggle-switch {
   position: relative;
@@ -582,4 +649,35 @@ input:checked + .slider:before {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+
+/* Assistant reasoning (thoughts) UI */
+.assistant-message { display: block; }
+.assistant-thoughts { margin-bottom: 8px; }
+.think-toggle {
+  background: var(--active-bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.think-toggle:hover { color: var(--text); border-color: var(--accent); }
+.think-toggle-icon { display:inline-block; margin-right:6px; }
+.think-content {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.msg-content { /* container for assistant/user rendered markdown */
 }

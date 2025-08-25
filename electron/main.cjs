@@ -58,6 +58,10 @@ async function createMainWindow () {
     mainWindow.show()
   })
 
+  mainWindow.on('focus', () => {
+    mainWindow.webContents.send('window-focused');
+  });
+
   if (is.dev && process.env.VITE_DEV_SERVER_URL) {
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools({ mode: 'detach' })

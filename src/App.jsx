@@ -4,7 +4,74 @@ import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import GeneralSettings from './GeneralSettings'
 import InterfaceSettings from './InterfaceSettings'
-import { markdownToHTML } from './markdown';
+import { markdownToHTML  } from './markdown';
+// Extract <think> or <thinking> block (first occurrence) and return { think, answer }
+function splitThinkBlocks(text) {
+  if (!text) return { think: null, answer: '' };
+
+  const openTagRe = /<think(?:ing)?>/i;
+  const closeTagRe = /<\/think(?:ing)?>/i;
+
+  const openMatch = text.match(openTagRe);
+
+  if (!openMatch) {
+    // No opening <think> tag found, so all content is answer
+    return { think: null, answer: text };
+  }
+
+  const openTagIndex = openMatch.index;
+  const openTagLength = openMatch[0].length;
+
+  const answerPartBeforeThink = text.substring(0, openTagIndex).trim();
+  let contentAfterOpenTag = text.substring(openTagIndex + openTagLength);
+
+  const closeMatch = contentAfterOpenTag.match(closeTagRe);
+
+  let thinkInner = null;
+  let finalAnswer = answerPartBeforeThink;
+
+  if (closeMatch) {
+    // Both open and close tags are present
+    thinkInner = contentAfterOpenTag.substring(0, closeMatch.index).trim();
+    finalAnswer += contentAfterOpenTag.substring(closeMatch.index + closeMatch[0].length);
+  } else {
+    // Only open tag found (streaming case), take everything after it as think
+    thinkInner = contentAfterOpenTag.trim();
+  }
+
+  return { think: thinkInner || null, answer: finalAnswer.trim() };
+}
+
+// Renders assistant message with a collapsible "Thoughts" block (if present)
+function AssistantMessageContent({ content, streamOutput }) {
+  const { think, answer } = splitThinkBlocks(content || '');
+  const [open, setOpen] = React.useState(false); // Closed by default
+
+  // If streaming, the button should appear as soon as 'think' content is detected
+  const showThinkButton = !!think;
+
+  return (
+    <div className="assistant-message">
+      {showThinkButton && (
+        <div className="assistant-thoughts">
+          <button
+            className="think-toggle"
+            onClick={() => setOpen(o => !o)}
+            aria-expanded={open ? 'true' : 'false'}
+            aria-controls="think-content"
+          >
+            <span className="think-toggle-icon" aria-hidden="true">{open ? '▾' : '▸'}</span>
+            Thoughts
+          </button>
+          {open && (
+            <div id="think-content" className="think-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(think) }} />
+          )}
+        </div>
+      )}
+      <div className="msg-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(answer || content || '') }} />
+    </div>
+  );
+}
 
 const API_URL_KEY = 'ollamaApiUrl';
 const COLOR_SCHEME_KEY = 'colorScheme';
@@ -43,6 +110,8 @@ export default function App() {
 
   // Live per-session scrollTop tracker to avoid races
   const scrollTopsRef = useRef({});
+  // Live per-session previous scrollTop tracker to detect scroll direction
+  const prevScrollTopsRef = useRef({});
 
   // Tip state: { [sessionId]: messageId }
   const [newMsgTip, setNewMsgTip] = useState({});
@@ -112,7 +181,23 @@ export default function App() {
       setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
       applyColorScheme(settings.colorScheme); // Apply initial scheme
     });
-  }, []);
+
+    const handleFocus = () => {
+      if (activeSidebarMode === 'chats') {
+        textareaRef.current?.focus();
+      }
+    };
+
+    window.electronAPI.onWindowFocus(handleFocus);
+
+    return () => {
+      // Clean up the listener when the component unmounts
+      // This part is tricky with the current setup, as `onWindowFocus` uses `ipcRenderer.on`
+      // which doesn't return a cleanup function. A more robust implementation
+      // would involve `ipcRenderer.removeListener`. For now, we'll assume this is okay
+      // for the lifetime of the app.
+    };
+  }, [activeSidebarMode]);
 
   // Apply color scheme whenever it changes
   useEffect(() => {
@@ -121,39 +206,6 @@ export default function App() {
 
   // Function to apply color scheme
   const colorSchemes = {
-    'Default': {
-      '--bg': '#0b1020',
-      '--panel': '#141b34',
-      '--text': '#e6e8ef',
-      '--muted': '#9aa3b2',
-      '--accent': '#6ea8fe',
-      '--border': '#24304f',
-      '--input-bg': '#0e1530',
-      '--user-msg-bg': '#111933',
-      '--assistant-msg-bg': '#101927',
-    },
-    'Grayscale': {
-      '--bg': '#1a1a1a',
-      '--panel': '#2a2a2a',
-      '--text': '#f0f0f0',
-      '--muted': '#aaaaaa',
-      '--accent': '#888888',
-      '--border': '#4a4a4a',
-      '--input-bg': '#202020',
-      '--user-msg-bg': '#333333',
-      '--assistant-msg-bg': '#252525',
-    },
-    'Rose': {
-      '--bg': '#200a10',
-      '--panel': '#301a20',
-      '--text': '#ffe0e0',
-      '--muted': '#a09090',
-      '--accent': '#E91E63',
-      '--border': '#402025',
-      '--input-bg': '#2a1015',
-      '--user-msg-bg': '#331119',
-      '--assistant-msg-bg': '#271019',
-    },
   };
 
   function applyColorScheme(schemeName) {
@@ -249,10 +301,21 @@ export default function App() {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = chatDiv;
       const isAtBottom = (scrollHeight - scrollTop - clientHeight) <= BOTTOM_EPSILON;
+
       if (activeSessionId) {
+        const prevScrollTop = prevScrollTopsRef.current[activeSessionId];
+        const scrolledUp = typeof prevScrollTop === 'number' && scrollTop < prevScrollTop;
+
         scrollTopsRef.current[activeSessionId] = scrollTop;
+
+        if (isAtBottom) {
+          setUserScrolledUp(activeSessionId, false); // User is at bottom, enable autoscroll
+        } else if (scrolledUp) {
+          setUserScrolledUp(activeSessionId, true); // User scrolled up, disable autoscroll
+        }
+        // If user scrolled down but not to bottom, maintain current userScrolledUp state
+        prevScrollTopsRef.current[activeSessionId] = scrollTop;
       }
-      setUserScrolledUp(activeSessionId, !isAtBottom);
     };
 
     chatDiv.addEventListener('scroll', handleScroll);
@@ -490,10 +553,18 @@ export default function App() {
               }
               const chunk = decoder.decode(value, { stream: true });
               fullReply += chunk;
-              const messageElement = document.getElementById(assistantMsgId)?.firstChild;
-              if (messageElement) {
-                messageElement.innerHTML = markdownToHTML(fullReply);
-              }
+              setChatSessions(prevSessions =>
+                prevSessions.map(session =>
+                  session.session_id === targetSessionId
+                    ? {
+                        ...session,
+                        messages: session.messages.map(m =>
+                          m.id === assistantMsgId ? { ...m, content: fullReply } : m
+                        )
+                      }
+                    : session
+                )
+              );
               // Keep sticky-bottom *only* when streaming in the active chat and user is at/near bottom.
               // This restores the old "push down while generating" behavior without fighting user scrolls.
               if (
@@ -578,9 +649,10 @@ export default function App() {
         })
         .then(r => r.json())
         .then(data => {
+          const sanitizedTitle = data.title.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/i, '').trim();
           setChatSessions(prevSessions =>
             prevSessions.map(session =>
-              session.session_id === targetSessionId ? { ...session, name: data.title } : session
+              session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session
             )
           );
         });
@@ -610,6 +682,7 @@ export default function App() {
     const sessionWithMessages = { ...newSession, messages: [] };
     setChatSessions(prevSessions => [sessionWithMessages, ...prevSessions]);
     setActiveSessionId(newSession.session_id);
+    textareaRef.current?.focus();
     return newSession;
   }
 
@@ -692,6 +765,23 @@ export default function App() {
       });
     }
   }, [activeSessionId, chatSessions, ollamaApiUrl]);
+
+  const handleChatFrameClick = (e) => {
+    const selection = window.getSelection();
+    if (selection.toString().length > 0) {
+      return;
+    }
+
+    if (document.activeElement === textareaRef.current) {
+      return;
+    }
+
+    if (e.target.closest('.msg')) {
+      return;
+    }
+
+    textareaRef.current?.focus();
+  };
 
   return (
     <div className="app" style={{ gridTemplateColumns: `${sidebarWidth}px 1fr` }}>
@@ -799,10 +889,13 @@ export default function App() {
               <strong>Chat - {chatSessions.find(s => s.session_id === activeSessionId)?.name || 'New Chat'}</strong>
             </div>
 
-            <div key={activeSessionId} className="chat" ref={chatRef}>
+            <div key={activeSessionId} className="chat" ref={chatRef} onClick={handleChatFrameClick}>
               {messages.map((m, i) => (
                 <div key={m.id || i} id={m.id} className={'msg ' + (m.role === 'user' ? 'user' : 'assistant')}>
-                  <div dangerouslySetInnerHTML={{ __html: markdownToHTML(m.content) }} />
+                  {m.role === 'assistant'
+                    ? <AssistantMessageContent content={m.content} streamOutput={streamOutput} />
+                    : <div className="msg-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(m.content) }} />
+                  }
                 </div>
               ))}
             </div>
@@ -822,6 +915,7 @@ export default function App() {
             <div className="footer">
               <div className="footer-content-wrapper">
                 <TextareaAutosize
+                  ref={textareaRef}
                   className="input"
                   value={input}
                   onChange={e => setInput(e.target.value)}

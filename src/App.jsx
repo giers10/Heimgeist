@@ -224,12 +224,14 @@ export default function App() {
 
     if (streamOutput) {
       const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
+      // add placeholder assistant message
       setChatSessions(prev =>
         prev.map(s => s.session_id === sessionId
           ? { ...s, messages: [...(s.messages || []), { id: assistantMsgId, role: 'assistant', content: '' }] }
           : s
         )
       );
+
       try {
         const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
           method: 'POST',
@@ -239,17 +241,43 @@ export default function App() {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let full = '';
+        let unreadMarked = false; // NEW
+
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
+
           const chunk = decoder.decode(value, { stream: true });
           full += chunk;
+
+          // Update the growing assistant message
           setChatSessions(prev =>
             prev.map(s => s.session_id === sessionId
               ? { ...s, messages: (s.messages || []).map(m => m.id === assistantMsgId ? { ...m, content: full } : m) }
               : s
             )
           );
+
+          // If this session is not active while streaming, mark unread once
+          if (!unreadMarked && activeSessionIdRef.current !== sessionId) {
+            unreadMarked = true;
+            setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+            setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
+          }
+        }
+
+        // On stream end: if user is in another chat, ensure unread + guided scroll are set
+        if (activeSessionIdRef.current !== sessionId) {
+          setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+          setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
+        } else {
+          // If user stayed here and didn't scroll up, align the finished answer nicely
+          if (!userScrolledUpRef.current[sessionId]) {
+            requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
+          } else {
+            // show the tip if they had scrolled away
+            setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+          }
         }
       } catch (e) {
         console.error(e);
@@ -264,12 +292,26 @@ export default function App() {
           body: JSON.stringify({ index, model, stream: false })
         });
         const data = await res.json();
+        const assistantMsgId = `msg-${Date.now()}`;
         setChatSessions(prev =>
           prev.map(s => s.session_id === sessionId
-            ? { ...s, messages: [...(s.messages || []), { role: 'assistant', content: data.reply, id: `msg-${Date.now()}` }] }
+            ? { ...s, messages: [...(s.messages || []), { role: 'assistant', content: data.reply, id: assistantMsgId }] }
             : s
           )
         );
+
+        if (activeSessionIdRef.current !== sessionId) {
+          // reply landed in background -> mark unread + remember where to scroll
+          setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+          setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
+        } else {
+          // same chat -> align unless the user scrolled away
+          if (!userScrolledUpRef.current[sessionId]) {
+            requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
+          } else {
+            setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+          }
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -348,6 +390,31 @@ export default function App() {
       document.body.classList.remove('no-select');
     }
   }, [isResizing]);
+
+  React.useEffect(() => {
+    const onClick = async (e) => {
+      const btn = e.target.closest('.codeblock__copy');
+      if (!btn) return;
+
+      const wrapper = btn.closest('.codeblock');
+      const codeEl = wrapper?.querySelector('pre > code');
+      if (!codeEl) return;
+
+      try {
+        // Use textContent to copy the plain code accurately
+        await navigator.clipboard.writeText(codeEl.textContent || '');
+        // Optional: brief visual feedback
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 800);
+      } catch (err) {
+        console.error('Copy failed:', err);
+      }
+    };
+
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
+
 
   // Load settings on startup
   useEffect(() => {

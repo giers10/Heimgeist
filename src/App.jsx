@@ -111,32 +111,27 @@ export default function App() {
   const [editingMessageIndex, setEditingMessageIndex] = useState(null);
   const [editText, setEditText] = useState('');
   // Helpers + handlers for message copy/edit/regenerate (must live inside App)
-  function getVisibleTextForCopy(message) {
+  function getMarkdownForCopy(message) {
     const raw = message.content || '';
-    if (message.role !== 'assistant') {
-      // For user messages, copy exactly what they typed.
-      return raw;
-    }
-    // Assistant messages: strip think, render as HTML, then extract readable text.
-    let shown = raw;
-    try {
-      const { think, answer } = splitThinkBlocks(raw);
-      shown = answer || raw;
-    } catch (_) {}
 
-    const html = markdownToHTML(shown);
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-    tempDiv.querySelectorAll('p,div,li,pre,code,h1,h2,h3,h4,h5,h6,table,tr').forEach(el => {
-      el.insertAdjacentText('beforeend', '\n');
-    });
-    return tempDiv.innerText.replace(/\n{3,}/g, '\n\n').trim();
+    if (message.role === 'assistant') {
+      // Copy the assistant's raw *markdown answer*, not rendered text,
+      // and strip any <think>...</think> block.
+      try {
+        const { answer } = splitThinkBlocks(raw);
+        return (answer || raw).trim();
+      } catch {
+        return raw.trim();
+      }
+    }
+
+    // User messages: copy exactly as typed
+    return raw;
   }
 
   async function handleCopyMessage(message) {
     try {
-      await navigator.clipboard.writeText(getVisibleTextForCopy(message));
+      await navigator.clipboard.writeText(getMarkdownForCopy(message));
     } catch (err) {
       console.error('Failed to copy message:', err);
     }

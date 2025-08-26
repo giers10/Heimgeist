@@ -5,6 +5,8 @@ export function markdownToHTML(text) {
   // </think> or </thinking> tag is found, OR the end of the string ($).
   text = text.replace(/<think(?:ing)?>[\s\S]*?(?:<\/think(?:ing)?>|$)/gi, '');
 
+  text = balanceStreamingCodeFence(text);
+
   // 1) Normalize line endings
   let tmp = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -164,4 +166,45 @@ export function markdownToHTML(text) {
     .replace(/(<div class="codeblock"[^>]*>[\s\S]*?<\/div>)\s*<br>/g, "$1");          // <br> right after closing
 
   return html;
+}
+
+// Virtually close an unfinished fenced code block so it renders during streaming.
+function balanceStreamingCodeFence(md) {
+  // Split into lines; we only consider fences that start a line.
+  const lines = md.split(/\r?\n/);
+
+  // Track the last unmatched opening fence we see while scanning.
+  // { fenceChar: '`' or '~', fenceLen: number }
+  let open = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Opening fence?  ^\s*([`~]{3,})(.*)$
+    if (!open) {
+      const m = line.match(/^\s*([`~]{3,})([^\s]*)?.*$/);
+      if (m) {
+        // Treat as an opening fence
+        open = { fenceChar: m[1][0], fenceLen: m[1].length };
+        continue;
+      }
+    } else {
+      // Closing fence: must match same char and length or longer
+      const re = new RegExp(`^\\s*(${open.fenceChar}{${open.fenceLen},})\\s*$`);
+      if (re.test(line)) {
+        // Closed
+        open = null;
+        continue;
+      }
+      // Otherwise still inside the code block; keep scanning
+    }
+  }
+
+  if (open) {
+    // Virtually close with the same fence so the block renders now
+    const virtual = `${open.fenceChar.repeat(open.fenceLen)}`;
+    return md.endsWith('\n') ? md + virtual : md + '\n' + virtual;
+  }
+
+  return md;
 }

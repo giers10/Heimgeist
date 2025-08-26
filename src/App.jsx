@@ -146,6 +146,7 @@ export default function App() {
     setEditingMessageIndex(index);
     setEditText(content || '');
   }
+
   function cancelEditMessage() {
     setEditingMessageIndex(null);
     setEditText('');
@@ -153,11 +154,21 @@ export default function App() {
 
   async function commitEditMessage(index) {
     const original = (messages[index]?.content || '').trim();
-    const next = (editText || '').trim();
+    const nextRaw = editText ?? '';
+    const next = nextRaw.trim();
+
+    // NEW: If empty after trimming, cancel edit (revert to original)
+    if (next.length === 0) {
+      cancelEditMessage();
+      return;
+    }
+
+    // If nothing changed, cancel edit
     if (next === original) {
       cancelEditMessage();
       return;
     }
+
     const sessionId = activeSessionId;
     if (!sessionId) return;
 
@@ -166,7 +177,6 @@ export default function App() {
       prev.map(s => {
         if (s.session_id !== sessionId) return s;
         const old = s.messages || [];
-        // keep up to index (inclusive) and update that item
         const updated = old.slice(0, index + 1).map((m, j) =>
           j === index ? { ...m, content: next } : m
         );
@@ -174,11 +184,12 @@ export default function App() {
       })
     );
 
+    // Exit edit mode immediately
     setEditingMessageIndex(null);
     setEditText('');
 
     // ⬇️ Scroll the chat frame to the bottom after the DOM updates
-    requestAnimationFrame(() => scrollToBottom('auto', sessionId)); // use 'smooth' if you prefer
+    requestAnimationFrame(() => scrollToBottom('auto', sessionId));
 
     try {
       const resp = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/messages/${index}`, {
@@ -1140,54 +1151,73 @@ export default function App() {
             </div>
 
             <div key={activeSessionId} className="chat" ref={chatRef} onClick={handleChatFrameClick}>
-              {messages.map((m, i) => (
-  <div key={m.id || i} id={m.id} className={'msg ' + (m.role === 'user' ? 'user' : 'assistant')}>
-    {m.role === 'assistant' ? (
-      <div className="assistant-message-wrapper">
-        <AssistantMessageContent content={m.content} streamOutput={streamOutput} />
-        {!isSending && (
-          <div className="message-options-bar assistant-options">
-            <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            </button>
-            <button className="icon-button" title="Regenerate response" onClick={() => regenerateFromIndex(i)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-            </button>
-          </div>
-        )}
-      </div>
-    ) : (
-      <div className="user-message-wrapper">
-        {editingMessageIndex === i ? (
-          <TextareaAutosize
-            className="edit-message-input"
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            onBlur={cancelEditMessage}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') { e.preventDefault(); cancelEditMessage(); }
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEditMessage(i); }
-            }}
-            autoFocus
-            maxRows={13}
-          />
-        ) : (
-          <div className="msg-content msg-content--user">{m.content}</div>
-        )}
-        {!isSending && (
-          <div className="message-options-bar user-options">
-            <button className="icon-button" title="Edit message" onClick={() => startEditMessage(i, m.content)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-            </button>
-            <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            </button>
-          </div>
-        )}
-      </div>
-    )}
-  </div>
-))}
+              {messages.map((m, i) => {
+                const isEditingThis = m.role === 'user' && editingMessageIndex === i;
+                return (
+                  <div
+                    key={m.id || i}
+                    id={m.id}
+                    className={
+                      'msg ' +
+                      (m.role === 'user' ? 'user' : 'assistant') +
+                      (isEditingThis ? ' editing' : '')
+                    }
+                  >
+                    {m.role === 'assistant' ? (
+                      <div className="assistant-message-wrapper">
+                        <AssistantMessageContent content={m.content} streamOutput={streamOutput} />
+                        {!isSending && (
+                          <div className="message-options-bar assistant-options">
+                            <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            </button>
+                            <button className="icon-button" title="Regenerate response" onClick={() => regenerateFromIndex(i)}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="user-message-wrapper">
+                        {isEditingThis ? (
+                          <div className="msg-content msg-content--user editing">
+                            {/* Shadow defines bubble width/height based on current text */}
+                            <div className="user-edit-shadow" aria-hidden="true">
+                              {editText}
+                            </div>
+
+                            {/* Overlay textarea fills the bubble exactly */}
+                            <TextareaAutosize
+                              className="edit-message-input edit-overlay"
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              onBlur={cancelEditMessage}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') { e.preventDefault(); cancelEditMessage(); }
+                                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEditMessage(i); }
+                              }}
+                              autoFocus
+                              minRows={1}
+                            />
+                          </div>
+                        ) : (
+                          <div className="msg-content msg-content--user">{m.content}</div>
+                        )}
+                        {!isSending && !isEditingThis && (
+                          <div className="message-options-bar user-options">
+                            <button className="icon-button" title="Edit message" onClick={() => startEditMessage(i, m.content)}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                            </button>
+                            <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* New message tip (active chat only) */}

@@ -320,18 +320,46 @@ textarea.input {
   flex-grow: 1; /* Allow textarea to take up available space */
 }
 
+/* /Users/giers/Heimgeist/src/styles.css */
+/* User message bubble */
 .msg.user {
   background: var(--user-msg-bg);
-  margin-left: auto; /* Right-align user messages */
+  margin-left: auto;            /* Right-align user messages */
   max-width: 80%;
   border: 1px solid var(--border);
   margin-right: 5px;
   margin-bottom: 15px;
+  transition: border-color .15s ease, box-shadow .15s ease; /* NEW */
 }
+
+.msg.user.editing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Render user messages as plain text (no markdown), preserving line breaks and wrapping */
 .msg.user .msg-content--user {
   white-space: pre-wrap;        /* keep newlines */
   overflow-wrap: anywhere;      /* wrap long tokens/URLs */
   word-break: break-word;       /* fallback */
+  position: relative;
+}
+
+/* Expand link inside the user bubble */
+.msg.user .user-msg-expand {
+  margin-top: 8px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-weight: 700;             /* bold as requested */
+  cursor: pointer;
+  text-align: left;             /* align with text content */
+}
+
+.msg.user .user-msg-expand:hover {
+  opacity: .9;
+  text-decoration: underline;
 }
 
 .msg.assistant {
@@ -793,22 +821,71 @@ input:checked + .slider:before {
 .msg-content { /* container for assistant/user rendered markdown */
 }
 
+.msg.user .msg-content--user.editing {
+  /* Bubble (.msg.user) already provides padding/border/max-width/rounded corners. */
+  /* Keep this wrapper neutral — no extra padding or borders here. */
+}
 
 /* Editing textarea styled like user bubble */
+/* Editing textarea should be visually indistinguishable from the user bubble */
 .edit-message-input {
-  background: var(--user-msg-bg);
-  border: 1px solid var(--border);
-  padding: 12px 14px;
-  border-radius: 12px;
-  margin-left: auto;
-  margin-right: 5px;
-  margin-bottom: 15px;
-  max-width: 80%;
-  width: 100%;
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial;
-  line-height: 1.5;
-  resize: none;
-  overflow-y: auto;
   display: block;
+  width: 100%;
+  height: 100%;            /* autosize will override with inline height; harmless */
+  background: transparent; /* let the bubble show through */
+  border: 0;               /* bubble has the border */
+  padding: 0;              /* bubble provides padding */
+  margin: 0;
+
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+
+  white-space: pre-wrap;   /* keep newlines like the view mode */
+  overflow-wrap: anywhere; /* wrap long tokens/URLs */
+  word-break: break-word;
+
+  resize: none;            /* autosize controls height */
+  overflow: hidden;        /* smooth growth */
+  outline: none;
+}
+.edit-message-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Shadow stays in flow to set the bubble's width & height, but remains invisible */
+.user-edit-shadow {
+  visibility: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Overlayed textarea fills exactly the content box of the bubble */
+.edit-message-input.edit-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+
+  background: transparent;  /* bubble provides bg */
+  border: 0;                /* bubble provides border */
+  padding: 0;               /* bubble provides padding */
+  margin: 0;
+
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  resize: none;             /* autosize controls height if needed */
+  overflow: hidden;
+  outline: none;
+  box-shadow: none;
 }

@@ -328,6 +328,12 @@ textarea.input {
   margin-right: 5px;
   margin-bottom: 15px;
 }
+.msg.user .msg-content--user {
+  white-space: pre-wrap;        /* keep newlines */
+  overflow-wrap: anywhere;      /* wrap long tokens/URLs */
+  word-break: break-word;       /* fallback */
+}
+
 .msg.assistant {
   background: transparent;
   border: none;

@@ -112,14 +112,19 @@ export default function App() {
   const [editText, setEditText] = useState('');
   // Helpers + handlers for message copy/edit/regenerate (must live inside App)
   function getVisibleTextForCopy(message) {
-    let raw = message.content || '';
-    if (message.role === 'assistant') {
-      try {
-        const { think, answer } = splitThinkBlocks(raw);
-        raw = answer || raw;
-      } catch (_) {}
+    const raw = message.content || '';
+    if (message.role !== 'assistant') {
+      // For user messages, copy exactly what they typed.
+      return raw;
     }
-    const html = markdownToHTML(raw);
+    // Assistant messages: strip think, render as HTML, then extract readable text.
+    let shown = raw;
+    try {
+      const { think, answer } = splitThinkBlocks(raw);
+      shown = answer || raw;
+    } catch (_) {}
+
+    const html = markdownToHTML(shown);
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
@@ -1167,7 +1172,7 @@ export default function App() {
             maxRows={13}
           />
         ) : (
-          <div className="msg-content" dangerouslySetInnerHTML={{ __html: markdownToHTML(m.content) }} />
+          <div className="msg-content msg-content--user">{m.content}</div>
         )}
         {!isSending && (
           <div className="message-options-bar user-options">

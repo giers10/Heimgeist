@@ -352,6 +352,38 @@ export default function App() {
   // Tip state: { [sessionId]: messageId }
   const [newMsgTip, setNewMsgTip] = useState({});
 
+  // Collapse state per user message: { [msgKey]: boolean } — true means "collapsed"
+  const [collapsedUserMsgs, setCollapsedUserMsgs] = useState({});
+
+  // Compute a stable key for collapse map (prefer id, else session:index)
+  const collapseKeyFor = (m, i, sessionId) => (m?.id ? m.id : `${sessionId}:${i}`);
+
+  // Initialize/maintain collapsed map whenever messages or the active session change
+  useEffect(() => {
+    if (!activeSessionId) return;
+
+    const msgs =
+      (chatSessions.find(s => s.session_id === activeSessionId)?.messages) || [];
+
+    setCollapsedUserMsgs(prev => {
+      const next = {};
+      msgs.forEach((m, i) => {
+        if (m.role !== 'user') return;
+        const key = collapseKeyFor(m, i, activeSessionId);
+        const lineCount = (m.content || '').split(/\r\n|\r|\n/).length;
+        const needsCollapse = lineCount > 30;
+        // Default collapsed = true when needsCollapse; preserve user toggles
+        next[key] = needsCollapse ? (prev[key] ?? true) : false;
+      });
+      return next;
+    });
+  }, [chatSessions, activeSessionId]);
+
+  // Toggle collapse/expand for a specific message
+  function toggleUserMsgCollapse(key) {
+    setCollapsedUserMsgs(prev => ({ ...prev, [key]: !(prev[key] ?? true) }));
+  }
+
   const setUserScrolledUp = React.useCallback((sessionId, value) => {
     setUserScrolledUpState(prev => {
       const next = { ...prev, [sessionId]: value };
@@ -1181,12 +1213,10 @@ export default function App() {
                       <div className="user-message-wrapper">
                         {isEditingThis ? (
                           <div className="msg-content msg-content--user editing">
-                            {/* Shadow defines bubble width/height based on current text */}
                             <div className="user-edit-shadow" aria-hidden="true">
                               {editText}
                             </div>
 
-                            {/* Overlay textarea fills the bubble exactly */}
                             <TextareaAutosize
                               className="edit-message-input edit-overlay"
                               value={editText}
@@ -1201,7 +1231,29 @@ export default function App() {
                             />
                           </div>
                         ) : (
-                          <div className="msg-content msg-content--user">{m.content}</div>
+                          (() => {
+                            const raw = m.content || '';
+                            const lines = raw.split(/\r\n|\r|\n/);
+                            const needsCollapse = lines.length > 30;
+                            const key = collapseKeyFor(m, i, activeSessionId);
+                            const isCollapsed = needsCollapse ? (collapsedUserMsgs[key] ?? true) : false;
+                            const displayText = isCollapsed ? lines.slice(0, 30).join('\n') + '\n…' : raw;
+
+                            return (
+                              <>
+                                <div className="msg-content msg-content--user">{displayText}</div>
+                                {needsCollapse && (
+                                  <button
+                                    className="user-msg-expand"
+                                    onClick={() => toggleUserMsgCollapse(key)}
+                                    aria-expanded={isCollapsed ? 'false' : 'true'}
+                                  >
+                                    {isCollapsed ? 'Show entire message' : 'Collapse'}
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()
                         )}
                         {!isSending && !isEditingThis && (
                           <div className="message-options-bar user-options">

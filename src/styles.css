@@ -351,15 +351,15 @@ textarea.input {
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--accent);
+  color: var(--muted);
   font-weight: 700;             /* bold as requested */
   cursor: pointer;
-  text-align: left;             /* align with text content */
+  align-self: flex-start;   /* <-- key line */
+  margin-left: 0;           /* ensure no stray left margin */
+  text-align: left;         /* you already had this */
 }
 
 .msg.user .user-msg-expand:hover {
-  opacity: .9;
-  text-decoration: underline;
 }
 
 .msg.assistant {

@@ -20,6 +20,8 @@ class ChatMessage(Base):
     session_pk = Column(Integer, ForeignKey('chat_sessions.id'), nullable=False)
     role = Column(String(16), nullable=False)  # 'user' | 'assistant'
     content = Column(Text, nullable=False)
+    # JSON-encoded list of citation URLs; null/empty => no chips
+    sources_json = Column(Text, nullable=True, default='[]')
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("ChatSession", back_populates="messages")

@@ -3,14 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
-import re # Import the regex module
-import html # Import the html module for unescaping
+import re
+import html
+import json
 from . import models, schemas
-from .database import Base, engine, SessionLocal
+from .database import Base, engine, SessionLocal, ensure_sources_column
 from .ollama_client import list_models as ollama_list, chat as ollama_chat, chat_stream as ollama_chat_stream
+from .websearch import enrich_prompt
 
-# Create tables
+# Create tables + ensure migration
 Base.metadata.create_all(bind=engine)
+ensure_sources_column(engine)
 
 app = FastAPI(title="LLM Desktop Backend", version="0.1.0" )
 
@@ -60,8 +63,21 @@ def history(session_id: str, db: Session = Depends(get_db)):
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
     if not session:
         return {"messages": []}
-    rows = db.query(models.ChatMessage)             .filter(models.ChatMessage.session_pk == session.id)             .order_by(models.ChatMessage.created_at.asc())             .all()
-    msgs = [{"role": r.role, "content": r.content} for r in rows]
+    rows = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.session_pk == session.id)
+        .order_by(models.ChatMessage.created_at.asc())
+        .all()
+    )
+    msgs = []
+    for r in rows:
+        sources = []
+        try:
+            if getattr(r, "sources_json", None):
+                sources = json.loads(r.sources_json or "[]")
+        except Exception:
+            sources = []
+        msgs.append({"role": r.role, "content": r.content, "sources": sources})
     return {"messages": msgs}
 
 @app.post("/chat")
@@ -74,15 +90,30 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(session)
 
-    # Save user message
+    # Store the BASE user prompt
     user_row = models.ChatMessage(session_pk=session.id, role='user', content=req.message)
     db.add(user_row)
     db.commit()
 
-    # Build minimal conversation context (last 20 messages)
-    last_msgs = db.query(models.ChatMessage)        .filter(models.ChatMessage.session_pk == session.id)        .order_by(models.ChatMessage.created_at.asc())        .all()[-20:]
-
+    # Build minimal context (last 20)
+    last_msgs = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.session_pk == session.id)
+        .order_by(models.ChatMessage.created_at.asc())
+        .all()[-20:]
+    )
     messages = [{"role": m.role, "content": m.content} for m in last_msgs]
+
+    # Patch last user with enriched_message only for LLM call
+    if req.enriched_message:
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("role") == "user":
+                messages = messages.copy()
+                messages[i] = {**messages[i], "content": req.enriched_message}
+                break
+
+    # Sources to persist with the assistant reply
+    sources = req.sources or []
 
     if req.stream:
         async def stream_generator():
@@ -92,14 +123,16 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
                     full_reply += chunk
                     yield chunk
             except Exception as e:
-                # How to handle errors in a stream? Could yield an error message.
                 yield f"Ollama error: {e}"
 
-            # Save full reply after stream is complete
-            as_row = models.ChatMessage(session_pk=session.id, role='assistant', content=full_reply)
+            # Persist assistant reply (include sources_json)
+            as_row = models.ChatMessage(
+                session_pk=session.id, role='assistant', content=full_reply,
+                sources_json=json.dumps(sources or [])
+            )
             db.add(as_row)
             db.commit()
-        
+
         return StreamingResponse(stream_generator(), media_type="text/plain")
     else:
         try:
@@ -107,11 +140,12 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
 
-        # Save assistant reply
-        as_row = models.ChatMessage(session_pk=session.id, role='assistant', content=reply)
+        as_row = models.ChatMessage(
+            session_pk=session.id, role='assistant', content=reply,
+            sources_json=json.dumps(sources or [])
+        )
         db.add(as_row)
         db.commit()
-
         return {"reply": reply}
 
 @app.post("/generate-title", response_model=schemas.GenerateTitleResponse)
@@ -200,13 +234,10 @@ def update_user_message(session_id: str, index: int, req: schemas.EditMessageReq
 # ADD or REPLACE this whole function
 @app.post("/sessions/{session_id}/regenerate")
 async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Session = Depends(get_db)):
-    """
-    Regenerate an assistant response for the conversation state at/before req.index.
-    If req.index points at an assistant message, we regenerate from the preceding user message.
-    """
     idx = req.index
     model = req.model
     stream = bool(req.stream)
+    sources = req.sources or []
 
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
     if not session:
@@ -218,43 +249,49 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
         .order_by(models.ChatMessage.created_at.asc())
         .all()
     )
-
     if idx < 0 or idx >= len(msgs):
         raise HTTPException(status_code=400, detail="Invalid message index")
 
-    # Find the last user message at/before idx
+    # last user idx at/before idx
     last_user_idx = idx
     for i in range(idx, -1, -1):
         if msgs[i].role == "user":
             last_user_idx = i
             break
 
-    # Prune everything after last_user_idx
+    # prune after that user
     if last_user_idx < len(msgs) - 1:
         for m in msgs[last_user_idx + 1:]:
             db.delete(m)
         db.commit()
 
-    # Build the conversation up to & incl. the last user message
     conversation = [{"role": m.role, "content": m.content} for m in msgs[: last_user_idx + 1]]
 
-    # Avoid DetachedInstanceError during streaming
+    if req.enriched_message:
+        for j in range(len(conversation) - 1, -1, -1):
+            if conversation[j].get("role") == "user":
+                conversation = conversation.copy()
+                conversation[j] = {**conversation[j], "content": req.enriched_message}
+                break
+
     session_pk = session.id
 
     if stream:
         async def stream_generator():
             full_reply = ""
             try:
-                # ollama_chat_stream must already exist in your codebase (used by /chat)
                 async for chunk in ollama_chat_stream(model, conversation):
                     full_reply += chunk
                     yield chunk
             except Exception as e:
                 yield f"Ollama error: {e}"
-            # Persist with a fresh DB session (streaming context)
+            # persist (with sources)
             try:
                 db_sess = SessionLocal()
-                db_sess.add(models.ChatMessage(session_pk=session_pk, role="assistant", content=full_reply))
+                db_sess.add(models.ChatMessage(
+                    session_pk=session_pk, role="assistant", content=full_reply,
+                    sources_json=json.dumps(sources or [])
+                ))
                 db_sess.commit()
             finally:
                 try:
@@ -264,16 +301,38 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
 
         return StreamingResponse(stream_generator(), media_type="text/plain")
 
-    # Non-streaming
     try:
-        # ollama_chat must already exist in your codebase (used by /chat)
         reply = await ollama_chat(model, conversation)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
 
-    db.add(models.ChatMessage(session_pk=session_pk, role="assistant", content=reply))
+    db.add(models.ChatMessage(
+        session_pk=session_pk, role="assistant", content=reply,
+        sources_json=json.dumps(sources or [])
+    ))
     db.commit()
     return {"reply": reply}
 
+
+# -----------------------------------------------------------------------------
+# Web search enrichment endpoint
+@app.post("/websearch", response_model=schemas.WebSearchResponse)
+async def websearch_route(req: schemas.WebSearchRequest):
+    """
+    Return an enriched prompt (with citations) for a given user prompt.
+    Optionally uses the last `history_limit` turns from `req.messages`.
+    """
+    try:
+        messages = (req.messages or [])[-int(req.history_limit or 8):]
+        enriched, sources = await enrich_prompt(
+            user_prompt=req.prompt,
+            model=req.model,
+            messages=[{"role": m.role, "content": m.content} for m in messages],
+            searx_url=req.searx_url,
+            engines=req.engines,
+        )
+        return {"enriched_prompt": enriched, "sources": sources}
+    except Exception:
+        return {"enriched_prompt": req.prompt, "sources": []}
 
 # To run standalone: python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000

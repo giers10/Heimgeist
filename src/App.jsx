@@ -4,6 +4,7 @@ import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import GeneralSettings from './GeneralSettings'
 import InterfaceSettings from './InterfaceSettings'
+import WebsearchSettings from './WebsearchSettings'
 import { markdownToHTML  } from './markdown';
 // Extract <think> or <thinking> block (first occurrence) and return { think, answer }
 function splitThinkBlocks(text) {
@@ -43,7 +44,7 @@ function splitThinkBlocks(text) {
 }
 
 // Renders assistant message with a collapsible "Thoughts" block (if present)
-function AssistantMessageContent({ content, streamOutput }) {
+function AssistantMessageContent({ content, streamOutput, sources }) {
   const { think, answer } = splitThinkBlocks(content || '');
   const [open, setOpen] = React.useState(false);
   const showThinkButton = !!think;
@@ -76,12 +77,30 @@ function AssistantMessageContent({ content, streamOutput }) {
         className="msg-content"
         dangerouslySetInnerHTML={{ __html: markdownToHTML(answer || content || '') }}
       />
+      {Array.isArray(sources) && sources.length > 0 && (
+        <div className="msg-sources chips">
+          {sources.map((u, i) => {
+            let label = u;
+            try {
+              const host = new URL(u).hostname || u;
+              label = host.replace(/^www\./i, '');
+            } catch {}
+            return (
+              <a key={u + i} className="chip" href={u} target="_blank" rel="noreferrer" title={u}>
+                {label}
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 const API_URL_KEY = 'ollamaApiUrl';
 const COLOR_SCHEME_KEY = 'colorScheme';
+const WEBSEARCH_URL_KEY = 'websearch.searxUrl';
+const WEBSEARCH_ENGINES_KEY = 'websearch.engines';
 
 // Initial API value will be set by useEffect after settings are loaded
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
@@ -103,6 +122,24 @@ export default function App() {
   const [ollamaApiUrl, setOllamaApiUrl] = useState(API); // State for Ollama API URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);
+  const [searxUrl, setSearxUrl] = useState(localStorage.getItem(WEBSEARCH_URL_KEY) || 'http://localhost:8888');
+  const [searxEngines, setSearxEngines] = useState(() => {
+    try {
+      const raw = localStorage.getItem(WEBSEARCH_ENGINES_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return ["duckduckgo","bing","wikipedia","github","stack_overflow"];
+  });
+  useEffect(() => {
+    localStorage.setItem(WEBSEARCH_URL_KEY, searxUrl || '');
+  }, [searxUrl]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WEBSEARCH_ENGINES_KEY, JSON.stringify(searxEngines || []));
+    } catch {}
+  }, [searxEngines]);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [loading, setLoading] = useState(true); // Loading state for initial session fetch
   const [unreadSessions, setUnreadSessions] = useState([]); // Track unread messages
@@ -210,126 +247,170 @@ export default function App() {
     }
 
     // Continue conversation from the edited message
-    await regenerateFromIndex(index);
+    await regenerateFromIndex(index, next);
   }
 
-  async function regenerateFromIndex(index) {
-    const sessionId = activeSessionId;
-    if (!sessionId || typeof index !== 'number') return;
+async function regenerateFromIndex(index, overrideUserText = null) {
+  const sessionId = activeSessionId;
+  if (!sessionId || typeof index !== 'number') return;
 
-    const msgs = (chatSessions.find(s => s.session_id === sessionId)?.messages) || [];
-    let lastUserIdx = index;
-    for (let i = index; i >= 0; i--) {
-      if (msgs[i]?.role === 'user') { lastUserIdx = i; break; }
+  const msgs = (chatSessions.find(s => s.session_id === sessionId)?.messages) || [];
+  let lastUserIdx = index;
+  for (let i = index; i >= 0; i--) {
+    if (msgs[i]?.role === 'user') { lastUserIdx = i; break; }
+  }
+
+  // Prune UI to lastUserIdx
+  setChatSessions(prev =>
+    prev.map(s => s.session_id === sessionId
+      ? { ...s, messages: (s.messages || []).slice(0, lastUserIdx + 1) }
+      : s
+    )
+  );
+
+  setIsSending(true);
+
+  // --- optional websearch enrichment for regenerate ---
+  let enrichedPrompt = null;
+  let citationSources = [];
+  if (webSearchEnabled) {
+    try {
+      // Use the freshly edited user text when provided
+      const promptText = (overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || ''));
+
+      // Build compact recent history and overwrite the last user turn with promptText
+      const historyForSearch = msgs
+        .slice(Math.max(0, lastUserIdx - 7), lastUserIdx + 1)
+        .map(m => ({ role: m.role, content: m.content || '' }));
+      if (historyForSearch.length > 0) {
+        historyForSearch[historyForSearch.length - 1] = { role: 'user', content: promptText };
+      }
+
+      const resp = await fetch(`${ollamaApiUrl}/websearch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: promptText,
+          model,
+          messages: historyForSearch,
+          history_limit: 8,
+          searx_url: searxUrl || null,
+          engines: Array.isArray(searxEngines) ? searxEngines : null,
+        })
+      });
+      const data = await resp.json();
+      if (data && typeof data.enriched_prompt === 'string') {
+        enrichedPrompt = data.enriched_prompt;
+        citationSources = Array.isArray(data.sources) ? data.sources : [];
+      }
+    } catch (e) {
+      console.warn('web search enrichment (regenerate) failed', e);
     }
+  }
 
-    // Prune UI to lastUserIdx
+  if (streamOutput) {
+    const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
+    // add placeholder assistant message (keep sources on the placeholder)
     setChatSessions(prev =>
       prev.map(s => s.session_id === sessionId
-        ? { ...s, messages: (s.messages || []).slice(0, lastUserIdx + 1) }
+        ? { ...s, messages: [...(s.messages || []), { id: assistantMsgId, role: 'assistant', content: '', sources: citationSources }] }
         : s
       )
     );
 
-    setIsSending(true);
+    try {
+      const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          index,
+          model,
+          stream: true,
+          enriched_message: enrichedPrompt,
+          sources: citationSources || []
+        })
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let full = '';
+      let unreadMarked = false;
 
-    if (streamOutput) {
-      const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
-      // add placeholder assistant message
-      setChatSessions(prev =>
-        prev.map(s => s.session_id === sessionId
-          ? { ...s, messages: [...(s.messages || []), { id: assistantMsgId, role: 'assistant', content: '' }] }
-          : s
-        )
-      );
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-      try {
-        const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ index, model, stream: true })
-        });
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let full = '';
-        let unreadMarked = false; // NEW
+        const chunk = decoder.decode(value, { stream: true });
+        full += chunk;
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          full += chunk;
-
-          // Update the growing assistant message
-          setChatSessions(prev =>
-            prev.map(s => s.session_id === sessionId
-              ? { ...s, messages: (s.messages || []).map(m => m.id === assistantMsgId ? { ...m, content: full } : m) }
-              : s
-            )
-          );
-
-          // If this session is not active while streaming, mark unread once
-          if (!unreadMarked && activeSessionIdRef.current !== sessionId) {
-            unreadMarked = true;
-            setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-            setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
-          }
-        }
-
-        // On stream end: if user is in another chat, ensure unread + guided scroll are set
-        if (activeSessionIdRef.current !== sessionId) {
-          setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-          setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
-        } else {
-          // If user stayed here and didn't scroll up, align the finished answer nicely
-          if (!userScrolledUpRef.current[sessionId]) {
-            requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
-          } else {
-            // show the tip if they had scrolled away
-            setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsSending(false);
-      }
-    } else {
-      try {
-        const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ index, model, stream: false })
-        });
-        const data = await res.json();
-        const assistantMsgId = `msg-${Date.now()}`;
+        // Update the growing assistant message (sources remain intact)
         setChatSessions(prev =>
           prev.map(s => s.session_id === sessionId
-            ? { ...s, messages: [...(s.messages || []), { role: 'assistant', content: data.reply, id: assistantMsgId }] }
+            ? { ...s, messages: (s.messages || []).map(m => m.id === assistantMsgId ? { ...m, content: full } : m) }
             : s
           )
         );
 
-        if (activeSessionIdRef.current !== sessionId) {
-          // reply landed in background -> mark unread + remember where to scroll
+        if (!unreadMarked && activeSessionIdRef.current !== sessionId) {
+          unreadMarked = true;
           setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
           setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
-        } else {
-          // same chat -> align unless the user scrolled away
-          if (!userScrolledUpRef.current[sessionId]) {
-            requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
-          } else {
-            setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-          }
         }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsSending(false);
       }
+
+      if (activeSessionIdRef.current !== sessionId) {
+        setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+        setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
+      } else {
+        if (!userScrolledUpRef.current[sessionId]) {
+          requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
+        } else {
+          setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSending(false);
+    }
+  } else {
+    try {
+      const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          index,
+          model,
+          stream: false,
+          enriched_message: enrichedPrompt,
+          sources: citationSources || []
+        })
+      });
+      const data = await res.json();
+      const assistantMsgId = `msg-${Date.now()}`;
+      setChatSessions(prev =>
+        prev.map(s => s.session_id === sessionId
+          ? { ...s, messages: [...(s.messages || []), { role: 'assistant', content: data.reply, id: assistantMsgId, sources: citationSources }] }
+          : s
+        )
+      );
+
+      if (activeSessionIdRef.current !== sessionId) {
+        setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+        setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
+      } else {
+        if (!userScrolledUpRef.current[sessionId]) {
+          requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
+        } else {
+          setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSending(false);
     }
   }
+}
 
 
   // Persist userScrolledUp state per session + live ref for closures (streaming)
@@ -739,108 +820,115 @@ export default function App() {
   };
 
 
-  async function sendMessage() {
-    if (!input.trim() || !model) return;
+async function sendMessage() {
+  if (!input.trim() || !model) return;
 
-    let targetSessionId = activeSessionId;
-    let isNewChat = false;
-    if (!targetSessionId) {
-      const newSession = await createNewChat();
-      await new Promise(resolve => setTimeout(resolve, 200));
-      targetSessionId = newSession.session_id;
-      isNewChat = true;
-    } else {
-      const currentSession = chatSessions.find(s => s.session_id === targetSessionId);
-      isNewChat = currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0;
+  let targetSessionId = activeSessionId;
+  let isNewChat = false;
+  if (!targetSessionId) {
+    const newSession = await createNewChat();
+    await new Promise(resolve => setTimeout(resolve, 200));
+    targetSessionId = newSession.session_id;
+    isNewChat = true;
+  } else {
+    const currentSession = chatSessions.find(s => s.session_id === targetSessionId);
+    isNewChat = currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0;
+  }
+
+  const userMsg = { role: 'user', content: input.trim(), id: `msg-${Date.now()}-${Math.random()}` };
+  justSentMessage.current = true;
+  lastSentSessionRef.current = targetSessionId;
+  setUserScrolledUp(targetSessionId, false);
+
+  if (activeSessionIdRef.current === targetSessionId) {
+    restoredForRef.current = activeSessionIdRef.current;
+  }
+
+  flushSync(() => {
+    setChatSessions(prevSessions =>
+      prevSessions.map(session =>
+        session.session_id === targetSessionId
+          ? { ...session, messages: [...(session.messages || []), userMsg] }
+          : session
+      )
+    );
+    setInput('');
+  });
+  requestAnimationFrame(() => scrollToBottom('auto', targetSessionId));
+
+  setIsSending(true);
+  try {
+    // Build compact recent history for context-aware websearch (resource-friendly).
+    // We only send the last 8 turns by default, including assistant replies,
+    // and we also append the *current* user message (same content as `userMsg`).
+    let historyForSearch = [];
+    try {
+      const existing = (chatSessions.find(s => s.session_id === targetSessionId)?.messages) || [];
+      const lastFew = existing.slice(-8).map(m => ({ role: m.role, content: m.content || '' }));
+      historyForSearch = [...lastFew, { role: 'user', content: userMsg.content }];
+    } catch {}
+
+    // Decide on enrichment using the toggle
+    let enrichedPrompt = userMsg.content;
+    let citationSources = [];
+    if (webSearchEnabled) {
+      try {
+        const resp = await fetch(`${ollamaApiUrl}/websearch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: userMsg.content,
+            model,
+            messages: historyForSearch,
+            history_limit: 8,
+            searx_url: searxUrl || null,
+            engines: Array.isArray(searxEngines) ? searxEngines : null,
+          })
+        });
+        const data = await resp.json();
+        if (data && typeof data.enriched_prompt === 'string') {
+          enrichedPrompt = data.enriched_prompt;
+          citationSources = Array.isArray(data.sources) ? data.sources : [];
+        }
+      } catch (e) {
+        console.warn('web search enrichment failed', e);
+      }
     }
-    
-    const userMsg = { role: 'user', content: input.trim(), id: `msg-${Date.now()}-${Math.random()}` };
-    justSentMessage.current = true;
-    lastSentSessionRef.current = targetSessionId;
-    setUserScrolledUp(targetSessionId, false);
 
-    // Cancel any pending restore for the active session (we're about to control the scroll)
-    if (activeSessionIdRef.current === targetSessionId) {
-      restoredForRef.current = activeSessionIdRef.current; // mark as already restored
-    }
-
-    // Optimistic add and flush DOM, then scroll to bottom
-    flushSync(() => {
+    if (streamOutput) {
+      const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
+      const assistantMsg = { role: 'assistant', content: '', id: assistantMsgId, sources: citationSources };
       setChatSessions(prevSessions =>
         prevSessions.map(session =>
           session.session_id === targetSessionId
-            ? { ...session, messages: [...(session.messages || []), userMsg] }
+            ? { ...session, messages: [...(session.messages || []), assistantMsg] }
             : session
         )
       );
-      setInput('');
-    });
-    requestAnimationFrame(() => scrollToBottom('auto', targetSessionId));
 
-    setIsSending(true);
-    try {
-      if (streamOutput) {
-        const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
-        const assistantMsg = { role: 'assistant', content: '', id: assistantMsgId };
-        setChatSessions(prevSessions =>
-          prevSessions.map(session =>
-            session.session_id === targetSessionId
-              ? { ...session, messages: [...(session.messages || []), assistantMsg] }
-              : session
-          )
-        );
+      (async () => {
+        try {
+          const res = await fetch(`${ollamaApiUrl}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: targetSessionId,
+              model,
+              message: userMsg.content,
+              enriched_message: webSearchEnabled ? enrichedPrompt : null,
+              stream: true,
+              sources: citationSources || []
+            })
+          });
 
-        (async () => {
-          try {
-            const res = await fetch(`${ollamaApiUrl}/chat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                session_id: targetSessionId,
-                model,
-                message: userMsg.content,
-                stream: true
-              })
-            });
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let fullReply = '';
+          let pendingMarked = false;
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let fullReply = '';
-            let pendingMarked = false;
-
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) {
-                setChatSessions(prevSessions =>
-                  prevSessions.map(session =>
-                    session.session_id === targetSessionId
-                      ? {
-                          ...session,
-                          messages: session.messages.map(m =>
-                            m.id === assistantMsgId ? { ...m, content: fullReply } : m
-                          )
-                        }
-                      : session
-                  )
-                );
-
-                if (activeSessionIdRef.current === targetSessionId) {
-                  if (!userScrolledUpRef.current[targetSessionId]) {
-                    // user stayed at bottom -> reveal the message immediately
-                    requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
-                  } else {
-                    // user scrolled away while it was generating -> show tip instead of auto-scroll
-                    setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
-                  }
-                } else {
-                  setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
-                  setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
-                }
-
-                break;
-              }
-              const chunk = decoder.decode(value, { stream: true });
-              fullReply += chunk;
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) {
               setChatSessions(prevSessions =>
                 prevSessions.map(session =>
                   session.session_id === targetSessionId
@@ -853,113 +941,154 @@ export default function App() {
                     : session
                 )
               );
-              // Keep sticky-bottom *only* when streaming in the active chat and user is at/near bottom.
-              // This restores the old "push down while generating" behavior without fighting user scrolls.
-              if (
-                activeSessionIdRef.current === targetSessionId &&
-                !userScrolledUpRef.current[targetSessionId]
-              ) {
-                // use 'auto' so it stays snappy during streaming
-                scrollToBottom('auto', targetSessionId);
-              }
-              // If streaming in a background chat, prepare a one-time guided scroll
-              if (activeSessionIdRef.current !== targetSessionId && !pendingMarked) {
+
+              if (activeSessionIdRef.current === targetSessionId) {
+                if (!userScrolledUpRef.current[targetSessionId]) {
+                  requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
+                } else {
+                  setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+                }
+              } else {
                 setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
-                pendingMarked = true;
+                setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
               }
+
+              break;
             }
-          } catch (e) {
-            console.error("Failed to send message:", e);
-            const errorMsg = { role: 'assistant', content: 'Error: ' + e.message, id: `msg-${Date.now()}-${Math.random()}` };
+            const chunk = decoder.decode(value, { stream: true });
+            fullReply += chunk;
             setChatSessions(prevSessions =>
               prevSessions.map(session =>
                 session.session_id === targetSessionId
-                  ? { ...session, messages: [...session.messages.slice(0, -1), errorMsg] }
+                  ? {
+                      ...session,
+                      messages: session.messages.map(m =>
+                        m.id === assistantMsgId ? { ...m, content: fullReply } : m
+                      )
+                    }
                   : session
               )
             );
-          } finally {
-            setIsSending(false);
-          }
-        })();
-      } else {
-        const res = await fetch(`${ollamaApiUrl}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: targetSessionId,
-            model,
-            message: userMsg.content,
-            stream: false
-          })
-        });
-        const data = await res.json();
-        const assistantMsgId = `msg-${Date.now()}`;
-        const assistantMsg = { role: 'assistant', content: data.reply, id: assistantMsgId };
 
-        setChatSessions(prevSessions =>
-          prevSessions.map(session =>
-            session.session_id === targetSessionId
-              ? { ...session, messages: [...(session.messages || []), assistantMsg] }
-              : session
-          )
-        );
-
-        // For non-stream: align new ASSISTANT message to top, unless user scrolled away
-        if (assistantMsgId) {
-          if (activeSessionIdRef.current === targetSessionId) {
-            if (!userScrolledUpRef.current[targetSessionId]) {
-              requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
-            } else {
-              // <<< show the tip if user scrolled away while waiting >>>
-              setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+            if (
+              activeSessionIdRef.current === targetSessionId &&
+              !userScrolledUpRef.current[targetSessionId]
+            ) {
+              scrollToBottom('auto', targetSessionId);
             }
-          } else {
-            setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+            if (activeSessionIdRef.current !== targetSessionId && !pendingMarked) {
+              setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+              pendingMarked = true;
+            }
           }
-        }
-        setIsSending(false);
-      }
-
-      if (activeSessionIdRef.current !== targetSessionId) {
-        setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
-      }
-
-      if (isNewChat) {
-        fetch(`${ollamaApiUrl}/generate-title`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: targetSessionId,
-            message: userMsg.content,
-            model: model
-          })
-        })
-        .then(r => r.json())
-        .then(data => {
-          const sanitizedTitle = data.title.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/i, '').trim();
+        } catch (e) {
+          console.error('Failed to send message:', e);
+          const errorMsg = {
+            role: 'assistant',
+            content: 'Error: ' + e.message,
+            id: `msg-${Date.now()}-${Math.random()}`,
+            sources: citationSources
+          };
           setChatSessions(prevSessions =>
             prevSessions.map(session =>
-              session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session
+              session.session_id === targetSessionId
+                ? { ...session, messages: [...session.messages.slice(0, -1), errorMsg] }
+                : session
             )
           );
-        });
-      }
-    } catch (e) {
-      console.error("Failed to send message:", e);
-      const errorMsg = { role: 'assistant', content: 'Error: ' + e.message, id: `msg-${Date.now()}-${Math.random()}` };
+        } finally {
+          setIsSending(false);
+        }
+      })();
+    } else {
+      const res = await fetch(`${ollamaApiUrl}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: targetSessionId,
+          model,
+          message: userMsg.content,
+          enriched_message: webSearchEnabled ? enrichedPrompt : null,
+          stream: false,
+          sources: citationSources || []
+        })
+      });
+      const data = await res.json();
+      const assistantMsgId = `msg-${Date.now()}`;
+      const assistantMsg = {
+        role: 'assistant',
+        content: data.reply,
+        id: assistantMsgId,
+        sources: citationSources
+      };
+
       setChatSessions(prevSessions =>
         prevSessions.map(session =>
           session.session_id === targetSessionId
-            ? { ...session, messages: [...session.messages, errorMsg] }
+            ? { ...session, messages: [...(session.messages || []), assistantMsg] }
             : session
         )
       );
+
+      if (assistantMsgId) {
+        if (activeSessionIdRef.current === targetSessionId) {
+          if (!userScrolledUpRef.current[targetSessionId]) {
+            requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
+          } else {
+            setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+          }
+        } else {
+          setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+        }
+      }
       setIsSending(false);
     }
-  }
 
-  async function createNewChat() {
+    if (activeSessionIdRef.current !== targetSessionId) {
+      setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
+    }
+
+    if (isNewChat) {
+      fetch(`${ollamaApiUrl}/generate-title`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: targetSessionId,
+          message: userMsg.content,
+          model: model
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        const sanitizedTitle = data.title.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/i, '').trim();
+        setChatSessions(prevSessions =>
+          prevSessions.map(session =>
+            session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session
+          )
+        );
+      });
+    }
+  } catch (e) {
+    console.error("Failed to send message:", e);
+    const errorMsg = { role: 'assistant', content: 'Error: ' + e.message, id: `msg-${Date.now()}-${Math.random()}` };
+    setChatSessions(prevSessions =>
+      prevSessions.map(session =>
+        session.session_id === targetSessionId
+          ? { ...session, messages: [...session.messages, errorMsg] }
+          : session
+      )
+    );
+    setIsSending(false);
+  }
+}
+
+  
+
+function toggleWebSearch() {
+  setWebSearchEnabled(prev => !prev);
+}
+
+async function createNewChat() {
     const newSessionId = 'sess-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
     const res = await fetch(`${ollamaApiUrl}/sessions`, {
       method: 'POST',
@@ -1155,6 +1284,12 @@ export default function App() {
               >
                 Interface
               </div>
+              <div
+                className={`settings-item ${activeSettingsSubmenu === 'Websearch' ? 'active' : ''}`}
+                onClick={() => setActiveSettingsSubmenu('Websearch')}
+              >
+                Websearch
+              </div>
             </div>
           )}
         </div>
@@ -1192,7 +1327,7 @@ export default function App() {
                   >
                     {m.role === 'assistant' ? (
                       <div className="assistant-message-wrapper">
-                        <AssistantMessageContent content={m.content} streamOutput={streamOutput} />
+                        <AssistantMessageContent content={m.content} streamOutput={streamOutput} sources={m.sources} />
                         {!isSending && (
                           <div className="message-options-bar assistant-options">
                             <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
@@ -1295,6 +1430,9 @@ export default function App() {
                   placeholder="Ask any question..."
                   maxRows={13}
                 />
+                <button className={"websearch-toggle" + (webSearchEnabled ? " active" : "")} onClick={toggleWebSearch} title="Toggle web search" aria-pressed={webSearchEnabled}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </button>
                 <button className="button" onClick={sendMessage} disabled={isSending}>
                   {isSending ? <div className="spinner"></div> : 'Send'}
                 </button>
@@ -1321,6 +1459,14 @@ export default function App() {
               />
             )}
             {activeSettingsSubmenu === 'Interface' && <InterfaceSettings />}
+            {activeSettingsSubmenu === 'Websearch' && (
+              <WebsearchSettings
+                searxUrl={searxUrl}
+                setSearxUrl={setSearxUrl}
+                engines={searxEngines}
+                setEngines={setSearxEngines}
+              />
+            )}
           </>
         )}
       </div>

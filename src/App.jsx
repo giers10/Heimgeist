@@ -1430,9 +1430,21 @@ async function createNewChat() {
                   placeholder="Ask any question..."
                   maxRows={13}
                 />
-                <button className={"websearch-toggle" + (webSearchEnabled ? " active" : "")} onClick={toggleWebSearch} title="Toggle web search" aria-pressed={webSearchEnabled}>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                </button>
+                  <button
+                    type="button"
+                    className={"websearch-toggle" + (webSearchEnabled ? " active" : "")}
+                    onClick={toggleWebSearch}
+                    title="Toggle web search"
+                    aria-pressed={webSearchEnabled}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                         aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="2" y1="12" x2="22" y2="12"/>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                  </button>
                 <button className="button" onClick={sendMessage} disabled={isSending}>
                   {isSending ? <div className="spinner"></div> : 'Send'}
                 </button>

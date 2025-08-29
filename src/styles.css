@@ -892,6 +892,7 @@ input:checked + .slider:before {
 
 
 /* Web search toggle */
+/*
 .websearch-toggle {
   display: inline-flex;
   align-items: center;
@@ -905,6 +906,51 @@ input:checked + .slider:before {
 }
 .websearch-toggle svg { width: 16px; height: 16px; }
 .websearch-toggle.active { outline: 2px solid var(--accent); }
+*/
+/* Icon-only Websearch toggle */
+.websearch-toggle {
+  background: transparent;
+  border: 0;
+  padding: 0;                 /* icon-only */
+  margin: 0 .1rem 0 0;
+  line-height: 0;             /* collapse inline space */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  top: -7.5px;
+  color: var(--muted);        /* inactive color */
+  box-shadow: none;           /* no glow */
+  outline: none;              /* remove default outline */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.websearch-toggle svg {
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
+/* Active state = accent color */
+.websearch-toggle.active {
+  color: var(--accent);
+}
+
+/*
+.websearch-toggle:hover {
+  color: var(--accent);
+}
+*/
+
+/* Keep focus minimal (no glow) but still visible if you want a tiny underline instead of glow: */
+.websearch-toggle:focus, 
+.websearch-toggle:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+
 .msg-sources { margin-top: 8px; font-size: 12px; color: var(--muted); }
 .msg-sources a { color: var(--accent); text-decoration: none; margin-right: 8px; }
 .msg-sources a:hover { text-decoration: underline; }

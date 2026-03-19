@@ -477,6 +477,12 @@ textarea.input {
   align-items: flex-end; /* Align items to the bottom */
 }
 
+.footer-tool-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* Settings Page Styles (removed nested sidebar styles) */
 /* The main .app grid and .sidebar will handle settings navigation */
 
@@ -954,8 +960,8 @@ input:checked + .slider:before {
 .websearch-toggle svg { width: 16px; height: 16px; }
 .websearch-toggle.active { outline: 2px solid var(--accent); }
 */
-/* Icon-only Websearch toggle */
-.websearch-toggle {
+.websearch-toggle,
+.db-picker-toggle {
   background: transparent;
   border: 0;
   padding: 0;                 /* icon-only */
@@ -973,14 +979,16 @@ input:checked + .slider:before {
   -webkit-tap-highlight-color: transparent;
 }
 
-.websearch-toggle svg {
+.websearch-toggle svg,
+.db-picker-toggle svg {
   width: 20px;
   height: 20px;
   pointer-events: none;
 }
 
 /* Active state = accent color */
-.websearch-toggle.active {
+.websearch-toggle.active,
+.db-picker-toggle.active {
   color: var(--accent);
 }
 
@@ -992,9 +1000,66 @@ input:checked + .slider:before {
 
 /* Keep focus minimal (no glow) but still visible if you want a tiny underline instead of glow: */
 .websearch-toggle:focus, 
-.websearch-toggle:focus-visible {
+.websearch-toggle:focus-visible,
+.db-picker-toggle:focus,
+.db-picker-toggle:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+.db-picker-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  min-width: 240px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 14px 32px rgba(0,0,0,.35);
+  z-index: 20;
+}
+
+.db-picker-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.db-picker-option:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+
+.db-picker-option.selected {
+  background: var(--active-bg);
+}
+
+.db-picker-option:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.db-picker-status {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.db-picker-empty {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 

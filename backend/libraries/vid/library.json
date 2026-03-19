@@ -14,6 +14,16 @@
       "sync_status": "ready",
       "enrich_enabled": false,
       "synced_at": "2026-03-19T22:41:10Z"
+    },
+    {
+      "sha256": "df6855b3c94f99c79d6ff6563b7468df0b09ae5ce2a55e97293374a7f44c88c4",
+      "path": "/Users/giers/Movies/2025-05-21 21-46-44.mp4",
+      "rel": "df6855b3c94f99c79d6ff6563b7468df0b09ae5ce2a55e97293374a7f44c88c4--2025-05-21_21-46-44.mp4",
+      "name": "2025-05-21 21-46-44.mp4",
+      "size": 41563770,
+      "added_at": "2026-03-19T22:46:25Z",
+      "sync_status": "pending",
+      "enrich_enabled": false
     }
   ],
   "pipeline": {
@@ -22,6 +32,8 @@
     "embed_model": "bge-m3:latest",
     "embed_model_updated_at": "2026-03-19T22:41:10Z",
     "indexed_signature": "0f0b619a1c42a4b21f55ba2f089239a5f9cc36266e4823cca0ddd6701d710cfe",
-    "indexed_updated_at": "2026-03-19T22:41:10Z"
+    "indexed_updated_at": "2026-03-19T22:41:10Z",
+    "pending_prepare_signature": "7d00a908c8b3de8129ede766022aaef7884e463b200c4dde1a0d51eae26b5738",
+    "pending_prepare_updated_at": "2026-03-19T22:46:25Z"
   }
 }

@@ -14,6 +14,16 @@
       "sync_status": "ready",
       "enrich_enabled": false,
       "synced_at": "2026-03-19T22:49:59Z"
+    },
+    {
+      "sha256": "77f33c6d0e6afeb8212857de806097eb0735b05a5623eae686af46aa5d7411e1",
+      "path": "/Users/giers/run_on_android_emulator Kopie.sh",
+      "rel": "77f33c6d0e6afeb8212857de806097eb0735b05a5623eae686af46aa5d7411e1--run_on_android_emulator_Kopie.sh",
+      "name": "run_on_android_emulator Kopie.sh",
+      "size": 19622,
+      "added_at": "2026-03-19T22:50:44Z",
+      "sync_status": "pending",
+      "enrich_enabled": false
     }
   ],
   "pipeline": {
@@ -22,6 +32,8 @@
     "embed_model": "bge-m3:latest",
     "embed_model_updated_at": "2026-03-19T22:49:59Z",
     "indexed_signature": "0f0b619a1c42a4b21f55ba2f089239a5f9cc36266e4823cca0ddd6701d710cfe",
-    "indexed_updated_at": "2026-03-19T22:49:59Z"
+    "indexed_updated_at": "2026-03-19T22:49:59Z",
+    "pending_prepare_signature": "89adcdd22ffb98589aae447346569c3ba678f17fb2a2e18ea1f559dfc9887e3a",
+    "pending_prepare_updated_at": "2026-03-19T22:50:44Z"
   }
 }

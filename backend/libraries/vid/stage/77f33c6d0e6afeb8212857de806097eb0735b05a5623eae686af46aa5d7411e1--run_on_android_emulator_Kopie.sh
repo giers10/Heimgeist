@@ -1,0 +1,1 @@
+/Users/giers/run_on_android_emulator Kopie.sh

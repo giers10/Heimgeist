@@ -705,19 +705,11 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
       if (nextLibraries.length === 0) {
         setActiveLibrarySlug(null);
-        setChatLibrarySlug(null);
-        setPendingChatLibrarySlug(null);
         return;
       }
 
       if (!nextLibraries.some(lib => lib.slug === activeLibrarySlug)) {
         setActiveLibrarySlug(nextLibraries[0].slug);
-      }
-      if (chatLibrarySlug && !nextLibraries.some(lib => lib.slug === chatLibrarySlug)) {
-        setChatLibrarySlug(null);
-      }
-      if (pendingChatLibrarySlug && !nextLibraries.some(lib => lib.slug === pendingChatLibrarySlug)) {
-        setPendingChatLibrarySlug(null);
       }
     } catch (error) {
       console.warn('Failed to load libraries', error);
@@ -811,13 +803,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
   useEffect(() => {
     try {
-      if (chatLibrarySlug) {
-        localStorage.setItem(CHAT_LIBRARY_KEY, chatLibrarySlug);
-      } else {
-        localStorage.removeItem(CHAT_LIBRARY_KEY);
-      }
+      localStorage.setItem(CHAT_LIBRARY_MAP_KEY, JSON.stringify(chatLibraryBySession || {}));
     } catch {}
-  }, [chatLibrarySlug]);
+  }, [chatLibraryBySession]);
 
   useEffect(() => {
     if (!ollamaApiUrl) return;
@@ -826,12 +814,29 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       refreshLibraryJobs();
     }, 3000);
     return () => clearInterval(interval);
-  }, [ollamaApiUrl, activeSidebarMode, activeLibrarySlug, chatLibrarySlug]);
+  }, [ollamaApiUrl, activeSidebarMode, activeLibrarySlug]);
 
   // Load messages for the active session
   useEffect(() => {
     fetchHistory(activeSessionId);
   }, [activeSessionId]);
+
+  useEffect(() => {
+    if (!libraries.length) return
+    const validSlugs = new Set(libraries.map(library => library.slug))
+    setChatLibraryBySession(prev => {
+      let changed = false
+      const next = {}
+      for (const [sessionId, slug] of Object.entries(prev || {})) {
+        if (validSlugs.has(slug)) {
+          next[sessionId] = slug
+        } else {
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [libraries])
 
   const handleSidebarClick = (mode) => {
     // Saving happens in the centralized cleanup effect below
@@ -851,104 +856,23 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     return libraries.find(lib => lib.slug === activeLibrarySlug) || null;
   }, [activeLibrarySlug, libraries]);
 
+  const chatLibrarySlug = activeSessionId ? (chatLibraryBySession[activeSessionId] || null) : null
+
   const chatLibrary = useMemo(() => {
     return libraries.find(lib => lib.slug === chatLibrarySlug) || null;
   }, [chatLibrarySlug, libraries]);
 
-  const pendingChatLibrary = useMemo(() => {
-    return libraries.find(lib => lib.slug === pendingChatLibrarySlug) || null;
-  }, [pendingChatLibrarySlug, libraries]);
+  const chatLibraryHasActiveJob = useMemo(() => {
+    if (!chatLibrarySlug) return false
+    return libraryJobs.some(job => job.slug === chatLibrarySlug && (job.status === 'queued' || job.status === 'running'))
+  }, [chatLibrarySlug, libraryJobs])
 
-  const chatAttachmentLibrary = useMemo(() => {
-    return chatLibrary || pendingChatLibrary || null;
-  }, [chatLibrary, pendingChatLibrary]);
-
-  useEffect(() => {
-    if (chatLibrarySlug && chatLibrary && !chatLibrary.states?.is_indexed) {
-      if (chatLibrary.files?.length) {
-        setPendingChatLibrarySlug(chatLibrarySlug)
-      }
-      setChatLibrarySlug(null)
-    }
-  }, [chatLibrarySlug, chatLibrary]);
-
-  useEffect(() => {
-    if (!pendingChatLibrarySlug || !ollamaApiUrl) return
-
-    const jobsForLibrary = libraryJobs
-      .filter(job => job.slug === pendingChatLibrarySlug)
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-    const hasActiveJob = jobsForLibrary.some(job => job.status === 'queued' || job.status === 'running')
-    const latestJob = jobsForLibrary[0] || null
-
-    if (!pendingChatLibrary) {
-      setPendingChatLibrarySlug(null)
-      return
-    }
-
-    if (pendingChatLibrary.states?.is_indexed) {
-      setChatLibrarySlug(pendingChatLibrarySlug)
-      setPendingChatLibrarySlug(null)
-      return
-    }
-
-    if (hasActiveJob) return
-
-    if (latestJob?.status === 'failed') {
-      setPendingChatLibrarySlug(null)
-      return
-    }
-
-    if (!pendingChatLibrary.files?.length) {
-      setPendingChatLibrarySlug(null)
-      return
-    }
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        await startLibraryJob(pendingChatLibrarySlug, 'prepare')
-        if (!cancelled) {
-          await refreshLibraries()
-        }
-      } catch (error) {
-        console.error('Failed to prepare library for chat', error)
-        if (!cancelled) {
-          setPendingChatLibrarySlug(null)
-        }
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [pendingChatLibrarySlug, pendingChatLibrary, libraryJobs, ollamaApiUrl])
-
-  async function toggleChatLibrary(libraryOrSlug) {
-    const slug = typeof libraryOrSlug === 'string' ? libraryOrSlug : libraryOrSlug?.slug
-    if (!slug) return
-
-    if (chatLibrarySlug === slug || pendingChatLibrarySlug === slug) {
-      setChatLibrarySlug(current => (current === slug ? null : current))
-      setPendingChatLibrarySlug(current => (current === slug ? null : current))
-      return
-    }
-
-    const library = libraries.find(lib => lib.slug === slug)
-    if (!library) return
-
-    if (library.states?.is_indexed) {
-      setChatLibrarySlug(slug)
-      setPendingChatLibrarySlug(null)
-      return
-    }
-
-    if (!library.files?.length) {
-      throw new Error('Add files before adding this database to chat.')
-    }
-
-    setPendingChatLibrarySlug(slug)
-  }
+  const chatLibraryStatusSuffix = useMemo(() => {
+    if (!chatLibrary) return ''
+    if (!chatLibrary.files?.length) return ' (empty)'
+    if (chatLibrary.states?.is_indexed) return ''
+    return chatLibraryHasActiveJob ? ' (syncing)' : ' (needs sync)'
+  }, [chatLibrary, chatLibraryHasActiveJob])
 
   // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)
   useEffect(() => {

@@ -5,17 +5,6 @@
   "created_at": "2026-03-19T21:57:31Z",
   "files": [
     {
-      "sha256": "95abaff996e9a675ea5af6323bab9293ff474cf420761be9df063a41bdc2d1b0",
-      "path": "/Users/giers/Schleim Keim - Party im Cannabisbeet.mp3",
-      "rel": "95abaff996e9a675ea5af6323bab9293ff474cf420761be9df063a41bdc2d1b0--Schleim_Keim_-_Party_im_Cannabisbeet.mp3",
-      "name": "Schleim Keim - Party im Cannabisbeet.mp3",
-      "size": 5785629,
-      "added_at": "2026-03-19T22:08:21Z",
-      "sync_status": "ready",
-      "enrich_enabled": false,
-      "synced_at": "2026-03-19T22:09:12Z"
-    },
-    {
       "sha256": "dd3889a0a32e9f5895d7d444f680421195a41129663afd19ef821817b1b9f516",
       "path": "/Users/giers/Pictures/giersi1/ELYA3238.jpeg",
       "rel": "dd3889a0a32e9f5895d7d444f680421195a41129663afd19ef821817b1b9f516--ELYA3238.jpeg",
@@ -33,7 +22,7 @@
     "embed_model_updated_at": "2026-03-19T22:09:12Z",
     "indexed_signature": "10b47575a3d348baacc5f3ac610bf7052974b746527263aad088e5e8490662a5",
     "indexed_updated_at": "2026-03-19T22:09:12Z",
-    "pending_prepare_signature": "a5cb9837dcf6e30f608239be2b5d0756cc5bfd99f7cb7a32df48586d053d1c91",
-    "pending_prepare_updated_at": "2026-03-19T22:13:16Z"
+    "pending_prepare_signature": "343f5c414b906b128b80c0ec81d79225640e75c11a9302da9698064e11497555",
+    "pending_prepare_updated_at": "2026-03-19T22:14:12Z"
   }
 }

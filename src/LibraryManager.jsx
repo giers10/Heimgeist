@@ -290,32 +290,6 @@ export default function LibraryManager({
 
         {errorMessage && <div className="form-error">{errorMessage}</div>}
 
-        <div className="library-toolbar">
-          <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
-          {library.files?.length > 0 && !isSyncing && !isReadyForChat && (
-            <button className="button ghost" disabled={busy} onClick={retrySync}>Retry Sync</button>
-          )}
-          <button
-            className="button danger"
-            onClick={() => {
-              setConfirmDelete(true)
-              setErrorMessage('')
-            }}
-          >
-            Delete
-          </button>
-        </div>
-
-        <div className="library-states">
-          <div className={`state-pill ${library.states?.has_files ? 'ready' : ''}`}>Files: {library.files?.length || 0}</div>
-          <div className={`state-pill ${(library.states?.enrichment_enabled_files || 0) > 0 ? 'ready' : ''}`}>
-            Enrich: {library.states?.enrichment_enabled_files || 0}
-          </div>
-          <div className={`state-pill ${isReadyForChat ? 'ready' : ''}`}>
-            {isSyncing ? 'Syncing' : isReadyForChat ? 'Ready' : library.files?.length ? 'Needs sync' : 'No data yet'}
-          </div>
-        </div>
-
         <div className="library-files">
           <h2>Files</h2>
           {library.files?.length ? (
@@ -369,6 +343,22 @@ export default function LibraryManager({
             <p className="muted-copy">No files registered yet.</p>
           )}
         </div>
+      </div>
+
+      <div className="library-footer-actions">
+        <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
+        {library.files?.length > 0 && !isSyncing && !isReadyForChat && (
+          <button className="button ghost" disabled={busy} onClick={retrySync}>Retry Sync</button>
+        )}
+        <button
+          className="button danger"
+          onClick={() => {
+            setConfirmDelete(true)
+            setErrorMessage('')
+          }}
+        >
+          Delete
+        </button>
       </div>
 
       {toasts.length > 0 && (

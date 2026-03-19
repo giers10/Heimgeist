@@ -8,6 +8,48 @@ function statusLabel(job) {
   return `${type} · ${job.status}${progress ? ` · ${progress}` : ''}${detail}`
 }
 
+function fileSyncMeta(file) {
+  const sync = file?.sync || {}
+  const status = String(sync.status || 'pending')
+  const progress = Math.max(0, Math.min(100, Number(sync.progress) || 0))
+  const detail = String(sync.detail || '').trim()
+  const error = String(sync.error || '').trim()
+
+  if (status === 'ready') {
+    return {
+      status,
+      progress: 100,
+      label: 'Available',
+      detail: detail || 'Ready in chat.'
+    }
+  }
+
+  if (status === 'failed') {
+    return {
+      status,
+      progress: 100,
+      label: 'Sync failed',
+      detail: error || detail || 'Heimgeist could not finish syncing this file.'
+    }
+  }
+
+  if (status === 'syncing') {
+    return {
+      status,
+      progress,
+      label: progress > 0 ? `Syncing ${Math.round(progress)}%` : 'Syncing',
+      detail: detail || 'Building corpus, enrichment, embeddings, and indexes.'
+    }
+  }
+
+  return {
+    status: 'pending',
+    progress: 6,
+    label: 'Queued',
+    detail: 'Waiting to start the full sync pipeline.'
+  }
+}
+
 export default function LibraryManager({
   apiBase,
   library,
@@ -96,6 +138,7 @@ export default function LibraryManager({
   const activeJobs = (jobs || []).filter(job => job.slug === library.slug && (job.status === 'queued' || job.status === 'running'))
   const isSyncing = activeJobs.length > 0
   const isReadyForChat = !!library.states?.is_indexed
+  const hasFailedFiles = (library.files || []).some(file => file?.sync?.status === 'failed')
 
   return (
     <div className="library-panel">
@@ -149,9 +192,9 @@ export default function LibraryManager({
         </div>
       )}
 
-      {library.files?.length > 0 && !isReadyForChat && !isSyncing && (
+      {hasFailedFiles && !isSyncing && (
         <div className="library-chat-note">
-          This database is not ready yet. Add or remove a file to trigger another full sync.
+          Some files did not finish syncing. Their tiles show the failure state and error details.
         </div>
       )}
 
@@ -169,18 +212,40 @@ export default function LibraryManager({
         <h2>Files</h2>
         {library.files?.length ? (
           <div className="library-file-list">
-            {library.files.map(file => (
-              <div key={file.sha256 || file.rel} className="library-file-row">
-                <div className="library-file-meta">
-                  <div className="library-file-name">{file.name || file.path}</div>
-                  <div className="library-file-path">{file.path}</div>
+            {library.files.map(file => {
+              const sync = fileSyncMeta(file)
+              return (
+                <div key={file.sha256 || file.rel} className="library-file-row">
+                  <div className="library-file-meta">
+                    <div className="library-file-name">{file.name || file.path}</div>
+                    <div className="library-file-path">{file.path}</div>
+                    <div className="library-file-sync">
+                      <div className="library-file-sync-row">
+                        <span className={`library-file-sync-label ${sync.status}`}>{sync.label}</span>
+                        <span className="library-file-sync-detail">{sync.detail}</span>
+                      </div>
+                      <div
+                        className={`library-file-progress ${sync.status}`}
+                        role="progressbar"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow={Math.round(sync.progress)}
+                        aria-label={`${file.name || file.path} sync progress`}
+                      >
+                        <div
+                          className="library-file-progress-bar"
+                          style={{ width: `${sync.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="library-file-actions">
+                    <button className="button ghost" onClick={() => window.electronAPI?.openPath?.(file.path)}>Open</button>
+                    <button className="button ghost" onClick={() => removeFile(file.rel)}>Remove</button>
+                  </div>
                 </div>
-                <div className="library-file-actions">
-                  <button className="button ghost" onClick={() => window.electronAPI?.openPath?.(file.path)}>Open</button>
-                  <button className="button ghost" onClick={() => removeFile(file.rel)}>Remove</button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <p className="muted-copy">No files registered yet.</p>

@@ -55,7 +55,11 @@ import threading
 import numpy as np
 import requests
 import faiss
-from tqdm import tqdm
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 
 # -----------------------------
 # IO

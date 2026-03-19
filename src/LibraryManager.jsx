@@ -151,7 +151,7 @@ export default function LibraryManager({
 
       {library.files?.length > 0 && !isReadyForChat && !isSyncing && (
         <div className="library-chat-note">
-          This database is waiting for its next sync.
+          This database is not ready yet. Add or remove a file to trigger another full sync.
         </div>
       )}
 

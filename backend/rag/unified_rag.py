@@ -301,7 +301,7 @@ def output_or_answer(final: List[Dict], args, on_stream=None):
 # -----------------------------
 # Main CLI (search / answer)
 # -----------------------------
-def run_cli(args):
+def run_cli(args, on_stream=None):
     # Determine mode
     hybrid_ok = all([args.shadow_index, args.shadow_store, args.content_index, args.content_store])
 
@@ -373,7 +373,7 @@ def run_cli(args):
                 rec["_score"] = rec["_ann"]
 
         final = candidates[: max(1, min(args.k, len(candidates)))]
-        return output_or_answer(final, args)
+        return output_or_answer(final, args, on_stream=on_stream)
 
     # HYBRID path
     shadow_index = faiss.read_index(args.shadow_index)
@@ -496,7 +496,7 @@ def run_cli(args):
     # per-source cap and top-k
     ordered = apply_per_source_cap(out_candidates, args.per_source_limit)
     final = ordered[: max(1, min(args.k, len(ordered)))]
-    return output_or_answer(final, args)
+    return output_or_answer(final, args, on_stream=on_stream)
 
 # -----------------------------
 # Rerank worker mode

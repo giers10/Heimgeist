@@ -1586,6 +1586,7 @@ async function createNewChat() {
                   >
                     <span>{library.name}</span>
                     {chatLibrarySlug === library.slug && <div className="db-active-badge">Chat</div>}
+                    {pendingChatLibrarySlug === library.slug && <div className="db-active-badge">Preparing</div>}
                   </div>
                 ))
               )}
@@ -1675,7 +1676,11 @@ async function createNewChat() {
           <>
             <div className="header">
               <strong>Chat - {chatSessions.find(s => s.session_id === activeSessionId)?.name || 'New Chat'}</strong>
-              {chatLibrary && <span className="header-subtle">KB: {chatLibrary.name}</span>}
+              {chatAttachmentLibrary && (
+                <span className="header-subtle">
+                  {chatLibrary ? `DB: ${chatLibrary.name}` : `DB: ${chatAttachmentLibrary.name} (preparing)`}
+                </span>
+              )}
             </div>
 
             <div key={activeSessionId} className="chat" ref={chatRef} onClick={handleChatFrameClick}>
@@ -1827,7 +1832,11 @@ async function createNewChat() {
           <>
             <div className="header">
               <strong>{activeLibrary?.name || 'Databases'}</strong>
-              {chatLibrary && <span className="header-subtle">Chat KB: {chatLibrary.name}</span>}
+              {chatAttachmentLibrary && (
+                <span className="header-subtle">
+                  {chatLibrary ? `Chat DB: ${chatLibrary.name}` : `Chat DB: ${chatAttachmentLibrary.name} (preparing)`}
+                </span>
+              )}
             </div>
             <LibraryManager
               apiBase={ollamaApiUrl}

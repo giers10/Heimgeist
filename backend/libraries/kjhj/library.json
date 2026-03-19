@@ -3,6 +3,20 @@
   "name": "kjhj",
   "slug": "kjhj",
   "created_at": "2026-03-19T20:46:46Z",
-  "files": [],
-  "pipeline": {}
+  "files": [
+    {
+      "sha256": "87b5e039fa580a8bbb84125fda96570462315b6b65090b43c7392edf53248c0d",
+      "path": "/Users/giers/Documents/assoziierungsabkommen-eu-ukraine--abl-l-161-vom-140529-neu.pdf",
+      "rel": "87b5e039fa580a8bbb84125fda96570462315b6b65090b43c7392edf53248c0d--assoziierungsabkommen-eu-ukraine--abl-l-161-vom-140529-neu.pdf",
+      "name": "assoziierungsabkommen-eu-ukraine--abl-l-161-vom-140529-neu.pdf",
+      "size": 11005066,
+      "added_at": "2026-03-19T20:46:52Z",
+      "sync_status": "failed",
+      "sync_error": "ModuleNotFoundError: No module named 'tqdm'"
+    }
+  ],
+  "pipeline": {
+    "pending_prepare_signature": "58262b48b89eeb46de1b5b9be22147c197479a7f75bbf8409f76963177ab1f95",
+    "pending_prepare_updated_at": "2026-03-19T20:46:52Z"
+  }
 }

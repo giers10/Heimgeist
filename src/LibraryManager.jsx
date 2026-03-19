@@ -12,6 +12,7 @@ export default function LibraryManager({
   library,
   jobs,
   chatLibrarySlug,
+  pendingChatLibrarySlug,
   onRefresh,
   onToggleChatLibrary,
   onDeleted
@@ -139,7 +140,7 @@ export default function LibraryManager({
 
   const activeJobs = (jobs || []).filter(job => job.slug === library.slug && (job.status === 'queued' || job.status === 'running'))
   const usingInChat = chatLibrarySlug === library.slug
-  const canUseInChat = usingInChat || !!library.states?.is_indexed
+  const isPreparingForChat = pendingChatLibrarySlug === library.slug
   const canStartRename = () => {
     setRenameValue(library.name || '')
     setErrorMessage('')
@@ -213,11 +214,11 @@ export default function LibraryManager({
         <button className="button" onClick={canStartRename}>Rename</button>
         <button
           className="button"
-          disabled={!canUseInChat}
-          title={!canUseInChat ? 'Index this database before using it in chat.' : ''}
-          onClick={() => onToggleChatLibrary(usingInChat ? null : library.slug)}
+          disabled={busy || isPreparingForChat}
+          title={isPreparingForChat ? 'Preparing this database for chat.' : ''}
+          onClick={() => onToggleChatLibrary(usingInChat ? null : library).catch((error) => setErrorMessage(String(error?.message || error)))}
         >
-          {usingInChat ? 'Stop Using In Chat' : 'Use In Chat'}
+          {usingInChat ? 'Stop Using In Chat' : isPreparingForChat ? 'Preparing For Chat...' : 'Use In Chat'}
         </button>
         <button
           className="button danger"
@@ -244,9 +245,15 @@ export default function LibraryManager({
         </div>
       )}
 
-      {!library.states?.is_indexed && !usingInChat && (
+      {isPreparingForChat && (
         <div className="library-chat-note">
-          Run Index before using this database in chat.
+          Preparing this database for chat. Heimgeist will build and index it automatically.
+        </div>
+      )}
+
+      {!library.states?.is_indexed && !usingInChat && !isPreparingForChat && (
+        <div className="library-chat-note">
+          Use In Chat will prepare this database automatically if it is not ready yet.
         </div>
       )}
 

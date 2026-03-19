@@ -831,7 +831,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
 async def _run_job(job_id: str, fn_name: str, **kwargs):
     loop = asyncio.get_running_loop()
     job = JOBS[job_id]
-    source_signature = kwargs.pop("source_signature", None)
+    stage_signature = kwargs.pop("stage_signature", None)
 
     def on_progress(phase: str, pct: float, detail: str):
         job["phase"] = phase
@@ -843,7 +843,7 @@ async def _run_job(job_id: str, fn_name: str, **kwargs):
         if fn_name == "build":
             runner = _load_pipeline_fn("corpus_builder", "run_build")
         elif fn_name == "enrich":
-            runner = _load_pipeline_fn("corpus_enricher", "run_enrich")
+            runner = functools.partial(_run_selected_enrichment, job["slug"])
         elif fn_name == "embed":
             runner = _load_pipeline_fn("index_builder", "run_index")
         elif fn_name == "prepare":
@@ -853,8 +853,8 @@ async def _run_job(job_id: str, fn_name: str, **kwargs):
 
         call = functools.partial(runner, on_progress=on_progress, **kwargs)
         result = await loop.run_in_executor(JOB_EXECUTOR, call)
-        if fn_name in {"build", "enrich", "embed"} and source_signature:
-            _mark_pipeline_stage(job["slug"], fn_name, source_signature)
+        if fn_name in {"build", "enrich", "embed"} and stage_signature:
+            _mark_pipeline_stage(job["slug"], fn_name, stage_signature)
         job["status"] = "succeeded"
         job["progress"] = 100.0
         job["phase"] = "done"

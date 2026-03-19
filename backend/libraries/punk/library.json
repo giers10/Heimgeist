@@ -11,14 +11,26 @@
       "name": "backfire-basics-german.pdf",
       "size": 118218,
       "added_at": "2026-03-19T21:27:29Z",
-      "sync_status": "pending",
-      "enrich_enabled": false
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "HTTPError: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/embeddings"
+    },
+    {
+      "sha256": "259b04f8f364d7dc890f081b366e2c324d3c1ec04ac5d0ca92a5acce70f9e630",
+      "path": "/Users/giers/Documents/Dramatic structure - Wikipedia.pdf",
+      "rel": "259b04f8f364d7dc890f081b366e2c324d3c1ec04ac5d0ca92a5acce70f9e630--Dramatic_structure_-_Wikipedia.pdf",
+      "name": "Dramatic structure - Wikipedia.pdf",
+      "size": 672524,
+      "added_at": "2026-03-19T21:27:48Z",
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "HTTPError: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/embeddings"
     }
   ],
   "pipeline": {
-    "corpus_signature": "734f722dc642d8c6fe719a6e3be34d03c1d79ed3bb3ef43e5de4a599ee94dba3",
-    "corpus_updated_at": "2026-03-19T21:27:30Z",
-    "pending_prepare_signature": "20e7e67600a1ad3f1aced22ab507fbc074fcffff6292aef801c78c6f2f0cc9a4",
-    "pending_prepare_updated_at": "2026-03-19T21:27:29Z"
+    "corpus_signature": "7c45a4135e880804d4cd4fe9e8f4220210001124e810a8e19c1b61270fee14d8",
+    "corpus_updated_at": "2026-03-19T21:27:50Z",
+    "pending_prepare_signature": "1a096ae3e7e680979d5fa8374d31043b76305de9680c507d68a88c2008d7cf10",
+    "pending_prepare_updated_at": "2026-03-19T21:27:48Z"
   }
 }

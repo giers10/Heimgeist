@@ -161,7 +161,7 @@ export default function LibraryManager({
   if (!library) {
     return (
       <div className="placeholder-view">
-        <p>Create a database and add files. Heimgeist will keep its retrieval pipeline updated automatically.</p>
+        <p>Create a database and add files. Heimgeist will raw-index them automatically, and you can opt specific files into enrichment.</p>
       </div>
     )
   }
@@ -219,7 +219,7 @@ export default function LibraryManager({
 
       {isSyncing && (
         <div className="library-chat-note">
-          Syncing this database. Heimgeist is rebuilding the corpus, enrichment, embeddings, and indexes automatically.
+          Syncing this database. Heimgeist is rebuilding the corpus and indexes automatically, and only selected files will run through enrichment.
         </div>
       )}
 

@@ -11,12 +11,15 @@
       "name": "GeorgeJordac-TheVoiceOfHumanJustice.pdf",
       "size": 849816,
       "added_at": "2026-03-19T21:17:22Z",
-      "sync_status": "pending",
-      "enrich_enabled": false
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "HTTPError: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/embeddings"
     }
   ],
   "pipeline": {
     "pending_prepare_signature": "3eb68db8cef2a242639047a877498e175b2de01652f1617bf54e22ab1847176c",
-    "pending_prepare_updated_at": "2026-03-19T21:17:22Z"
+    "pending_prepare_updated_at": "2026-03-19T21:17:22Z",
+    "corpus_signature": "4ee63713a76f8fb419918759fc04071848fb669a0e7b5b12c15727224c3838d2",
+    "corpus_updated_at": "2026-03-19T21:17:25Z"
   }
 }

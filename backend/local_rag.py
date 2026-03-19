@@ -177,14 +177,56 @@ def _source_signature(files: List[Dict[str, Any]]) -> Optional[str]:
     return digest.hexdigest()
 
 
+def _file_enrich_enabled(entry: Dict[str, Any]) -> bool:
+    value = entry.get("enrich_enabled")
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _versioned_signature(*parts: Optional[str]) -> Optional[str]:
+    clean_parts = [str(part) for part in parts if part]
+    if not clean_parts:
+        return None
+    digest = hashlib.sha256()
+    for part in clean_parts:
+        digest.update(part.encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def _corpus_signature(files: List[Dict[str, Any]]) -> Optional[str]:
+    return _versioned_signature("corpus", RAW_CORPUS_PROFILE, _source_signature(files))
+
+
+def _prepare_signature(files: List[Dict[str, Any]]) -> Optional[str]:
+    source_signature = _source_signature(files)
+    if not source_signature:
+        return None
+
+    digest = hashlib.sha256()
+    digest.update(f"prepare\n{RAW_CORPUS_PROFILE}\n{PREPARE_PROFILE}\n{source_signature}\n".encode("utf-8"))
+    for entry in sorted(files, key=lambda item: str(item.get("rel") or item.get("path") or item.get("sha256") or "")):
+        rel = str(entry.get("rel") or "")
+        enabled = "1" if _file_enrich_enabled(entry) else "0"
+        digest.update(f"{rel}\t{enabled}\n".encode("utf-8"))
+    return digest.hexdigest()
+
+
 def _collect_library_paths(slug: str) -> Dict[str, Path]:
     base = lib_dir(slug)
     return {
         "base": base,
         "stage": stage_dir(slug),
         "corpus": base / "corpus.jsonl",
+        "enrich_input": base / "corpus.enrich-input.jsonl",
         "enhanced": base / "corpus.enhanced.jsonl",
         "shadow": base / "corpus.shadow.jsonl",
+        "shadow_partial": base / "corpus.shadow.partial.jsonl",
         "indexes": indexes_dir(slug),
         "shadow_index": indexes_dir(slug) / "shadow.index.faiss",
         "shadow_store": indexes_dir(slug) / "shadow.meta.jsonl",
@@ -193,12 +235,22 @@ def _collect_library_paths(slug: str) -> Dict[str, Path]:
     }
 
 
+def _cleanup_enrichment_artifacts(slug: str) -> None:
+    paths = _collect_library_paths(slug)
+    for key in ("enrich_input", "enhanced", "shadow", "shadow_partial"):
+        target = paths[key]
+        if target.exists():
+            target.unlink()
+
+
 def _cleanup_generated_artifacts(slug: str) -> None:
     paths = _collect_library_paths(slug)
     for key in (
         "corpus",
+        "enrich_input",
         "enhanced",
         "shadow",
+        "shadow_partial",
         "shadow_index",
         "shadow_store",
         "content_index",
@@ -232,6 +284,7 @@ def _build_file_sync_payload(
 
     for entry in files:
         file_entry = dict(entry)
+        file_entry["enrich_enabled"] = _file_enrich_enabled(file_entry)
         stored_status = str(file_entry.get("sync_status") or "pending")
         sync_status = stored_status
         sync_progress = 100.0 if stored_status == "ready" else 0.0
@@ -271,16 +324,20 @@ def library_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     raw_files = list(data.get("files", []))
     files = _build_file_sync_payload(data["slug"], raw_files, pipeline)
     source_signature = _source_signature(files)
-    has_corpus = bool(source_signature) and pipeline.get("corpus_signature") == source_signature and paths["corpus"].exists()
+    corpus_signature = _corpus_signature(files)
+    prepare_signature = _prepare_signature(files)
+    enrichment_enabled_files = sum(1 for entry in files if _file_enrich_enabled(entry))
+    has_corpus = bool(corpus_signature) and pipeline.get("corpus_signature") == corpus_signature and paths["corpus"].exists()
     is_enriched = (
-        bool(source_signature)
-        and pipeline.get("enriched_signature") == source_signature
+        enrichment_enabled_files > 0
+        and bool(prepare_signature)
+        and pipeline.get("enriched_signature") == prepare_signature
         and paths["enhanced"].exists()
-        and paths["shadow"].exists()
+        and paths["shadow_partial"].exists()
     )
     is_indexed = (
-        bool(source_signature)
-        and pipeline.get("indexed_signature") == source_signature
+        bool(prepare_signature)
+        and pipeline.get("indexed_signature") == prepare_signature
         and paths["shadow_index"].exists()
         and paths["shadow_store"].exists()
         and paths["content_index"].exists()
@@ -293,17 +350,20 @@ def library_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         "is_indexed": is_indexed,
         "is_ready_for_chat": is_indexed,
         "needs_prepare": bool(files) and not is_indexed,
+        "enrichment_enabled_files": enrichment_enabled_files,
     }
     artifacts = {
         "corpus_records": _line_count(paths["corpus"]) if has_corpus else 0,
         "enhanced_records": _line_count(paths["enhanced"]) if is_enriched else 0,
-        "shadow_records": _line_count(paths["shadow"]) if is_enriched else 0,
+        "shadow_records": _line_count(paths["shadow_partial"]) if is_enriched else 0,
     }
     return {
         **data,
         "files": files,
         "pipeline": pipeline,
         "source_signature": source_signature,
+        "corpus_signature": corpus_signature,
+        "prepare_signature": prepare_signature,
         "states": stages,
         "artifacts": artifacts,
     }

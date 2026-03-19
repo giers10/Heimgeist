@@ -194,18 +194,12 @@ export default function LibraryManager({
     }
   }
 
-  if (!library) {
-    return (
-      <div className="placeholder-view">
-        <p>Create a database and add files. Heimgeist will raw-index them automatically, and you can opt specific files into enrichment.</p>
-      </div>
-    )
-  }
-
-  const activeJobs = (jobs || []).filter(job => job.slug === library.slug && (job.status === 'queued' || job.status === 'running'))
-  const isSyncing = activeJobs.length > 0
-  const isReadyForChat = !!library.states?.is_indexed
-  const hasFailedFiles = (library.files || []).some(file => file?.sync?.status === 'failed')
+  const librarySlug = library?.slug || null
+  const isSyncing = !!librarySlug && (jobs || []).some(
+    job => job.slug === librarySlug && (job.status === 'queued' || job.status === 'running')
+  )
+  const isReadyForChat = !!library?.states?.is_indexed
+  const hasFailedFiles = (library?.files || []).some(file => file?.sync?.status === 'failed')
 
   useEffect(() => {
     if (!library?.slug) {
@@ -266,6 +260,14 @@ export default function LibraryManager({
     isReadyForChat,
     isSyncing
   ])
+
+  if (!library) {
+    return (
+      <div className="placeholder-view">
+        <p>Create a database and add files. Heimgeist will raw-index them automatically, and you can opt specific files into enrichment.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="library-panel">

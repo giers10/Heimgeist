@@ -1086,7 +1086,8 @@ async def build_library(slug: str):
             "build",
             root=stage_dir(slug),
             out=_collect_library_paths(slug)["corpus"],
-            source_signature=payload.get("source_signature"),
+            emit="per-file",
+            stage_signature=payload.get("corpus_signature"),
         )
     return {"job_id": job_id}
 
@@ -1095,21 +1096,13 @@ async def build_library(slug: str):
 async def enrich_library(slug: str):
     data = read_library(slug)
     payload = library_payload(data)
-    paths = _collect_library_paths(slug)
     if not payload["states"].get("has_corpus"):
         raise HTTPException(status_code=400, detail="Build the corpus before enrichment.")
     lock = LIB_LOCKS.setdefault(slug, asyncio.Lock())
     async with lock:
         if _has_active_job(slug):
             raise HTTPException(status_code=409, detail="This library already has an active job.")
-        job_id = _start_job(
-            slug,
-            "enrich",
-            inp=paths["corpus"],
-            out=paths["enhanced"],
-            shadow_out=paths["shadow"],
-            source_signature=payload.get("source_signature"),
-        )
+        job_id = _start_job(slug, "enrich", stage_signature=payload.get("prepare_signature"))
     return {"job_id": job_id}
 
 
@@ -1128,15 +1121,15 @@ async def embed_library(slug: str, req: EmbedLibraryRequest):
             slug,
             "embed",
             raw=paths["corpus"],
-            enhanced=paths["enhanced"] if payload["states"].get("is_enriched") and paths["enhanced"].exists() else None,
-            shadow=paths["shadow"] if payload["states"].get("is_enriched") and paths["shadow"].exists() else None,
+            enhanced=None,
+            shadow=paths["shadow"] if paths["shadow"].exists() else None,
             out_dir=paths["indexes"],
             embed_model=req.embed_model,
             ollama=req.ollama,
             target_chars=req.target_chars,
             overlap_chars=req.overlap_chars,
             concurrency=req.concurrency,
-            source_signature=payload.get("source_signature"),
+            stage_signature=payload.get("prepare_signature"),
         )
     return {"job_id": job_id}
 

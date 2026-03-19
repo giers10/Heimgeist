@@ -196,10 +196,67 @@ def _cleanup_generated_artifacts(slug: str) -> None:
             target.unlink()
 
 
+def _latest_library_job(slug: str, *, statuses: Optional[set[str]] = None) -> Optional[Dict[str, Any]]:
+    matches = [
+        job for job in JOBS.values()
+        if job["slug"] == slug and (statuses is None or job["status"] in statuses)
+    ]
+    if not matches:
+        return None
+    matches.sort(key=lambda job: (str(job.get("created_at") or ""), job["id"]), reverse=True)
+    return matches[0]
+
+
+def _build_file_sync_payload(
+    slug: str,
+    files: List[Dict[str, Any]],
+    pipeline: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    active_job = _latest_library_job(slug, statuses={"queued", "running"})
+    failed_job = _latest_library_job(slug, statuses={"failed"})
+    pending_signature = pipeline.get("pending_prepare_signature")
+    out: List[Dict[str, Any]] = []
+
+    for entry in files:
+        file_entry = dict(entry)
+        stored_status = str(file_entry.get("sync_status") or "pending")
+        sync_status = stored_status
+        sync_progress = 100.0 if stored_status == "ready" else 0.0
+        sync_detail = ""
+        sync_error = file_entry.get("sync_error")
+
+        if stored_status != "ready":
+            if active_job:
+                sync_status = "syncing"
+                sync_progress = float(active_job.get("progress") or 0.0)
+                sync_detail = active_job.get("detail") or ""
+                sync_error = None
+            elif failed_job and pending_signature:
+                sync_status = "failed"
+                sync_progress = 0.0
+                sync_detail = failed_job.get("detail") or ""
+                sync_error = failed_job.get("error")
+            elif pending_signature:
+                sync_status = "pending"
+                sync_progress = 0.0
+
+        file_entry["sync"] = {
+            "status": sync_status,
+            "progress": round(sync_progress, 1),
+            "detail": sync_detail,
+            "error": sync_error,
+            "ready": sync_status == "ready",
+        }
+        out.append(file_entry)
+
+    return out
+
+
 def library_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     paths = _collect_library_paths(data["slug"])
-    files = list(data.get("files", []))
     pipeline = _pipeline_meta(data)
+    raw_files = list(data.get("files", []))
+    files = _build_file_sync_payload(data["slug"], raw_files, pipeline)
     source_signature = _source_signature(files)
     has_corpus = bool(source_signature) and pipeline.get("corpus_signature") == source_signature and paths["corpus"].exists()
     is_enriched = (

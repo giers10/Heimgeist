@@ -22,8 +22,9 @@
       "name": "run_on_android_emulator Kopie.sh",
       "size": 19622,
       "added_at": "2026-03-19T22:50:44Z",
-      "sync_status": "pending",
-      "enrich_enabled": false
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "RuntimeError: Corpus build produced no usable records."
     }
   ],
   "pipeline": {

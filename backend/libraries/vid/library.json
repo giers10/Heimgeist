@@ -3,21 +3,6 @@
   "name": "vid",
   "slug": "vid",
   "created_at": "2026-03-19T22:19:06Z",
-  "files": [
-    {
-      "sha256": "bd0f618ae2c977bda2ea78bfa45dfae8a5e93b77e1fbd5d1bde44691a1ec1bb0",
-      "path": "/Users/giers/Movies/3 Meter Processor Unit shorts.mp4",
-      "rel": "bd0f618ae2c977bda2ea78bfa45dfae8a5e93b77e1fbd5d1bde44691a1ec1bb0--3_Meter_Processor_Unit_shorts.mp4",
-      "name": "3 Meter Processor Unit shorts.mp4",
-      "size": 4528678,
-      "added_at": "2026-03-19T22:26:25Z",
-      "sync_status": "failed",
-      "enrich_enabled": false,
-      "sync_error": "RuntimeError: Corpus build produced no usable records."
-    }
-  ],
-  "pipeline": {
-    "pending_prepare_signature": "0f0b619a1c42a4b21f55ba2f089239a5f9cc36266e4823cca0ddd6701d710cfe",
-    "pending_prepare_updated_at": "2026-03-19T22:26:25Z"
-  }
+  "files": [],
+  "pipeline": {}
 }

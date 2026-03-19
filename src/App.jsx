@@ -697,6 +697,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       if (nextLibraries.length === 0) {
         setActiveLibrarySlug(null);
         setChatLibrarySlug(null);
+        setPendingChatLibrarySlug(null);
         return;
       }
 
@@ -705,6 +706,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       }
       if (chatLibrarySlug && !nextLibraries.some(lib => lib.slug === chatLibrarySlug)) {
         setChatLibrarySlug(null);
+      }
+      if (pendingChatLibrarySlug && !nextLibraries.some(lib => lib.slug === pendingChatLibrarySlug)) {
+        setPendingChatLibrarySlug(null);
       }
     } catch (error) {
       console.warn('Failed to load libraries', error);

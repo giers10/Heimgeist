@@ -47,7 +47,7 @@ python 03_index_builder.py \
 """
 from __future__ import annotations
 
-import argparse, json, sys, uuid, os, re
+import argparse, json, sys, uuid, os, re, math
 from pathlib import Path
 from typing import Dict, Any, Iterable, List, Tuple, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -126,6 +126,101 @@ def chunk_text(txt: str, target_chars: int = 2500, overlap_chars: int = 200) -> 
         size += len(p) + 2
     if buf:
         yield "\n\n".join(buf)
+
+def clamp_int(value: int, low: int, high: int) -> int:
+    return max(low, min(high, value))
+
+def sample_evenly_spaced_chunks(chunks: List[str], target_count: int) -> List[str]:
+    if target_count <= 0 or len(chunks) <= target_count:
+        return chunks
+    if target_count == 1:
+        return [chunks[len(chunks) // 2]]
+
+    last = len(chunks) - 1
+    step = last / float(target_count - 1)
+    picked: List[str] = []
+    seen = set()
+    for idx in range(target_count):
+        source_idx = int(round(idx * step))
+        source_idx = clamp_int(source_idx, 0, last)
+        while source_idx in seen and source_idx < last:
+            source_idx += 1
+        if source_idx in seen:
+            source_idx = max(i for i in range(last + 1) if i not in seen)
+        seen.add(source_idx)
+        picked.append(chunks[source_idx])
+    return picked
+
+def plan_content_chunking(txt: str, target_chars: int, overlap_chars: int) -> Dict[str, int | bool | str]:
+    clean = (txt or "").strip()
+    text_len = len(clean)
+    base_target = max(400, int(target_chars))
+    base_overlap = max(0, int(overlap_chars))
+    approx_raw_chunks = max(1, math.ceil(text_len / max(1, base_target))) if text_len else 1
+
+    adaptive = approx_raw_chunks > 24
+    chunk_budget = approx_raw_chunks
+    planned_target = base_target
+    sampling_fallback = False
+
+    if adaptive:
+        chunk_budget = min(
+            approx_raw_chunks,
+            max(24, math.ceil(3.5 * math.sqrt(approx_raw_chunks))),
+        )
+        planned_target = math.ceil(text_len / max(1, chunk_budget)) if text_len else base_target
+
+    max_target = max(base_target, base_target * 8)
+    if planned_target > max_target:
+        planned_target = max_target
+        sampling_fallback = adaptive
+
+    planned_target = clamp_int(planned_target, base_target, max_target)
+    planned_overlap = min(base_overlap, max(0, planned_target // 12))
+
+    return {
+        "doc_chars": text_len,
+        "baseline_chunks": approx_raw_chunks,
+        "chunk_budget": chunk_budget,
+        "target_chars": planned_target,
+        "overlap_chars": planned_overlap,
+        "adaptive": adaptive,
+        "sampling_fallback": sampling_fallback,
+        "mode": "adaptive" if adaptive else "fixed",
+    }
+
+def chunk_text_for_index(txt: str, target_chars: int, overlap_chars: int) -> Tuple[List[str], Dict[str, int | bool | str]]:
+    clean = (txt or "").strip()
+    if not clean:
+        return [], {
+            "doc_chars": 0,
+            "baseline_chunks": 0,
+            "chunk_budget": 0,
+            "target_chars": max(400, int(target_chars)),
+            "overlap_chars": max(0, int(overlap_chars)),
+            "adaptive": False,
+            "sampling_fallback": False,
+            "mode": "fixed",
+            "chunks_indexed": 0,
+            "chunks_saved": 0,
+        }
+
+    plan = plan_content_chunking(clean, target_chars, overlap_chars)
+    chunks = list(
+        chunk_text(
+            clean,
+            int(plan["target_chars"]),
+            int(plan["overlap_chars"]),
+        )
+    )
+
+    if plan["adaptive"] and len(chunks) > int(plan["chunk_budget"]):
+        chunks = sample_evenly_spaced_chunks(chunks, int(plan["chunk_budget"]))
+        plan["mode"] = "adaptive-sampled"
+
+    plan["chunks_indexed"] = len(chunks)
+    plan["chunks_saved"] = max(0, int(plan["baseline_chunks"]) - len(chunks))
+    return chunks, plan
 
 def norm_f32(mat: np.ndarray) -> np.ndarray:
     mat = np.asarray(mat, dtype="float32")
@@ -376,7 +471,7 @@ def build_content_any(
     target_chars: int,
     overlap_chars: int,
     concurrency: int
-) -> Tuple[int, int, int]:
+) -> Tuple[int, int, int, Dict[str, Any]]:
     """
     Build FAISS over chunked 'text' from best available source.
     Priority: enhanced_jsonl > raw_jsonl.
@@ -395,6 +490,16 @@ def build_content_any(
 
     metas: List[Dict[str, Any]] = []
     texts: List[str] = []
+    stats: Dict[str, Any] = {
+        "docs_with_text": 0,
+        "adaptive_docs": 0,
+        "sampled_docs": 0,
+        "baseline_chunks": 0,
+        "chunks_indexed": 0,
+        "chunks_saved": 0,
+        "max_doc_chunks": 0,
+        "max_doc_chars": 0,
+    }
     for rec in src_records:
         base_text = pick_text(rec)
         if not base_text.strip():
@@ -404,15 +509,30 @@ def build_content_any(
         title = rec.get("title")
         url = rec.get("url") or rec.get("source_path")
 
-        chunks = list(chunk_text(base_text, target_chars, overlap_chars))
+        chunks, chunk_plan = chunk_text_for_index(base_text, target_chars, overlap_chars)
         if not chunks:
             continue
+        stats["docs_with_text"] += 1
+        stats["baseline_chunks"] += int(chunk_plan["baseline_chunks"])
+        stats["chunks_indexed"] += len(chunks)
+        stats["chunks_saved"] += int(chunk_plan["chunks_saved"])
+        stats["max_doc_chunks"] = max(stats["max_doc_chunks"], len(chunks))
+        stats["max_doc_chars"] = max(stats["max_doc_chars"], int(chunk_plan["doc_chars"]))
+        if chunk_plan["adaptive"]:
+            stats["adaptive_docs"] += 1
+        if chunk_plan["mode"] == "adaptive-sampled":
+            stats["sampled_docs"] += 1
         for ci, chunk in enumerate(chunks):
             meta = {
                 "id": None,  # numeric FAISS id later
                 "doc_id": doc_id,
                 "record_id": record_id,
                 "chunk_no": ci,
+                "doc_chunk_count": len(chunks),
+                "doc_chars": int(chunk_plan["doc_chars"]),
+                "chunk_target_chars": int(chunk_plan["target_chars"]),
+                "chunk_overlap_chars": int(chunk_plan["overlap_chars"]),
+                "chunking_mode": chunk_plan["mode"],
                 "title": title,
                 "url": url,
                 "text": chunk,
@@ -450,7 +570,7 @@ def build_content_any(
             index.add_with_ids(np.vstack(buf_vecs), np.array(buf_ids, dtype="int64"))
 
     faiss.write_index(index, str(out_index))
-    return (len(src_records), index.ntotal, d)
+    return (len(src_records), index.ntotal, d, stats)
 
 # -----------------------------
 # CLI
@@ -496,14 +616,14 @@ def run_index(raw: Path|None, enhanced: Path|None, shadow: Path|None, out_dir: P
 
     if not args.no_content:
         if on_progress: on_progress("content", 0.6, "Building content index...")
-        c_tot, c_ix, c_dim = build_content_any(
+        c_tot, c_ix, c_dim, c_stats = build_content_any(
             args.enhanced, args.raw,
             content_index_path, content_meta_path,
             ollama=args.ollama, model=resolved_model,
             target_chars=args.target_chars, overlap_chars=args.overlap_chars,
             concurrency=args.concurrency
         )
-        results["content"] = {"records": c_tot, "chunks": c_ix, "dim": c_dim}
+        results["content"] = {"records": c_tot, "chunks": c_ix, "dim": c_dim, **c_stats}
         if on_progress: on_progress("content", 0.9, "Content index complete.")
         built_any = True
 
@@ -519,7 +639,7 @@ def main():
     ap.add_argument("--enhanced", help="Enhanced corpus JSONL (from 02_corpus_enricher.py)")
     ap.add_argument("--shadow", help="Shadow corpus JSONL (from 02_corpus_enricher.py)")
     ap.add_argument("--out-dir", default="indexes", help="Output directory for indexes + metadata")
-    ap.add_argument("--embed-model", default="dengcao/Qwen3-Embedding-0.6B:F16", help="Ollama embedding model")
+    ap.add_argument("--embed-model", default="bge-m3:latest", help="Ollama embedding model")
     ap.add_argument("--ollama", default="http://localhost:11434", help="Ollama base URL")
     ap.add_argument("--target-chars", type=int, default=2500, help="Chunk size for content index")
     ap.add_argument("--overlap-chars", type=int, default=200, help="Overlap size for content index")

@@ -790,12 +790,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [chatLibrarySlug]);
 
   useEffect(() => {
-    if (chatLibrarySlug && chatLibrary && !chatLibrary.states?.is_indexed) {
-      setChatLibrarySlug(null)
-    }
-  }, [chatLibrarySlug, chatLibrary]);
-
-  useEffect(() => {
     if (!ollamaApiUrl) return;
     const interval = setInterval(() => {
       refreshLibraries();
@@ -830,6 +824,12 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   const chatLibrary = useMemo(() => {
     return libraries.find(lib => lib.slug === chatLibrarySlug) || null;
   }, [chatLibrarySlug, libraries]);
+
+  useEffect(() => {
+    if (chatLibrarySlug && chatLibrary && !chatLibrary.states?.is_indexed) {
+      setChatLibrarySlug(null)
+    }
+  }, [chatLibrarySlug, chatLibrary]);
 
   // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)
   useEffect(() => {

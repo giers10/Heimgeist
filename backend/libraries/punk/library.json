@@ -11,10 +11,18 @@
       "name": "GeorgeJordac-TheVoiceOfHumanJustice.pdf",
       "size": 849816,
       "added_at": "2026-03-19T20:40:28Z"
+    },
+    {
+      "sha256": "1382a12d7c29a62012b1b64b6aa68af3cd69d7b7809ef1112e1ccea5fda6b5c1",
+      "path": "/Users/giers/Documents/Frischmuth, Barbara - Die Mystifikationen der Sophie Silber (2016, Aufbau Digital) - libgen.li.epub",
+      "rel": "1382a12d7c29a62012b1b64b6aa68af3cd69d7b7809ef1112e1ccea5fda6b5c1--Frischmuth_Barbara_-_Die_Mystifikationen_der_Sophie_Silber_2016_Aufbau_Digital_-_libgen.li.epub",
+      "name": "Frischmuth, Barbara - Die Mystifikationen der Sophie Silber (2016, Aufbau Digital) - libgen.li.epub",
+      "size": 2122352,
+      "added_at": "2026-03-19T20:40:48Z"
     }
   ],
   "pipeline": {
-    "pending_prepare_signature": "2ea5318f8ecf02e1cecd13be25e23f71a6c3c804d6a2193bb9b25221f53f975c",
-    "pending_prepare_updated_at": "2026-03-19T20:40:28Z"
+    "pending_prepare_signature": "1e536902a347599832fe9ca05463b074be11d0f36c8f582c11e6eea1c51b8597",
+    "pending_prepare_updated_at": "2026-03-19T20:40:48Z"
   }
 }

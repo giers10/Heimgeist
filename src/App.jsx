@@ -126,7 +126,7 @@ const API_URL_KEY = 'ollamaApiUrl';
 const COLOR_SCHEME_KEY = 'colorScheme';
 const WEBSEARCH_URL_KEY = 'websearch.searxUrl';
 const WEBSEARCH_ENGINES_KEY = 'websearch.engines';
-const CHAT_LIBRARY_KEY = 'chat.librarySlug';
+const CHAT_LIBRARY_MAP_KEY = 'chat.libraryBySession';
 
 // Initial API value will be set by useEffect after settings are loaded
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
@@ -143,17 +143,25 @@ export default function App() {
   const [libraries, setLibraries] = useState([])
   const [libraryJobs, setLibraryJobs] = useState([])
   const [activeLibrarySlug, setActiveLibrarySlug] = useState(null)
-  const [chatLibrarySlug, setChatLibrarySlug] = useState(localStorage.getItem(CHAT_LIBRARY_KEY) || null)
-  const [pendingChatLibrarySlug, setPendingChatLibrarySlug] = useState(null)
+  const [chatLibraryBySession, setChatLibraryBySession] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_LIBRARY_MAP_KEY)
+      return raw ? JSON.parse(raw) : {}
+    } catch {
+      return {}
+    }
+  })
   const [isCreatingLibrary, setIsCreatingLibrary] = useState(false)
   const [newLibraryName, setNewLibraryName] = useState('')
   const [libraryCreateError, setLibraryCreateError] = useState('')
+  const [isDbPickerOpen, setIsDbPickerOpen] = useState(false)
 
   // Use currentSessionId for the actual chat operations
   const [model, setModel] = useState('')
   const [input, setInput] = useState('')
   const chatRef = useRef(null)
   const textareaRef = useRef(null); // Ref for the textarea
+  const dbPickerRef = useRef(null)
   const [ollamaApiUrl, setOllamaApiUrl] = useState(API); // State for Ollama API URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);

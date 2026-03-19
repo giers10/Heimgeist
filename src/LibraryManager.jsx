@@ -39,7 +39,7 @@ function fileSyncMeta(file) {
       status,
       progress,
       label: progress > 0 ? `Syncing ${Math.round(progress)}%` : 'Syncing',
-      detail: detail || 'Building corpus, enrichment, embeddings, and indexes.'
+      detail: detail || 'Rebuilding the corpus and indexes. Selected files may also be enriched.'
     }
   }
 
@@ -47,7 +47,7 @@ function fileSyncMeta(file) {
     status: 'pending',
     progress: 6,
     label: 'Queued',
-    detail: 'Waiting to start the full sync pipeline.'
+    detail: 'Waiting to rebuild the retrieval pipeline.'
   }
 }
 

@@ -143,6 +143,7 @@ export default function App() {
   const [libraryJobs, setLibraryJobs] = useState([])
   const [activeLibrarySlug, setActiveLibrarySlug] = useState(null)
   const [chatLibrarySlug, setChatLibrarySlug] = useState(localStorage.getItem(CHAT_LIBRARY_KEY) || null)
+  const [pendingChatLibrarySlug, setPendingChatLibrarySlug] = useState(null)
   const [isCreatingLibrary, setIsCreatingLibrary] = useState(false)
   const [newLibraryName, setNewLibraryName] = useState('')
   const [libraryCreateError, setLibraryCreateError] = useState('')
@@ -721,6 +722,22 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
   }
 
+  async function startLibraryJob(slug, kind) {
+    const options = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }
+    if (kind === 'embed') {
+      options.body = JSON.stringify({})
+    }
+    const response = await fetch(`${ollamaApiUrl}/libraries/${slug}/jobs/${kind}`, options)
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new Error(detail || `HTTP ${response.status}`)
+    }
+    await refreshLibraryJobs()
+  }
+
   async function createLibrary(nameOverride = null) {
     const rawName = typeof nameOverride === 'string' ? nameOverride : newLibraryName
     const name = rawName.trim()
@@ -825,11 +842,103 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     return libraries.find(lib => lib.slug === chatLibrarySlug) || null;
   }, [chatLibrarySlug, libraries]);
 
+  const pendingChatLibrary = useMemo(() => {
+    return libraries.find(lib => lib.slug === pendingChatLibrarySlug) || null;
+  }, [pendingChatLibrarySlug, libraries]);
+
   useEffect(() => {
     if (chatLibrarySlug && chatLibrary && !chatLibrary.states?.is_indexed) {
       setChatLibrarySlug(null)
     }
   }, [chatLibrarySlug, chatLibrary]);
+
+  useEffect(() => {
+    if (!pendingChatLibrarySlug || !ollamaApiUrl) return
+
+    const jobsForLibrary = libraryJobs
+      .filter(job => job.slug === pendingChatLibrarySlug)
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    const hasActiveJob = jobsForLibrary.some(job => job.status === 'queued' || job.status === 'running')
+    const latestJob = jobsForLibrary[0] || null
+
+    if (!pendingChatLibrary) {
+      setPendingChatLibrarySlug(null)
+      return
+    }
+
+    if (pendingChatLibrary.states?.is_indexed) {
+      setChatLibrarySlug(pendingChatLibrarySlug)
+      setPendingChatLibrarySlug(null)
+      return
+    }
+
+    if (hasActiveJob) return
+
+    if (latestJob?.status === 'failed') {
+      setPendingChatLibrarySlug(null)
+      return
+    }
+
+    if (!pendingChatLibrary.files?.length) {
+      setPendingChatLibrarySlug(null)
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        if (!pendingChatLibrary.states?.has_corpus) {
+          await startLibraryJob(pendingChatLibrarySlug, 'build')
+        } else {
+          await startLibraryJob(pendingChatLibrarySlug, 'embed')
+        }
+        if (!cancelled) {
+          await refreshLibraries()
+        }
+      } catch (error) {
+        console.error('Failed to prepare library for chat', error)
+        if (!cancelled) {
+          setPendingChatLibrarySlug(null)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [pendingChatLibrarySlug, pendingChatLibrary, libraryJobs, ollamaApiUrl])
+
+  async function toggleChatLibrary(libraryOrSlug) {
+    const slug = typeof libraryOrSlug === 'string' ? libraryOrSlug : libraryOrSlug?.slug
+    if (!slug) return
+
+    if (chatLibrarySlug === slug || pendingChatLibrarySlug === slug) {
+      setChatLibrarySlug(current => (current === slug ? null : current))
+      setPendingChatLibrarySlug(current => (current === slug ? null : current))
+      return
+    }
+
+    const library = libraries.find(lib => lib.slug === slug)
+    if (!library) return
+
+    if (library.states?.is_indexed) {
+      setChatLibrarySlug(slug)
+      setPendingChatLibrarySlug(null)
+      return
+    }
+
+    if (!library.files?.length) {
+      throw new Error('Add files before using this database in chat.')
+    }
+
+    setPendingChatLibrarySlug(slug)
+    if (!library.states?.has_corpus) {
+      await startLibraryJob(slug, 'build')
+    } else {
+      await startLibraryJob(slug, 'embed')
+    }
+    await refreshLibraries()
+  }
 
   // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)
   useEffect(() => {

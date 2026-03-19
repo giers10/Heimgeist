@@ -18,11 +18,10 @@ The `DBs` tab is no longer a placeholder. You can:
 
 - create and rename libraries
 - register files and folders
-- build, enrich, and index library content
-- mark one library as active for chat context
+- attach one library to chat context
 - open or remove registered files from the UI
 
-When a chat library is active, Heimgeist queries it before sending a message and appends the returned context block to the prompt.
+When a library is added to chat, Heimgeist prepares it automatically by building a corpus, enriching the content, and creating retrieval indexes. For each chat turn, Heimgeist queries the active library, turns the top results into a local context block, appends that block to the user prompt, and sends the enriched prompt to Ollama.
 
 ## Stack
 

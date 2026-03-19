@@ -835,6 +835,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             overlap_chars=opts.get("overlap_chars", 200),
             concurrency=opts.get("concurrency", 6),
         )
+        _set_pipeline_embed_model(slug, results["embed"].get("embed_model") if isinstance(results.get("embed"), dict) else None)
         _mark_pipeline_stage(slug, "embed", prepare_signature)
 
     if on_progress:
@@ -872,6 +873,10 @@ async def _run_job(job_id: str, fn_name: str, **kwargs):
 
         call = functools.partial(runner, on_progress=on_progress, **kwargs)
         result = await loop.run_in_executor(JOB_EXECUTOR, call)
+        if fn_name in {"embed", "prepare"} and isinstance(result, dict):
+            embed_model = result.get("embed_model")
+            if embed_model:
+                _set_pipeline_embed_model(job["slug"], embed_model)
         if fn_name in {"build", "enrich", "embed"} and stage_signature:
             _mark_pipeline_stage(job["slug"], fn_name, stage_signature)
         job["status"] = "succeeded"

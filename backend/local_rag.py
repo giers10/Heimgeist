@@ -769,6 +769,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             out=paths["corpus"],
             on_progress=build_progress,
             emit="per-file",
+            lang_detect=False,
         )
         _mark_pipeline_stage(slug, "build", corpus_signature)
         states["has_corpus"] = True
@@ -1087,6 +1088,7 @@ async def build_library(slug: str):
             root=stage_dir(slug),
             out=_collect_library_paths(slug)["corpus"],
             emit="per-file",
+            lang_detect=False,
             stage_signature=payload.get("corpus_signature"),
         )
     return {"job_id": job_id}

@@ -267,6 +267,11 @@ try:
 except Exception:
     _ld_detect = None
 
+_LANGID_RUNTIME_SAFE = (
+    langid is not None and
+    not (sys.platform == "darwin" and sys.version_info >= (3, 13))
+)
+
 # Progress
 try:
     from tqdm import tqdm
@@ -501,11 +506,11 @@ def detect_language(text: str) -> Optional[str]:
     else:
         sample = text
     try:
-        if langid is not None:
-            lang, _ = langid.classify(sample)
-            return lang
         if _ld_detect is not None:
             return _ld_detect(sample)
+        if _LANGID_RUNTIME_SAFE:
+            lang, _ = langid.classify(sample)
+            return lang
     except Exception:
         pass
     return None

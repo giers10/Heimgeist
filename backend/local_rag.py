@@ -1138,9 +1138,11 @@ async def enrich_library(slug: str):
 async def embed_library(slug: str, req: EmbedLibraryRequest):
     data = read_library(slug)
     payload = library_payload(data)
+    pipeline = _pipeline_meta(data)
     paths = _collect_library_paths(slug)
     if not payload["states"].get("has_corpus"):
         raise HTTPException(status_code=400, detail="Build the corpus before indexing.")
+    embed_model = req.embed_model or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
     lock = LIB_LOCKS.setdefault(slug, asyncio.Lock())
     async with lock:
         if _has_active_job(slug):
@@ -1152,7 +1154,7 @@ async def embed_library(slug: str, req: EmbedLibraryRequest):
             enhanced=None,
             shadow=paths["shadow"] if paths["shadow"].exists() else None,
             out_dir=paths["indexes"],
-            embed_model=req.embed_model,
+            embed_model=embed_model,
             ollama=req.ollama,
             target_chars=req.target_chars,
             overlap_chars=req.overlap_chars,
@@ -1194,9 +1196,11 @@ def get_job(job_id: str):
 @router.post("/libraries/{slug}/context")
 def library_context(slug: str, req: LibraryContextRequest):
     payload = library_payload(read_library(slug))
+    pipeline = payload.get("pipeline") or {}
     paths = _collect_library_paths(slug)
     if not payload["states"].get("is_indexed"):
         raise HTTPException(status_code=400, detail="Prepare the library before using it in chat.")
+    embed_model = req.embed_model or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
     try:
         run_query = _load_pipeline_fn("unified_rag", "run_query")
         result = run_query(
@@ -1207,7 +1211,7 @@ def library_context(slug: str, req: LibraryContextRequest):
             query=req.prompt,
             answer=False,
             ollama=req.ollama,
-            embed_model=req.embed_model,
+            embed_model=embed_model,
             gen_model=req.gen_model,
             no_rerank=True,
             k=max(1, req.top_k),

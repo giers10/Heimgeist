@@ -1534,7 +1534,7 @@ def process_media(path: Path, args) -> List[Record]:
     slices = slice_audio(wav_path, slice_dir, nslices, args.overlap_sec, ffprobe_bin, ffmpeg_bin)
 
     mpw = args.mp_workers or len(slices)
-    device = _resolve_whisper_device(args.whisper_device)
+    device = args.whisper_device or "auto"
     ctx = mp.get_context("spawn")
     pool = ctx.Pool(processes=mpw, initializer=_whisper_pool_init, initargs=(args.whisper_model, device))
     try:

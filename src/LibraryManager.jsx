@@ -127,6 +127,20 @@ export default function LibraryManager({
     onDeleted?.(library.slug)
   }
 
+  async function retrySync() {
+    if (!library) return
+    try {
+      await runAction(async () => {
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/jobs/prepare`, {
+          method: 'POST'
+        })
+        await expectOk(response)
+      })
+    } catch (error) {
+      setErrorMessage(String(error?.message || error))
+    }
+  }
+
   if (!library) {
     return (
       <div className="placeholder-view">
@@ -162,6 +176,9 @@ export default function LibraryManager({
 
       <div className="library-toolbar">
         <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
+        {library.files?.length > 0 && !isSyncing && !isReadyForChat && (
+          <button className="button ghost" disabled={busy} onClick={retrySync}>Retry Sync</button>
+        )}
         <button
           className="button danger"
           onClick={() => {

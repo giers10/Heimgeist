@@ -845,6 +845,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
         "status": "ok",
         "results": results,
         "source_signature": source_signature,
+        "embed_model": (results.get("embed") or {}).get("embed_model") if isinstance(results.get("embed"), dict) else None,
     }
 
 

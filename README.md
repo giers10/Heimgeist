@@ -47,6 +47,13 @@ Quick start:
 
 This creates or refreshes `backend/.venv`, installs Python dependencies, installs npm dependencies, and starts the dev stack.
 
+On Linux `x86_64`, `run.sh` now selects a PyTorch flavor before installing `openai-whisper`:
+
+- Steam Deck / SteamOS and other non-NVIDIA Linux hosts default to CPU-only PyTorch, which avoids downloading NVIDIA CUDA runtime wheels that Whisper does not need there.
+- NVIDIA Linux hosts keep the default PyTorch install path.
+- Override with `HEIMGEIST_TORCH_FLAVOR=default`, `HEIMGEIST_TORCH_FLAVOR=cpu`, or `HEIMGEIST_TORCH_FLAVOR=rocm6.4`.
+- Use `HEIMGEIST_TORCH_INDEX_URL=...` if you need a custom PyTorch wheel index.
+
 Manual startup:
 
 ```bash

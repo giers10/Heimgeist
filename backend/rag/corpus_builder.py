@@ -1416,6 +1416,14 @@ def slice_audio(audio_path: Path, out_dir: Path, num_slices: int, overlap_sec: f
 
 _WHISPER_MODEL = None
 
+def whisper_runtime_error() -> Optional[str]:
+    if whisper is None:
+        return (
+            "Audio/video transcription requires the optional 'openai-whisper' package. "
+            "Install it in backend/.venv, for example: pip install -U openai-whisper"
+        )
+    return None
+
 def _resolve_whisper_device(flag: str) -> Optional[str]:
     if flag and flag != "auto":
         return flag
@@ -1467,6 +1475,10 @@ def merge_transcripts(files_idx_text: List[Tuple[int, str]], max_overlap_words: 
     return " ".join(merged_words).strip()
 
 def process_media(path: Path, args) -> List[Record]:
+    whisper_error = whisper_runtime_error()
+    if whisper_error:
+        raise RuntimeError(whisper_error)
+
     probe = ffprobe_json(args.ffprobe, path)
     duration_s = None
     if probe:

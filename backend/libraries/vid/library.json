@@ -17,6 +17,8 @@
   ],
   "pipeline": {
     "pending_prepare_signature": "35edbcbc01e6ba1cb1bd960a48f977a97e4e44688cee4138c4407bcabebcc4f1",
-    "pending_prepare_updated_at": "2026-03-19T22:28:03Z"
+    "pending_prepare_updated_at": "2026-03-19T22:28:03Z",
+    "corpus_signature": "9aa1bb80f420e87cce15106b4c6d488d56e02eb71aef99abedf328530906b71b",
+    "corpus_updated_at": "2026-03-19T22:28:07Z"
   }
 }

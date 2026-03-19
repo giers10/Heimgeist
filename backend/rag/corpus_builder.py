@@ -417,6 +417,15 @@ def read_text_file(path: Path) -> str:
 def run_cmd(cmd: List[str], *, cwd: Optional[Path] = None, env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=str(cwd) if cwd else None, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
+def resolve_binary_path(explicit: Optional[str], env_name: str, binary_name: str, fallback: str) -> str:
+    candidate = explicit or os.environ.get(env_name) or shutil.which(binary_name) or fallback
+    return str(candidate)
+
+def binary_available(binary_path: Optional[str]) -> bool:
+    if not binary_path:
+        return False
+    return Path(binary_path).exists() or shutil.which(binary_path) is not None
+
 def ffprobe_json(ffprobe_bin: str, media_path: Path) -> Optional[Dict]:
     cmd = [ffprobe_bin, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(media_path)]
     res = run_cmd(cmd)
@@ -1479,7 +1488,22 @@ def process_media(path: Path, args) -> List[Record]:
     if whisper_error:
         raise RuntimeError(whisper_error)
 
-    probe = ffprobe_json(args.ffprobe, path)
+    ffmpeg_bin = resolve_binary_path(args.ffmpeg, "HEIMGEIST_FFMPEG_PATH", "ffmpeg", "/usr/bin/ffmpeg")
+    ffprobe_bin = resolve_binary_path(args.ffprobe, "HEIMGEIST_FFPROBE_PATH", "ffprobe", "/usr/bin/ffprobe")
+    missing_tools = []
+    if not binary_available(ffmpeg_bin):
+        missing_tools.append("ffmpeg")
+    if not binary_available(ffprobe_bin):
+        missing_tools.append("ffprobe")
+    if missing_tools:
+        missing = " and ".join(missing_tools)
+        raise RuntimeError(
+            f"Audio/video ingestion requires {missing}. "
+            "Install the tools system-wide or provide bundled paths via "
+            "HEIMGEIST_FFMPEG_PATH and HEIMGEIST_FFPROBE_PATH."
+        )
+
+    probe = ffprobe_json(ffprobe_bin, path)
     duration_s = None
     if probe:
         try:
@@ -1491,7 +1515,7 @@ def process_media(path: Path, args) -> List[Record]:
 
     tmpdir = Path(tempfile.mkdtemp(prefix="av_"))
     wav_path = tmpdir / "audio.wav"
-    ok = extract_audio_wav(args.ffmpeg, path, wav_path)
+    ok = extract_audio_wav(ffmpeg_bin, path, wav_path)
     if not ok or not wav_path.exists():
         try: shutil.rmtree(tmpdir)
         except Exception: pass
@@ -1500,7 +1524,7 @@ def process_media(path: Path, args) -> List[Record]:
     slice_dir = tmpdir / "slices"
     slice_dir.mkdir(parents=True, exist_ok=True)
     nslices = max(1, args.num_slices)
-    slices = slice_audio(wav_path, slice_dir, nslices, args.overlap_sec, args.ffprobe, args.ffmpeg)
+    slices = slice_audio(wav_path, slice_dir, nslices, args.overlap_sec, ffprobe_bin, ffmpeg_bin)
 
     mpw = args.mp_workers or len(slices)
     device = _resolve_whisper_device(args.whisper_device)
@@ -1625,8 +1649,8 @@ def run_build(root: Path, out: Path, *, on_progress=None, **opts) -> dict:
         writer_queue=opts.get("writer_queue", 64),
         writer_chunk=opts.get("writer_chunk", 256),
         writer_rotate_mb=opts.get("writer_rotate_mb", 0),
-        ffmpeg=opts.get("ffmpeg", shutil.which("ffmpeg") or "/usr/bin/ffmpeg"),
-        ffprobe=opts.get("ffprobe", shutil.which("ffprobe") or "/usr/bin/ffprobe"),
+        ffmpeg=opts.get("ffmpeg", resolve_binary_path(None, "HEIMGEIST_FFMPEG_PATH", "ffmpeg", "/usr/bin/ffmpeg")),
+        ffprobe=opts.get("ffprobe", resolve_binary_path(None, "HEIMGEIST_FFPROBE_PATH", "ffprobe", "/usr/bin/ffprobe")),
         tesseract=opts.get("tesseract", shutil.which("tesseract") or "/usr/bin/tesseract"),
         ebook_convert=opts.get("ebook_convert", shutil.which("ebook-convert")),
         pandoc=opts.get("pandoc", shutil.which("pandoc")),

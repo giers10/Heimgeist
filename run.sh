@@ -63,7 +63,7 @@ resolve_torch_flavor() {
       printf '%s\n' "default"
       ;;
     default|cpu|cuda|rocm|rocm6.4)
-      printf '%s\n' "%s" "$HEIMGEIST_TORCH_FLAVOR"
+      printf '%s\n' "$HEIMGEIST_TORCH_FLAVOR"
       ;;
     *)
       echo "Unsupported HEIMGEIST_TORCH_FLAVOR '$HEIMGEIST_TORCH_FLAVOR'. Use auto, default, cpu, cuda, rocm, or rocm6.4." >&2

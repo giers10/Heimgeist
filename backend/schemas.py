@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -38,8 +38,7 @@ class ChatSession(BaseModel):
     name: str
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SessionsResponse(BaseModel):
     sessions: List[ChatSession]
@@ -67,3 +66,4 @@ class WebSearchRequest(BaseModel):
 class WebSearchResponse(BaseModel):
     enriched_prompt: str
     sources: List[str] = []
+    context_block: str = ""

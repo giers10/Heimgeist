@@ -1,5 +1,4 @@
-
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron')
 const path = require('path')
 const { is } = require('@electron-toolkit/utils')
 const fs = require('fs')
@@ -9,12 +8,36 @@ let settingsWindow = null
 
 const settingsFilePath = path.join(app.getPath('userData'), 'settings.json')
 let appSettings = {}
+const DEFAULT_UI_SCALE = 1
+const MIN_UI_SCALE = 0.7
+const MAX_UI_SCALE = 1.3
 
-// Default settings
 const defaultSettings = {
   ollamaApiUrl: 'http://127.0.0.1:8000',
   colorScheme: 'Default',
-  chatModel: 'llama3' // Set a default model here
+  uiScale: DEFAULT_UI_SCALE,
+  chatModel: 'llama3',
+}
+
+function normalizeUiScale(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return DEFAULT_UI_SCALE
+  }
+
+  return Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, Math.round(numericValue * 100) / 100))
+}
+
+function applyUiScaleToWindow(window) {
+  if (!window || window.isDestroyed()) {
+    return
+  }
+
+  window.webContents.setZoomFactor(normalizeUiScale(appSettings.uiScale))
+}
+
+function applyUiScaleToAllWindows() {
+  BrowserWindow.getAllWindows().forEach(applyUiScaleToWindow)
 }
 
 function loadSettings() {
@@ -24,8 +47,9 @@ function loadSettings() {
       appSettings = { ...defaultSettings, ...JSON.parse(data) }
     } else {
       appSettings = { ...defaultSettings }
-      saveSettings() // Create the file with default settings
+      saveSettings()
     }
+    appSettings.uiScale = normalizeUiScale(appSettings.uiScale)
   } catch (error) {
     console.error('Failed to load settings:', error)
     appSettings = { ...defaultSettings }
@@ -40,7 +64,7 @@ function saveSettings() {
   }
 }
 
-async function createMainWindow () {
+async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 720,
@@ -50,17 +74,23 @@ async function createMainWindow () {
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      nodeIntegration: false
-    }
+      nodeIntegration: false,
+    },
   })
+
+  applyUiScaleToWindow(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    applyUiScaleToWindow(mainWindow)
+  })
+
   mainWindow.on('focus', () => {
-    mainWindow.webContents.send('window-focused');
-  });
+    mainWindow.webContents.send('window-focused')
+  })
 
   if (is.dev && process.env.VITE_DEV_SERVER_URL) {
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
@@ -70,12 +100,12 @@ async function createMainWindow () {
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
 }
 
-async function createSettingsWindow () {
+async function createSettingsWindow() {
   if (settingsWindow) {
     settingsWindow.focus()
     return
@@ -91,12 +121,18 @@ async function createSettingsWindow () {
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      nodeIntegration: false
-    }
+      nodeIntegration: false,
+    },
   })
+
+  applyUiScaleToWindow(settingsWindow)
 
   settingsWindow.on('ready-to-show', () => {
     settingsWindow.show()
+  })
+
+  settingsWindow.webContents.on('did-finish-load', () => {
+    applyUiScaleToWindow(settingsWindow)
   })
 
   settingsWindow.on('closed', () => {
@@ -112,7 +148,7 @@ async function createSettingsWindow () {
 }
 
 app.whenReady().then(() => {
-  loadSettings() // Load settings when the app is ready
+  loadSettings()
   createMainWindow()
 
   const menuTemplate = [
@@ -122,11 +158,11 @@ app.whenReady().then(() => {
         {
           label: 'Settings',
           accelerator: 'CmdOrCtrl+,',
-          click: createSettingsWindow
+          click: createSettingsWindow,
         },
         { type: 'separator' },
-        { role: 'quit' }
-      ]
+        { role: 'quit' },
+      ],
     },
     {
       label: 'Edit',
@@ -139,8 +175,8 @@ app.whenReady().then(() => {
         { role: 'paste' },
         { role: 'delete' },
         { type: 'separator' },
-        { role: 'selectAll' }
-      ]
+        { role: 'selectAll' },
+      ],
     },
     {
       label: 'View',
@@ -153,9 +189,9 @@ app.whenReady().then(() => {
         { role: 'zoomin' },
         { role: 'zoomout' },
         { type: 'separator' },
-        { role: 'togglefullscreen' }
-      ]
-    }
+        { role: 'togglefullscreen' },
+      ],
+    },
   ]
 
   const menu = Menu.buildFromTemplate(menuTemplate)
@@ -166,21 +202,38 @@ app.whenReady().then(() => {
   })
 })
 
-// IPC handlers for settings
-ipcMain.handle('get-settings', () => {
-  return appSettings
-})
+ipcMain.handle('get-settings', () => appSettings)
 
 ipcMain.handle('set-setting', (event, key, value) => {
-  appSettings[key] = value
+  appSettings[key] = key === 'uiScale' ? normalizeUiScale(value) : value
   saveSettings()
+  if (key === 'uiScale') {
+    applyUiScaleToAllWindows()
+  }
   return true
 })
 
 ipcMain.handle('update-settings', (event, settings) => {
   appSettings = { ...appSettings, ...settings }
+  appSettings.uiScale = normalizeUiScale(appSettings.uiScale)
   saveSettings()
+  if (Object.prototype.hasOwnProperty.call(settings, 'uiScale')) {
+    applyUiScaleToAllWindows()
+  }
   return true
+})
+
+ipcMain.handle('pick-paths', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile', 'openDirectory', 'multiSelections'],
+  })
+  return result.canceled ? [] : result.filePaths
+})
+
+ipcMain.handle('open-path', async (event, filePath) => {
+  if (!filePath) return false
+  const err = await shell.openPath(filePath)
+  return err === ''
 })
 
 ipcMain.on('open-external-link', (event, url) => {

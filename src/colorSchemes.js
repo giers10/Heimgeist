@@ -1,5 +1,18 @@
 const colorSchemes = {
-  'Nightsky': {
+  Default: {
+    '--bg': '#0b1020',
+    '--panel': '#141b34',
+    '--text': '#e6e8ef',
+    '--muted': '#9aa3b2',
+    '--accent': '#6ea8fe',
+    '--border': '#24304f',
+    '--input-bg': '#121933',
+    '--user-msg-bg': '#18213d',
+    '--assistant-msg-bg': '#10172d',
+    '--active-bg': 'rgba(110, 168, 254, 0.16)',
+    '--hover-bg': 'rgba(255, 255, 255, 0.06)',
+  },
+  Nightsky: {
     '--bg': '#0a0e1a',
     '--panel': '#18203a',
     '--text': '#ffffff',
@@ -12,7 +25,7 @@ const colorSchemes = {
     '--active-bg': 'rgba(74, 144, 226, 0.15)',
     '--hover-bg': 'rgba(255, 255, 255, 0.05)',
   },
-  'Grayscale': {
+  Grayscale: {
     '--bg': '#1a1a1a',
     '--panel': '#2a2a2a',
     '--text': '#f0f0f0',
@@ -25,33 +38,33 @@ const colorSchemes = {
     '--active-bg': 'rgba(136, 136, 136, 0.15)',
     '--hover-bg': 'rgba(255, 255, 255, 0.05)',
   },
-  'Japan': {
+  Japan: {
     '--bg': '#ffffff',
     '--panel': '#f5f5f5',
     '--text': '#000000',
     '--muted': '#444444',
-    '--accent': '#e74c3c', /* Vibrant Red */
+    '--accent': '#e74c3c',
     '--border': '#999999',
     '--input-bg': '#ffffff',
     '--user-msg-bg': '#f0f0f0',
     '--assistant-msg-bg': '#f0f0f0',
-    '--active-bg': 'rgba(231, 76, 60, 0.15)', /* Light red for active */
-    '--hover-bg': 'rgba(231, 76, 60, 0.08)', /* Lighter red for hover */
+    '--active-bg': 'rgba(231, 76, 60, 0.15)',
+    '--hover-bg': 'rgba(231, 76, 60, 0.08)',
   },
-  'Lime': {
+  Lime: {
     '--bg': '#f0fff0',
     '--panel': '#e0ffe0',
     '--text': '#1a1a1a',
     '--muted': '#72a272ff',
-    '--accent': '#deef88',
+    '--accent': '#8e9f38ff',
     '--border': '#a0c0a0',
     '--input-bg': '#ffffff',
-    '--user-msg-bg': '#f8f7ad',
+    '--user-msg-bg': '#f8f7adff',
     '--assistant-msg-bg': '#f5fff5',
     '--active-bg': 'rgba(104, 159, 56, 0.2)',
     '--hover-bg': 'rgba(104, 159, 56, 0.1)',
   },
-  'Vampire': {
+  Vampire: {
     '--bg': '#1a050a',
     '--panel': '#2a1015',
     '--text': '#ffefff',
@@ -64,15 +77,80 @@ const colorSchemes = {
     '--active-bg': 'rgba(216, 27, 96, 0.15)',
     '--hover-bg': 'rgba(255, 255, 255, 0.05)',
   },
-};
+  'Sunset Drive': {
+    '--bg': '#1f1024',
+    '--panel': '#2e1632',
+    '--text': '#fff2ea',
+    '--muted': '#caa8b7',
+    '--accent': '#ff8a5b',
+    '--border': '#593050',
+    '--input-bg': '#26132a',
+    '--user-msg-bg': '#442038',
+    '--assistant-msg-bg': '#32172c',
+    '--active-bg': 'rgba(255, 138, 91, 0.18)',
+    '--hover-bg': 'rgba(255, 138, 91, 0.08)',
+  },
+  'Aurora Pulse': {
+    '--bg': '#07171d',
+    '--panel': '#102730',
+    '--text': '#eafcff',
+    '--muted': '#9bc8cf',
+    '--accent': '#54f2c2',
+    '--border': '#214853',
+    '--input-bg': '#0b2028',
+    '--user-msg-bg': '#12313d',
+    '--assistant-msg-bg': '#0f2530',
+    '--active-bg': 'rgba(84, 242, 194, 0.18)',
+    '--hover-bg': 'rgba(84, 242, 194, 0.08)',
+  },
+  'Sakura Neon': {
+    '--bg': '#160b1d',
+    '--panel': '#251331',
+    '--text': '#fff5fd',
+    '--muted': '#d4abc7',
+    '--accent': '#ff4fb6',
+    '--border': '#52315f',
+    '--input-bg': '#1d1027',
+    '--user-msg-bg': '#341844',
+    '--assistant-msg-bg': '#281534',
+    '--active-bg': 'rgba(255, 79, 182, 0.18)',
+    '--hover-bg': 'rgba(255, 79, 182, 0.09)',
+  },
+  'Cobalt Punch': {
+    '--bg': '#081527',
+    '--panel': '#102643',
+    '--text': '#eef6ff',
+    '--muted': '#9fb7d0',
+    '--accent': '#ffb703',
+    '--border': '#234164',
+    '--input-bg': '#0d1f37',
+    '--user-msg-bg': '#162f54',
+    '--assistant-msg-bg': '#102640',
+    '--active-bg': 'rgba(255, 183, 3, 0.18)',
+    '--hover-bg': 'rgba(255, 183, 3, 0.08)',
+  },
+  'Mango Mojito': {
+    '--bg': '#fff7ea',
+    '--panel': '#ffe9c8',
+    '--text': '#2a1c13',
+    '--muted': '#7c6150',
+    '--accent': '#ff6b35',
+    '--border': '#e6bf91',
+    '--input-bg': '#fffdf9',
+    '--user-msg-bg': '#fff0d7',
+    '--assistant-msg-bg': '#fff8ed',
+    '--active-bg': 'rgba(255, 107, 53, 0.14)',
+    '--hover-bg': 'rgba(255, 107, 53, 0.08)',
+  },
+}
 
 function applyColorScheme(schemeName) {
-  const scheme = colorSchemes[schemeName];
-  if (scheme) {
-    for (const [key, value] of Object.entries(scheme)) {
-      document.documentElement.style.setProperty(key, value);
-    }
+  const scheme = colorSchemes[schemeName] || colorSchemes.Default
+  if (!scheme) return
+
+  for (const [key, value] of Object.entries(scheme)) {
+    document.documentElement.style.setProperty(key, value)
   }
 }
 
-export { colorSchemes, applyColorScheme };
+export { colorSchemes, applyColorScheme }

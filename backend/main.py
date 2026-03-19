@@ -8,6 +8,7 @@ import html
 import json
 from . import models, schemas
 from .database import Base, engine, SessionLocal, ensure_sources_column
+from .local_rag import router as local_rag_router
 from .ollama_client import list_models as ollama_list, chat as ollama_chat, chat_stream as ollama_chat_stream
 from .websearch import enrich_prompt
 
@@ -25,6 +26,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(local_rag_router)
 
 def get_db():
     db = SessionLocal()
@@ -331,8 +333,11 @@ async def websearch_route(req: schemas.WebSearchRequest):
             searx_url=req.searx_url,
             engines=req.engines,
         )
-        return {"enriched_prompt": enriched, "sources": sources}
+        context_block = ""
+        if "<websearch_context>" in enriched:
+            context_block = enriched[enriched.index("<websearch_context>"):].strip()
+        return {"enriched_prompt": enriched, "sources": sources, "context_block": context_block}
     except Exception:
-        return {"enriched_prompt": req.prompt, "sources": []}
+        return {"enriched_prompt": req.prompt, "sources": [], "context_block": ""}
 
 # To run standalone: python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000

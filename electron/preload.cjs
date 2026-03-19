@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
   updateSettings: (settings) => ipcRenderer.invoke('update-settings', settings),
+  pickPaths: () => ipcRenderer.invoke('pick-paths'),
+  openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
   openExternalLink: (event) => {
     event.preventDefault();
     const url = event.currentTarget.href;

@@ -9,9 +9,7 @@ import { applyColorScheme } from './colorSchemes'
 function Main() {
   useEffect(() => {
     window.electronAPI.getSettings().then(settings => {
-      if (settings.colorScheme) {
-        applyColorScheme(settings.colorScheme)
-      }
+      applyColorScheme(settings.colorScheme || 'Default')
     })
   }, [])
 

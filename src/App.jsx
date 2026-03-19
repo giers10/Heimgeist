@@ -4,8 +4,10 @@ import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import GeneralSettings from './GeneralSettings'
 import InterfaceSettings from './InterfaceSettings'
+import LibraryManager from './LibraryManager'
 import WebsearchSettings from './WebsearchSettings'
 import { markdownToHTML  } from './markdown';
+import { applyColorScheme } from './colorSchemes'
 // Extract <think> or <thinking> block (first occurrence) and return { think, answer }
 function splitThinkBlocks(text) {
   if (!text) return { think: null, answer: '' };
@@ -81,12 +83,35 @@ function AssistantMessageContent({ content, streamOutput, sources }) {
         <div className="msg-sources chips">
           {sources.map((u, i) => {
             let label = u;
+            let isFile = false;
             try {
-              const host = new URL(u).hostname || u;
-              label = host.replace(/^www\./i, '');
+              const parsed = new URL(u);
+              if (parsed.protocol === 'file:') {
+                isFile = true;
+                const parts = parsed.pathname.split('/').filter(Boolean);
+                label = decodeURIComponent(parts[parts.length - 1] || u);
+              } else {
+                const host = parsed.hostname || u;
+                label = host.replace(/^www\./i, '');
+              }
             } catch {}
             return (
-              <a key={u + i} className="chip" href={u} target="_blank" rel="noreferrer" title={u}>
+              <a
+                key={u + i}
+                className="chip"
+                href={u}
+                target="_blank"
+                rel="noreferrer"
+                title={u}
+                onClick={(event) => {
+                  if (!isFile) return;
+                  event.preventDefault();
+                  try {
+                    const parsed = new URL(u);
+                    window.electronAPI?.openPath?.(decodeURIComponent(parsed.pathname));
+                  } catch {}
+                }}
+              >
                 {label}
               </a>
             );
@@ -101,6 +126,7 @@ const API_URL_KEY = 'ollamaApiUrl';
 const COLOR_SCHEME_KEY = 'colorScheme';
 const WEBSEARCH_URL_KEY = 'websearch.searxUrl';
 const WEBSEARCH_ENGINES_KEY = 'websearch.engines';
+const CHAT_LIBRARY_KEY = 'chat.librarySlug';
 
 // Initial API value will be set by useEffect after settings are loaded
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
@@ -113,6 +139,13 @@ export default function App() {
   const [activeSidebarMode, setActiveSidebarMode] = useState('chats') // 'chats', 'dbs', 'settings'
   const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('General'); // 'General', 'Interface'
   const [editingSessionId, setEditingSessionId] = useState(null); // ID of the session being edited
+  const [libraries, setLibraries] = useState([])
+  const [libraryJobs, setLibraryJobs] = useState([])
+  const [activeLibrarySlug, setActiveLibrarySlug] = useState(null)
+  const [chatLibrarySlug, setChatLibrarySlug] = useState(localStorage.getItem(CHAT_LIBRARY_KEY) || null)
+  const [isCreatingLibrary, setIsCreatingLibrary] = useState(false)
+  const [newLibraryName, setNewLibraryName] = useState('')
+  const [libraryCreateError, setLibraryCreateError] = useState('')
 
   // Use currentSessionId for the actual chat operations
   const [model, setModel] = useState('')
@@ -172,6 +205,38 @@ export default function App() {
     } catch (err) {
       console.error('Failed to copy message:', err);
     }
+  }
+
+  function setAssistantMessageContent(sessionId, messageId, content, options = {}) {
+    const { removeIfEmpty = false } = options
+
+    setChatSessions(prevSessions =>
+      prevSessions.map(session => {
+        if (session.session_id !== sessionId) return session
+
+        const nextMessages = []
+        for (const message of session.messages || []) {
+          if (message.id !== messageId) {
+            nextMessages.push(message)
+            continue
+          }
+
+          if (removeIfEmpty && !content) continue
+          nextMessages.push({ ...message, content })
+        }
+
+        return { ...session, messages: nextMessages }
+      })
+    )
+  }
+
+  function isAbortError(error) {
+    return error?.name === 'AbortError'
+  }
+
+  function getErrorText(error) {
+    if (error instanceof Error && error.message) return error.message
+    return String(error)
   }
 
   function startEditMessage(index, content) {
@@ -251,132 +316,134 @@ export default function App() {
   }
 
 async function regenerateFromIndex(index, overrideUserText = null) {
-  const sessionId = activeSessionId;
-  if (!sessionId || typeof index !== 'number') return;
+  const sessionId = activeSessionId
+  if (isSending || !sessionId || typeof index !== 'number') return
 
-  const msgs = (chatSessions.find(s => s.session_id === sessionId)?.messages) || [];
-  let lastUserIdx = index;
+  const msgs = (chatSessions.find(s => s.session_id === sessionId)?.messages) || []
+  let lastUserIdx = index
   for (let i = index; i >= 0; i--) {
-    if (msgs[i]?.role === 'user') { lastUserIdx = i; break; }
+    if (msgs[i]?.role === 'user') {
+      lastUserIdx = i
+      break
+    }
   }
 
-  // Prune UI to lastUserIdx
   setChatSessions(prev =>
     prev.map(s => s.session_id === sessionId
       ? { ...s, messages: (s.messages || []).slice(0, lastUserIdx + 1) }
       : s
     )
-  );
+  )
 
-  setIsSending(true);
+  const requestController = beginCancelableRequest(sessionId)
 
-  // --- optional websearch enrichment for regenerate ---
-  let enrichedPrompt = null;
-  let citationSources = [];
-  if (webSearchEnabled) {
-    try {
-      // Use the freshly edited user text when provided
-      const promptText = (overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || ''));
+  let enrichedPrompt = null
+  let citationSources = []
+  try {
+    if (webSearchEnabled) {
+      try {
+        const promptText = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
+        const historyForSearch = msgs
+          .slice(Math.max(0, lastUserIdx - 7), lastUserIdx + 1)
+          .map(m => ({ role: m.role, content: m.content || '' }))
+        if (historyForSearch.length > 0) {
+          historyForSearch[historyForSearch.length - 1] = { role: 'user', content: promptText }
+        }
 
-      // Build compact recent history and overwrite the last user turn with promptText
-      const historyForSearch = msgs
-        .slice(Math.max(0, lastUserIdx - 7), lastUserIdx + 1)
-        .map(m => ({ role: m.role, content: m.content || '' }));
-      if (historyForSearch.length > 0) {
-        historyForSearch[historyForSearch.length - 1] = { role: 'user', content: promptText };
-      }
-
-      const resp = await fetch(`${ollamaApiUrl}/websearch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          model,
-          messages: historyForSearch,
-          history_limit: 8,
-          searx_url: searxUrl || null,
-          engines: Array.isArray(searxEngines) ? searxEngines : null,
+        const resp = await fetch(`${ollamaApiUrl}/websearch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: requestController.signal,
+          body: JSON.stringify({
+            prompt: promptText,
+            model,
+            messages: historyForSearch,
+            history_limit: 8,
+            searx_url: searxUrl || null,
+            engines: Array.isArray(searxEngines) ? searxEngines : null,
+          })
         })
-      });
-      const data = await resp.json();
-      if (data && typeof data.enriched_prompt === 'string') {
-        enrichedPrompt = data.enriched_prompt;
-        citationSources = Array.isArray(data.sources) ? data.sources : [];
+        const data = await resp.json()
+        if (data && typeof data.enriched_prompt === 'string') {
+          enrichedPrompt = data.enriched_prompt
+          citationSources = Array.isArray(data.sources) ? data.sources : []
+        }
+      } catch (error) {
+        if (isAbortError(error)) throw error
+        console.warn('web search enrichment (regenerate) failed', error)
       }
-    } catch (e) {
-      console.warn('web search enrichment (regenerate) failed', e);
     }
-  }
 
-  if (streamOutput) {
-    const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
-    // add placeholder assistant message (keep sources on the placeholder)
-    setChatSessions(prev =>
-      prev.map(s => s.session_id === sessionId
-        ? { ...s, messages: [...(s.messages || []), { id: assistantMsgId, role: 'assistant', content: '', sources: citationSources }] }
-        : s
+    if (streamOutput) {
+      const assistantMsgId = `msg-${Date.now()}-${Math.random()}`
+      let full = ''
+
+      setChatSessions(prev =>
+        prev.map(s => s.session_id === sessionId
+          ? { ...s, messages: [...(s.messages || []), { id: assistantMsgId, role: 'assistant', content: '', sources: citationSources }] }
+          : s
+        )
       )
-    );
 
-    try {
-      const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          index,
-          model,
-          stream: true,
-          enriched_message: enrichedPrompt,
-          sources: citationSources || []
+      try {
+        const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: requestController.signal,
+          body: JSON.stringify({
+            index,
+            model,
+            stream: true,
+            enriched_message: enrichedPrompt,
+            sources: citationSources || []
+          })
         })
-      });
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let full = '';
-      let unreadMarked = false;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('Missing response body')
 
-        const chunk = decoder.decode(value, { stream: true });
-        full += chunk;
+        const decoder = new TextDecoder()
+        let unreadMarked = false
 
-        // Update the growing assistant message (sources remain intact)
-        setChatSessions(prev =>
-          prev.map(s => s.session_id === sessionId
-            ? { ...s, messages: (s.messages || []).map(m => m.id === assistantMsgId ? { ...m, content: full } : m) }
-            : s
-          )
-        );
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
 
-        if (!unreadMarked && activeSessionIdRef.current !== sessionId) {
-          unreadMarked = true;
-          setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-          setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
+          const chunk = decoder.decode(value, { stream: true })
+          full += chunk
+          setAssistantMessageContent(sessionId, assistantMsgId, full)
+
+          if (!unreadMarked && activeSessionIdRef.current !== sessionId) {
+            unreadMarked = true
+            setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }))
+            setUnreadSessions(prev => [...new Set([...prev, sessionId])])
+          }
         }
-      }
 
-      if (activeSessionIdRef.current !== sessionId) {
-        setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-        setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
-      } else {
-        if (!userScrolledUpRef.current[sessionId]) {
-          requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
+        if (activeSessionIdRef.current !== sessionId) {
+          setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }))
+          setUnreadSessions(prev => [...new Set([...prev, sessionId])])
+        } else if (!userScrolledUpRef.current[sessionId]) {
+          requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId))
         } else {
-          setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
+          setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }))
         }
+      } catch (error) {
+        if (isAbortError(error)) {
+          setAssistantMessageContent(sessionId, assistantMsgId, full, { removeIfEmpty: true })
+          return
+        }
+
+        console.error(error)
+        setAssistantMessageContent(sessionId, assistantMsgId, `Error: ${getErrorText(error)}`, { removeIfEmpty: true })
+        return
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSending(false);
-    }
-  } else {
-    try {
+    } else {
       const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: requestController.signal,
         body: JSON.stringify({
           index,
           model,
@@ -384,31 +451,33 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           enriched_message: enrichedPrompt,
           sources: citationSources || []
         })
-      });
-      const data = await res.json();
-      const assistantMsgId = `msg-${Date.now()}`;
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const data = await res.json()
+      const assistantMsgId = `msg-${Date.now()}`
       setChatSessions(prev =>
         prev.map(s => s.session_id === sessionId
           ? { ...s, messages: [...(s.messages || []), { role: 'assistant', content: data.reply, id: assistantMsgId, sources: citationSources }] }
           : s
         )
-      );
+      )
 
       if (activeSessionIdRef.current !== sessionId) {
-        setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-        setUnreadSessions(prev => [...new Set([...prev, sessionId])]);
+        setPendingScrollToLastUser(prev => ({ ...prev, [sessionId]: assistantMsgId }))
+        setUnreadSessions(prev => [...new Set([...prev, sessionId])])
+      } else if (!userScrolledUpRef.current[sessionId]) {
+        requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId))
       } else {
-        if (!userScrolledUpRef.current[sessionId]) {
-          requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId));
-        } else {
-          setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }));
-        }
+        setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }))
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSending(false);
     }
+  } catch (error) {
+    if (!isAbortError(error)) {
+      console.error(error)
+    }
+  } finally {
+    finishCancelableRequest(requestController)
   }
 }
 
@@ -468,13 +537,40 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     });
   }, []);
 
-  const activeRequestSessionId = useRef(null);
+  const activeRequestRef = useRef(null);
   const justSentMessage = useRef(false);
   const lastSentSessionRef = useRef(null);
   const activeSessionIdRef = useRef(activeSessionId);
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
+
+  const beginCancelableRequest = React.useCallback((sessionId) => {
+    const controller = new AbortController()
+    activeRequestRef.current = { controller, sessionId }
+    setIsSending(true)
+    return controller
+  }, [])
+
+  const finishCancelableRequest = React.useCallback((controller) => {
+    if (activeRequestRef.current?.controller !== controller) return
+    activeRequestRef.current = null
+    setIsSending(false)
+  }, [])
+
+  const cancelActiveRequest = React.useCallback(() => {
+    const activeRequest = activeRequestRef.current
+    if (!activeRequest) return
+    activeRequestRef.current = null
+    activeRequest.controller.abort()
+    setIsSending(false)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      activeRequestRef.current?.controller.abort()
+    }
+  }, [])
 
   // Flag to ensure we only restore once per open of a chat
   const restoredForRef = useRef(null);
@@ -544,11 +640,11 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   useEffect(() => {
     window.electronAPI.getSettings().then(settings => {
       setOllamaApiUrl(settings.ollamaApiUrl);
-      setColorScheme(settings.colorScheme);
+      setColorScheme(settings.colorScheme || 'Default');
       setModel(settings.chatModel || ''); // Load the selected model, with a fallback
       setStreamOutput(settings.streamOutput || false);
       setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
-      applyColorScheme(settings.colorScheme); // Apply initial scheme
+      applyColorScheme(settings.colorScheme || 'Default'); // Apply initial scheme
     });
 
     const handleFocus = () => {
@@ -573,19 +669,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     applyColorScheme(colorScheme);
   }, [colorScheme]);
 
-  // Function to apply color scheme
-  const colorSchemes = {
-  };
-
-  function applyColorScheme(schemeName) {
-    const scheme = colorSchemes[schemeName];
-    if (scheme) {
-      for (const [key, value] of Object.entries(scheme)) {
-        document.documentElement.style.setProperty(key, value);
-      }
-    }
-  }
-
   const fetchHistory = (sessionId) => {
     if (!sessionId || !ollamaApiUrl) return;
     fetch(`${ollamaApiUrl}/history?session_id=${encodeURIComponent(sessionId)}`)
@@ -601,6 +684,73 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       })
       .catch(() => {});
   };
+
+  async function refreshLibraries() {
+    if (!ollamaApiUrl) return;
+    try {
+      const response = await fetch(`${ollamaApiUrl}/libraries`);
+      const data = await response.json();
+      const nextLibraries = Array.isArray(data.libraries) ? data.libraries : [];
+      setLibraries(nextLibraries);
+
+      if (nextLibraries.length === 0) {
+        setActiveLibrarySlug(null);
+        setChatLibrarySlug(null);
+        return;
+      }
+
+      if (!nextLibraries.some(lib => lib.slug === activeLibrarySlug)) {
+        setActiveLibrarySlug(nextLibraries[0].slug);
+      }
+      if (chatLibrarySlug && !nextLibraries.some(lib => lib.slug === chatLibrarySlug)) {
+        setChatLibrarySlug(null);
+      }
+    } catch (error) {
+      console.warn('Failed to load libraries', error);
+    }
+  }
+
+  async function refreshLibraryJobs() {
+    if (!ollamaApiUrl) return;
+    try {
+      const response = await fetch(`${ollamaApiUrl}/jobs`);
+      const data = await response.json();
+      setLibraryJobs(Array.isArray(data.jobs) ? data.jobs : []);
+    } catch (error) {
+      console.warn('Failed to load library jobs', error);
+    }
+  }
+
+  async function createLibrary(nameOverride = null) {
+    const rawName = typeof nameOverride === 'string' ? nameOverride : newLibraryName
+    const name = rawName.trim()
+    if (!name) {
+      setLibraryCreateError('Name is required.')
+      return
+    }
+    try {
+      setLibraryCreateError('')
+      const response = await fetch(`${ollamaApiUrl}/libraries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(detail || `HTTP ${response.status}`)
+      }
+      const data = await response.json();
+      setIsCreatingLibrary(false)
+      setNewLibraryName('')
+      await refreshLibraries();
+      if (data?.slug) {
+        setActiveLibrarySlug(data.slug);
+      }
+    } catch (error) {
+      console.error('Failed to create library', error);
+      setLibraryCreateError(String(error?.message || error))
+    }
+  }
 
   // Load chat sessions from backend on initial render
   useEffect(() => {
@@ -623,6 +773,31 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       });
   }, [ollamaApiUrl]);
 
+  useEffect(() => {
+    if (!ollamaApiUrl) return;
+    refreshLibraries();
+    refreshLibraryJobs();
+  }, [ollamaApiUrl]);
+
+  useEffect(() => {
+    try {
+      if (chatLibrarySlug) {
+        localStorage.setItem(CHAT_LIBRARY_KEY, chatLibrarySlug);
+      } else {
+        localStorage.removeItem(CHAT_LIBRARY_KEY);
+      }
+    } catch {}
+  }, [chatLibrarySlug]);
+
+  useEffect(() => {
+    if (!ollamaApiUrl) return;
+    const interval = setInterval(() => {
+      refreshLibraries();
+      refreshLibraryJobs();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [ollamaApiUrl, activeSidebarMode, activeLibrarySlug, chatLibrarySlug]);
+
   // Load messages for the active session
   useEffect(() => {
     fetchHistory(activeSessionId);
@@ -641,6 +816,14 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   const messages = useMemo(() => {
     return chatSessions.find(s => s.session_id === activeSessionId)?.messages || [];
   }, [activeSessionId, chatSessions]);
+
+  const activeLibrary = useMemo(() => {
+    return libraries.find(lib => lib.slug === activeLibrarySlug) || null;
+  }, [activeLibrarySlug, libraries]);
+
+  const chatLibrary = useMemo(() => {
+    return libraries.find(lib => lib.slug === chatLibrarySlug) || null;
+  }, [chatLibrarySlug, libraries]);
 
   // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)
   useEffect(() => {
@@ -821,27 +1004,27 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
 
 async function sendMessage() {
-  if (!input.trim() || !model) return;
+  if (isSending || !input.trim() || !model) return
 
-  let targetSessionId = activeSessionId;
-  let isNewChat = false;
+  let targetSessionId = activeSessionId
+  let isNewChat = false
   if (!targetSessionId) {
-    const newSession = await createNewChat();
-    await new Promise(resolve => setTimeout(resolve, 200));
-    targetSessionId = newSession.session_id;
-    isNewChat = true;
+    const newSession = await createNewChat()
+    await new Promise(resolve => setTimeout(resolve, 200))
+    targetSessionId = newSession.session_id
+    isNewChat = true
   } else {
-    const currentSession = chatSessions.find(s => s.session_id === targetSessionId);
-    isNewChat = currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0;
+    const currentSession = chatSessions.find(s => s.session_id === targetSessionId)
+    isNewChat = currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0
   }
 
-  const userMsg = { role: 'user', content: input.trim(), id: `msg-${Date.now()}-${Math.random()}` };
-  justSentMessage.current = true;
-  lastSentSessionRef.current = targetSessionId;
-  setUserScrolledUp(targetSessionId, false);
+  const userMsg = { role: 'user', content: input.trim(), id: `msg-${Date.now()}-${Math.random()}` }
+  justSentMessage.current = true
+  lastSentSessionRef.current = targetSessionId
+  setUserScrolledUp(targetSessionId, false)
 
   if (activeSessionIdRef.current === targetSessionId) {
-    restoredForRef.current = activeSessionIdRef.current;
+    restoredForRef.current = activeSessionIdRef.current
   }
 
   flushSync(() => {
@@ -851,31 +1034,54 @@ async function sendMessage() {
           ? { ...session, messages: [...(session.messages || []), userMsg] }
           : session
       )
-    );
-    setInput('');
-  });
-  requestAnimationFrame(() => scrollToBottom('auto', targetSessionId));
+    )
+    setInput('')
+  })
+  requestAnimationFrame(() => scrollToBottom('auto', targetSessionId))
 
-  setIsSending(true);
+  const requestController = beginCancelableRequest(targetSessionId)
   try {
-    // Build compact recent history for context-aware websearch (resource-friendly).
-    // We only send the last 8 turns by default, including assistant replies,
-    // and we also append the *current* user message (same content as `userMsg`).
-    let historyForSearch = [];
+    let historyForSearch = []
     try {
-      const existing = (chatSessions.find(s => s.session_id === targetSessionId)?.messages) || [];
-      const lastFew = existing.slice(-8).map(m => ({ role: m.role, content: m.content || '' }));
-      historyForSearch = [...lastFew, { role: 'user', content: userMsg.content }];
+      const existing = (chatSessions.find(s => s.session_id === targetSessionId)?.messages) || []
+      const lastFew = existing.slice(-8).map(m => ({ role: m.role, content: m.content || '' }))
+      historyForSearch = [...lastFew, { role: 'user', content: userMsg.content }]
     } catch {}
 
-    // Decide on enrichment using the toggle
-    let enrichedPrompt = userMsg.content;
-    let citationSources = [];
+    let enrichedPrompt = userMsg.content
+    let citationSources = []
+    const contextBlocks = []
+
+    if (chatLibrarySlug) {
+      try {
+        const resp = await fetch(`${ollamaApiUrl}/libraries/${chatLibrarySlug}/context`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: requestController.signal,
+          body: JSON.stringify({
+            prompt: userMsg.content,
+            top_k: 5
+          })
+        })
+        const data = await resp.json()
+        if (data && typeof data.context_block === 'string' && data.context_block.trim()) {
+          contextBlocks.push(data.context_block.trim())
+        }
+        if (Array.isArray(data?.sources)) {
+          citationSources.push(...data.sources)
+        }
+      } catch (error) {
+        if (isAbortError(error)) throw error
+        console.warn('local library enrichment failed', error)
+      }
+    }
+
     if (webSearchEnabled) {
       try {
         const resp = await fetch(`${ollamaApiUrl}/websearch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: requestController.signal,
           body: JSON.stringify({
             prompt: userMsg.content,
             model,
@@ -884,143 +1090,124 @@ async function sendMessage() {
             searx_url: searxUrl || null,
             engines: Array.isArray(searxEngines) ? searxEngines : null,
           })
-        });
-        const data = await resp.json();
-        if (data && typeof data.enriched_prompt === 'string') {
-          enrichedPrompt = data.enriched_prompt;
-          citationSources = Array.isArray(data.sources) ? data.sources : [];
+        })
+        const data = await resp.json()
+        if (data && typeof data.context_block === 'string' && data.context_block.trim()) {
+          contextBlocks.push(data.context_block.trim())
         }
-      } catch (e) {
-        console.warn('web search enrichment failed', e);
+        if (Array.isArray(data?.sources)) {
+          citationSources.push(...data.sources)
+        }
+      } catch (error) {
+        if (isAbortError(error)) throw error
+        console.warn('web search enrichment failed', error)
       }
     }
 
+    citationSources = [...new Set(citationSources)]
+    if (contextBlocks.length > 0) {
+      enrichedPrompt = `${userMsg.content}\n\n${contextBlocks.join('\n\n')}`
+    }
+
     if (streamOutput) {
-      const assistantMsgId = `msg-${Date.now()}-${Math.random()}`;
-      const assistantMsg = { role: 'assistant', content: '', id: assistantMsgId, sources: citationSources };
+      const assistantMsgId = `msg-${Date.now()}-${Math.random()}`
+      let fullReply = ''
+      const assistantMsg = { role: 'assistant', content: '', id: assistantMsgId, sources: citationSources }
       setChatSessions(prevSessions =>
         prevSessions.map(session =>
           session.session_id === targetSessionId
             ? { ...session, messages: [...(session.messages || []), assistantMsg] }
             : session
         )
-      );
+      )
 
-      (async () => {
-        try {
-          const res = await fetch(`${ollamaApiUrl}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id: targetSessionId,
-              model,
-              message: userMsg.content,
-              enriched_message: webSearchEnabled ? enrichedPrompt : null,
-              stream: true,
-              sources: citationSources || []
-            })
-          });
+      try {
+        const res = await fetch(`${ollamaApiUrl}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: requestController.signal,
+          body: JSON.stringify({
+            session_id: targetSessionId,
+            model,
+            message: userMsg.content,
+            enriched_message: contextBlocks.length > 0 ? enrichedPrompt : null,
+            stream: true,
+            sources: citationSources || []
+          })
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let fullReply = '';
-          let pendingMarked = false;
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('Missing response body')
 
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) {
-              setChatSessions(prevSessions =>
-                prevSessions.map(session =>
-                  session.session_id === targetSessionId
-                    ? {
-                        ...session,
-                        messages: session.messages.map(m =>
-                          m.id === assistantMsgId ? { ...m, content: fullReply } : m
-                        )
-                      }
-                    : session
-                )
-              );
+        const decoder = new TextDecoder()
+        let pendingMarked = false
 
-              if (activeSessionIdRef.current === targetSessionId) {
-                if (!userScrolledUpRef.current[targetSessionId]) {
-                  requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
-                } else {
-                  setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
-                }
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) {
+            setAssistantMessageContent(targetSessionId, assistantMsgId, fullReply)
+
+            if (activeSessionIdRef.current === targetSessionId) {
+              if (!userScrolledUpRef.current[targetSessionId]) {
+                requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId))
               } else {
-                setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
-                setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
+                setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }))
               }
+            } else {
+              setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }))
+              setUnreadSessions(prev => [...new Set([...prev, targetSessionId])])
+            }
 
-              break;
-            }
-            const chunk = decoder.decode(value, { stream: true });
-            fullReply += chunk;
-            setChatSessions(prevSessions =>
-              prevSessions.map(session =>
-                session.session_id === targetSessionId
-                  ? {
-                      ...session,
-                      messages: session.messages.map(m =>
-                        m.id === assistantMsgId ? { ...m, content: fullReply } : m
-                      )
-                    }
-                  : session
-              )
-            );
-
-            if (
-              activeSessionIdRef.current === targetSessionId &&
-              !userScrolledUpRef.current[targetSessionId]
-            ) {
-              scrollToBottom('auto', targetSessionId);
-            }
-            if (activeSessionIdRef.current !== targetSessionId && !pendingMarked) {
-              setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
-              pendingMarked = true;
-            }
+            break
           }
-        } catch (e) {
-          console.error('Failed to send message:', e);
-          const errorMsg = {
-            role: 'assistant',
-            content: 'Error: ' + e.message,
-            id: `msg-${Date.now()}-${Math.random()}`,
-            sources: citationSources
-          };
-          setChatSessions(prevSessions =>
-            prevSessions.map(session =>
-              session.session_id === targetSessionId
-                ? { ...session, messages: [...session.messages.slice(0, -1), errorMsg] }
-                : session
-            )
-          );
-        } finally {
-          setIsSending(false);
+
+          const chunk = decoder.decode(value, { stream: true })
+          fullReply += chunk
+          setAssistantMessageContent(targetSessionId, assistantMsgId, fullReply)
+
+          if (activeSessionIdRef.current === targetSessionId && !userScrolledUpRef.current[targetSessionId]) {
+            scrollToBottom('auto', targetSessionId)
+          }
+          if (activeSessionIdRef.current !== targetSessionId && !pendingMarked) {
+            setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }))
+            pendingMarked = true
+          }
         }
-      })();
+      } catch (error) {
+        if (isAbortError(error)) {
+          setAssistantMessageContent(targetSessionId, assistantMsgId, fullReply, { removeIfEmpty: true })
+          return
+        }
+
+        console.error('Failed to send message:', error)
+        setAssistantMessageContent(targetSessionId, assistantMsgId, 'Error: ' + getErrorText(error), { removeIfEmpty: true })
+        return
+      }
     } else {
       const res = await fetch(`${ollamaApiUrl}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: requestController.signal,
         body: JSON.stringify({
           session_id: targetSessionId,
           model,
           message: userMsg.content,
-          enriched_message: webSearchEnabled ? enrichedPrompt : null,
+          enriched_message: contextBlocks.length > 0 ? enrichedPrompt : null,
           stream: false,
           sources: citationSources || []
         })
-      });
-      const data = await res.json();
-      const assistantMsgId = `msg-${Date.now()}`;
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const data = await res.json()
+      const assistantMsgId = `msg-${Date.now()}`
       const assistantMsg = {
         role: 'assistant',
         content: data.reply,
         id: assistantMsgId,
         sources: citationSources
-      };
+      }
 
       setChatSessions(prevSessions =>
         prevSessions.map(session =>
@@ -1028,24 +1215,23 @@ async function sendMessage() {
             ? { ...session, messages: [...(session.messages || []), assistantMsg] }
             : session
         )
-      );
+      )
 
       if (assistantMsgId) {
         if (activeSessionIdRef.current === targetSessionId) {
           if (!userScrolledUpRef.current[targetSessionId]) {
-            requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId));
+            requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId))
           } else {
-            setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+            setNewMsgTip(prev => ({ ...prev, [targetSessionId]: assistantMsgId }))
           }
         } else {
-          setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }));
+          setPendingScrollToLastUser(prev => ({ ...prev, [targetSessionId]: assistantMsgId }))
         }
       }
-      setIsSending(false);
     }
 
     if (activeSessionIdRef.current !== targetSessionId) {
-      setUnreadSessions(prev => [...new Set([...prev, targetSessionId])]);
+      setUnreadSessions(prev => [...new Set([...prev, targetSessionId])])
     }
 
     if (isNewChat) {
@@ -1055,30 +1241,36 @@ async function sendMessage() {
         body: JSON.stringify({
           session_id: targetSessionId,
           message: userMsg.content,
-          model: model
+          model
         })
       })
       .then(r => r.json())
       .then(data => {
-        const sanitizedTitle = data.title.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/i, '').trim();
+        const sanitizedTitle = data.title.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/i, '').trim()
         setChatSessions(prevSessions =>
           prevSessions.map(session =>
             session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session
           )
-        );
-      });
+        )
+      })
     }
-  } catch (e) {
-    console.error("Failed to send message:", e);
-    const errorMsg = { role: 'assistant', content: 'Error: ' + e.message, id: `msg-${Date.now()}-${Math.random()}` };
+  } catch (error) {
+    if (isAbortError(error)) {
+      finishCancelableRequest(requestController)
+      return
+    }
+
+    console.error('Failed to send message:', error)
+    const errorMsg = { role: 'assistant', content: 'Error: ' + getErrorText(error), id: `msg-${Date.now()}-${Math.random()}` }
     setChatSessions(prevSessions =>
       prevSessions.map(session =>
         session.session_id === targetSessionId
           ? { ...session, messages: [...session.messages, errorMsg] }
           : session
       )
-    );
-    setIsSending(false);
+    )
+  } finally {
+    finishCancelableRequest(requestController)
   }
 }
 
@@ -1267,7 +1459,20 @@ async function createNewChat() {
           )}
           {activeSidebarMode === 'dbs' && (
             <div className="db-list">
-              <div className="empty-list-message">No databases yet.</div>
+              {libraries.length === 0 ? (
+                <div className="empty-list-message">No databases yet.</div>
+              ) : (
+                libraries.map(library => (
+                  <div
+                    key={library.slug}
+                    className={`chat-item ${library.slug === activeLibrarySlug ? 'active' : ''}`}
+                    onClick={() => setActiveLibrarySlug(library.slug)}
+                  >
+                    <span>{library.name}</span>
+                    {chatLibrarySlug === library.slug && <div className="db-active-badge">Chat</div>}
+                  </div>
+                ))
+              )}
             </div>
           )}
           {activeSidebarMode === 'settings' && (
@@ -1299,7 +1504,51 @@ async function createNewChat() {
               <button className="button new-chat-button" onClick={createNewChat}>New Chat</button>
             )}
             {activeSidebarMode === 'dbs' && (
-              <button className="button new-db-button" onClick={() => {}}>New Database</button>
+              isCreatingLibrary ? (
+                <div className="new-db-form">
+                  <input
+                    type="text"
+                    className="rename-input"
+                    value={newLibraryName}
+                    onChange={(e) => setNewLibraryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        createLibrary()
+                      } else if (e.key === 'Escape') {
+                        setIsCreatingLibrary(false)
+                        setNewLibraryName('')
+                        setLibraryCreateError('')
+                      }
+                    }}
+                    placeholder="Database name"
+                    autoFocus
+                  />
+                  {libraryCreateError && <div className="form-error">{libraryCreateError}</div>}
+                  <div className="new-db-actions">
+                    <button className="button new-db-button" onClick={() => createLibrary()}>Create</button>
+                    <button
+                      className="button ghost"
+                      onClick={() => {
+                        setIsCreatingLibrary(false)
+                        setNewLibraryName('')
+                        setLibraryCreateError('')
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="button new-db-button"
+                  onClick={() => {
+                    setIsCreatingLibrary(true)
+                    setLibraryCreateError('')
+                  }}
+                >
+                  New Database
+                </button>
+              )
             )}
           </div>
         )}
@@ -1310,6 +1559,7 @@ async function createNewChat() {
           <>
             <div className="header">
               <strong>Chat - {chatSessions.find(s => s.session_id === activeSessionId)?.name || 'New Chat'}</strong>
+              {chatLibrary && <span className="header-subtle">KB: {chatLibrary.name}</span>}
             </div>
 
             <div key={activeSessionId} className="chat" ref={chatRef} onClick={handleChatFrameClick}>
@@ -1445,7 +1695,12 @@ async function createNewChat() {
                       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                     </svg>
                   </button>
-                <button className="button" onClick={sendMessage} disabled={isSending}>
+                <button
+                  className="button"
+                  onClick={isSending ? cancelActiveRequest : sendMessage}
+                  title={isSending ? 'Cancel generation' : 'Send'}
+                  aria-label={isSending ? 'Cancel generation' : 'Send'}
+                >
                   {isSending ? <div className="spinner"></div> : 'Send'}
                 </button>
               </div>
@@ -1453,10 +1708,32 @@ async function createNewChat() {
           </>
         )}
         {activeSidebarMode === 'dbs' && (
-          <div className="placeholder-view">
-            <h1>Databases</h1>
-            <p>This is a placeholder for the database management view.</p>
-          </div>
+          <>
+            <div className="header">
+              <strong>{activeLibrary?.name || 'Databases'}</strong>
+              {chatLibrary && <span className="header-subtle">Chat KB: {chatLibrary.name}</span>}
+            </div>
+            <LibraryManager
+              apiBase={ollamaApiUrl}
+              library={activeLibrary}
+              jobs={libraryJobs}
+              chatLibrarySlug={chatLibrarySlug}
+              onRefresh={async () => {
+                await refreshLibraries();
+                await refreshLibraryJobs();
+              }}
+              onToggleChatLibrary={setChatLibrarySlug}
+              onDeleted={(slug) => {
+                if (activeLibrarySlug === slug) {
+                  const next = libraries.find(lib => lib.slug !== slug);
+                  setActiveLibrarySlug(next?.slug || null);
+                }
+                if (chatLibrarySlug === slug) {
+                  setChatLibrarySlug(null);
+                }
+              }}
+            />
+          </>
         )}
         {activeSidebarMode === 'settings' && (
           <>

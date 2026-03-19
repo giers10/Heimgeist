@@ -3,6 +3,20 @@
   "name": "punk",
   "slug": "punk",
   "created_at": "2026-03-19T21:16:54Z",
-  "files": [],
-  "pipeline": {}
+  "files": [
+    {
+      "sha256": "19f1e5d2ceaab5fd1f1dc58ff07422388f156610d16dfdea2bdb35a5b9e70813",
+      "path": "/Users/giers/Documents/GeorgeJordac-TheVoiceOfHumanJustice.pdf",
+      "rel": "19f1e5d2ceaab5fd1f1dc58ff07422388f156610d16dfdea2bdb35a5b9e70813--GeorgeJordac-TheVoiceOfHumanJustice.pdf",
+      "name": "GeorgeJordac-TheVoiceOfHumanJustice.pdf",
+      "size": 849816,
+      "added_at": "2026-03-19T21:17:22Z",
+      "sync_status": "pending",
+      "enrich_enabled": false
+    }
+  ],
+  "pipeline": {
+    "pending_prepare_signature": "3eb68db8cef2a242639047a877498e175b2de01652f1617bf54e22ab1847176c",
+    "pending_prepare_updated_at": "2026-03-19T21:17:22Z"
+  }
 }

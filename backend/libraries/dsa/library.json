@@ -12,11 +12,20 @@
       "size": 672524,
       "added_at": "2026-03-19T20:49:21Z",
       "sync_status": "pending"
+    },
+    {
+      "sha256": "ee60f8138669faf3b708b07b711caa0085c302331c94ce3f62816009e4cb3275",
+      "path": "/Users/giers/Documents/Daniel Kahneman - Schnelles Denken, langsames Denken (2012, Siedler Verlag) - libgen.li.pdf",
+      "rel": "ee60f8138669faf3b708b07b711caa0085c302331c94ce3f62816009e4cb3275--Daniel_Kahneman_-_Schnelles_Denken_langsames_Denken_2012_Siedler_Verlag_-_libgen.li.pdf",
+      "name": "Daniel Kahneman - Schnelles Denken, langsames Denken (2012, Siedler Verlag) - libgen.li.pdf",
+      "size": 3078733,
+      "added_at": "2026-03-19T20:51:16Z",
+      "sync_status": "pending"
     }
   ],
   "pipeline": {
-    "pending_prepare_signature": "ac4634da7d1957fd2683d57ca76becac493caccc2a3a6f4383d3d4b5820e6d60",
-    "pending_prepare_updated_at": "2026-03-19T20:49:21Z",
+    "pending_prepare_signature": "681fecaea08d1dc8acd4bff0ee7d347b169fe40ac4561b3b4d646f3e8884cb48",
+    "pending_prepare_updated_at": "2026-03-19T20:51:16Z",
     "corpus_signature": "ac4634da7d1957fd2683d57ca76becac493caccc2a3a6f4383d3d4b5820e6d60",
     "corpus_updated_at": "2026-03-19T20:49:24Z"
   }

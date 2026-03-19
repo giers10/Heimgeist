@@ -1827,11 +1827,12 @@ async function createNewChat() {
               library={activeLibrary}
               jobs={libraryJobs}
               chatLibrarySlug={chatLibrarySlug}
+              pendingChatLibrarySlug={pendingChatLibrarySlug}
               onRefresh={async () => {
                 await refreshLibraries();
                 await refreshLibraryJobs();
               }}
-              onToggleChatLibrary={setChatLibrarySlug}
+              onToggleChatLibrary={toggleChatLibrary}
               onDeleted={(slug) => {
                 if (activeLibrarySlug === slug) {
                   const next = libraries.find(lib => lib.slug !== slug);
@@ -1839,6 +1840,9 @@ async function createNewChat() {
                 }
                 if (chatLibrarySlug === slug) {
                   setChatLibrarySlug(null);
+                }
+                if (pendingChatLibrarySlug === slug) {
+                  setPendingChatLibrarySlug(null);
                 }
               }}
             />

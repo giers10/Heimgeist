@@ -5,16 +5,6 @@
   "created_at": "2026-03-19T20:02:20Z",
   "files": [
     {
-      "sha256": "b4d7f8ab4b2661eb958e477b1dc857ffc209d5c6a38374237992ce2044bc0f09",
-      "path": "/Users/giers/Documents/Humanity\u2019s Last Prompt Engineering Guide.pdf",
-      "rel": "b4d7f8ab4b2661eb958e477b1dc857ffc209d5c6a38374237992ce2044bc0f09--Humanity_s_Last_Prompt_Engineering_Guide.pdf",
-      "name": "Humanity\u2019s Last Prompt Engineering Guide.pdf",
-      "size": 4697895,
-      "added_at": "2026-03-19T20:40:56Z",
-      "sync_status": "failed",
-      "sync_error": "ModuleNotFoundError: No module named 'tqdm'"
-    },
-    {
       "sha256": "38d83f5a4d382ccfc263a1cf98aac4c1d4a323bee3237096474db567d9c49f39",
       "path": "/Users/giers/Documents/Storyteller Tactics.pdf",
       "rel": "38d83f5a4d382ccfc263a1cf98aac4c1d4a323bee3237096474db567d9c49f39--Storyteller_Tactics.pdf",
@@ -26,7 +16,7 @@
     }
   ],
   "pipeline": {
-    "pending_prepare_signature": "b2336450f8c5d6d2b352193a72e03dc62a3db85b963de641b71ba2b1f05dbe45",
-    "pending_prepare_updated_at": "2026-03-19T20:46:36Z"
+    "pending_prepare_signature": "08e26fecbefe77b8e9c280745628e9e469cdbe2da15e236a8d405d10bb183b03",
+    "pending_prepare_updated_at": "2026-03-19T20:46:37Z"
   }
 }

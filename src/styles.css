@@ -1094,14 +1094,29 @@ input:checked + .slider:before {
   font-size: 11px;
 }
 
-.placeholder-view,
-.library-panel {
+.placeholder-view {
+  height: 100%;
   overflow: auto;
   padding: 20px;
 }
 
 .placeholder-view h1 {
   margin-top: 0;
+}
+
+.library-panel {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.library-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 20px 132px;
 }
 
 .library-toolbar {
@@ -1131,15 +1146,6 @@ input:checked + .slider:before {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-.library-chat-note,
-.job-card {
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 82%, black);
-  border: 1px solid var(--border);
-}
-
 .library-inline-form {
   margin-bottom: 14px;
   padding: 12px 14px;
@@ -1150,6 +1156,50 @@ input:checked + .slider:before {
 
 .danger-zone {
   border-color: #8f3d49;
+}
+
+.library-toast-stack {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  left: 20px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.library-toast {
+  width: min(100%, 560px);
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 88%, black);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+  line-height: 1.45;
+  animation: libraryToastIn 180ms ease-out;
+}
+
+.library-toast.success {
+  border-color: color-mix(in srgb, #69c4a1 60%, var(--border));
+}
+
+.library-toast.warning {
+  border-color: color-mix(in srgb, #e18282 60%, var(--border));
+}
+
+@keyframes libraryToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .library-files h2 {
@@ -1280,6 +1330,16 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 760px) {
+  .library-panel-scroll {
+    padding-bottom: 168px;
+  }
+
+  .library-toast-stack {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+  }
+
   .library-file-row {
     flex-direction: column;
   }

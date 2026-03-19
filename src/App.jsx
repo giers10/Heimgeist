@@ -366,12 +366,30 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
   const requestController = beginCancelableRequest(sessionId)
 
-  let enrichedPrompt = null
+  let enrichedPrompt = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
   let citationSources = []
+  const contextBlocks = []
   try {
+    const selectedLibrary = getChatLibraryForSession(sessionId)
+    const promptText = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
+
+    if (selectedLibrary?.states?.is_indexed) {
+      try {
+        const localContext = await fetchLocalLibraryContext(selectedLibrary.slug, promptText, requestController.signal)
+        if (localContext.contextBlock) {
+          contextBlocks.push(localContext.contextBlock)
+        }
+        if (Array.isArray(localContext.sources)) {
+          citationSources.push(...localContext.sources)
+        }
+      } catch (error) {
+        if (isAbortError(error)) throw error
+        console.warn('local library enrichment (regenerate) failed', error)
+      }
+    }
+
     if (webSearchEnabled) {
       try {
-        const promptText = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
         const historyForSearch = msgs
           .slice(Math.max(0, lastUserIdx - 7), lastUserIdx + 1)
           .map(m => ({ role: m.role, content: m.content || '' }))
@@ -393,14 +411,23 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           })
         })
         const data = await resp.json()
-        if (data && typeof data.enriched_prompt === 'string') {
-          enrichedPrompt = data.enriched_prompt
-          citationSources = Array.isArray(data.sources) ? data.sources : []
+        if (data && typeof data.context_block === 'string' && data.context_block.trim()) {
+          contextBlocks.push(data.context_block.trim())
+        }
+        if (Array.isArray(data?.sources)) {
+          citationSources.push(...data.sources)
         }
       } catch (error) {
         if (isAbortError(error)) throw error
         console.warn('web search enrichment (regenerate) failed', error)
       }
+    }
+
+    citationSources = [...new Set(citationSources)]
+    if (contextBlocks.length > 0) {
+      enrichedPrompt = `${promptText}\n\n${contextBlocks.join('\n\n')}`
+    } else {
+      enrichedPrompt = null
     }
 
     if (streamOutput) {

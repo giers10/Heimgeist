@@ -746,15 +746,17 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
     payload = library_payload(data)
     files = list(data.get("files", []))
     source_signature = payload.get("source_signature")
-    if not files or not source_signature:
+    corpus_signature = payload.get("corpus_signature")
+    prepare_signature = payload.get("prepare_signature")
+    if not files or not source_signature or not corpus_signature or not prepare_signature:
         raise RuntimeError("Add files before preparing this database.")
 
     paths = _collect_library_paths(slug)
     states = dict(payload.get("states") or {})
     results: Dict[str, Any] = {}
+    enrichment_enabled_files = int(states.get("enrichment_enabled_files") or 0)
 
     build_runner = _load_pipeline_fn("corpus_builder", "run_build")
-    enrich_runner = _load_pipeline_fn("corpus_enricher", "run_enrich")
     index_runner = _load_pipeline_fn("index_builder", "run_index")
 
     if on_progress:
@@ -766,39 +768,55 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             root=stage_dir(slug),
             out=paths["corpus"],
             on_progress=build_progress,
+            emit="per-file",
         )
-        _mark_pipeline_stage(slug, "build", source_signature)
+        _mark_pipeline_stage(slug, "build", corpus_signature)
         states["has_corpus"] = True
         states["is_enriched"] = False
         states["is_indexed"] = False
 
-    if not states.get("is_enriched"):
-        enrich_progress = _scaled_progress(on_progress, 0.34, 0.69, "Enriching content") if on_progress else None
-        results["enrich"] = enrich_runner(
-            inp=paths["corpus"],
-            out=paths["enhanced"],
-            shadow_out=paths["shadow"],
-            on_progress=enrich_progress,
-        )
-        _mark_pipeline_stage(slug, "enrich", source_signature)
-        states["is_enriched"] = True
-        states["is_indexed"] = False
+    if enrichment_enabled_files > 0:
+        if not states.get("is_enriched"):
+            enrich_progress = _scaled_progress(on_progress, 0.34, 0.69, "Enriching selected files") if on_progress else None
+            results["enrich"] = _run_selected_enrichment(
+                slug,
+                on_progress=enrich_progress,
+                ollama=opts.get("ollama", "http://localhost:11434"),
+                enrich_model=opts.get("enrich_model", DEFAULT_ENRICH_MODEL),
+                summary_lang=opts.get("summary_lang", "auto"),
+                enrich_concurrency=opts.get("enrich_concurrency", DEFAULT_ENRICH_CONCURRENCY),
+                min_chars=opts.get("min_chars", DEFAULT_ENRICH_MIN_CHARS),
+                max_text=opts.get("max_text", DEFAULT_ENRICH_MAX_TEXT),
+            )
+            _mark_pipeline_stage(slug, "enrich", prepare_signature)
+            states["is_enriched"] = True
+            states["is_indexed"] = False
+    else:
+        _cleanup_enrichment_artifacts(slug)
+        results["enrich"] = {
+            "status": "skipped",
+            "selected_files": 0,
+            "selected_records": 0,
+        }
+        if on_progress:
+            on_progress("enrich", 0.69, "Skipping enrichment. Files will stay raw-indexed.")
+        states["is_enriched"] = False
 
     if not states.get("is_indexed"):
         index_progress = _scaled_progress(on_progress, 0.69, 1.0, "Building search indexes") if on_progress else None
         results["embed"] = index_runner(
             raw=paths["corpus"],
-            enhanced=paths["enhanced"] if states.get("is_enriched") and paths["enhanced"].exists() else None,
-            shadow=paths["shadow"] if states.get("is_enriched") and paths["shadow"].exists() else None,
+            enhanced=None,
+            shadow=paths["shadow"] if paths["shadow"].exists() else None,
             out_dir=paths["indexes"],
             on_progress=index_progress,
-            embed_model=opts.get("embed_model", "dengcao/Qwen3-Embedding-0.6B:F16"),
+            embed_model=opts.get("embed_model", DEFAULT_EMBED_MODEL),
             ollama=opts.get("ollama", "http://localhost:11434"),
             target_chars=opts.get("target_chars", 2000),
             overlap_chars=opts.get("overlap_chars", 200),
             concurrency=opts.get("concurrency", 6),
         )
-        _mark_pipeline_stage(slug, "embed", source_signature)
+        _mark_pipeline_stage(slug, "embed", prepare_signature)
 
     if on_progress:
         on_progress("done", 1.0, "Database is ready for chat.")

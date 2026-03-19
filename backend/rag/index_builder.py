@@ -57,6 +57,11 @@ import requests
 import faiss
 
 try:
+    from backend.rag.ollama_embeddings import resolve_embed_model, request_embedding
+except ModuleNotFoundError:
+    from .ollama_embeddings import resolve_embed_model, request_embedding
+
+try:
     from tqdm import tqdm
 except ImportError:
     tqdm = None
@@ -132,26 +137,32 @@ def norm_f32(mat: np.ndarray) -> np.ndarray:
 # Embedding
 # -----------------------------
 def embed_many(ollama_url: str, model: str, texts: List[str], *, concurrency: int = 4, timeout: int = 120, on_progress=None) -> List[np.ndarray]:
+    if not texts:
+        return []
+
+    resolved_model, first_vec = resolve_embed_model(
+        ollama_url,
+        model,
+        probe_text=texts[0],
+        timeout=timeout,
+    )
+
     def _embed_one(t: str) -> np.ndarray:
-        r = requests.post(f"{ollama_url.rstrip('/')}/api/embeddings", json={"model": model, "prompt": t}, timeout=timeout)
-        r.raise_for_status()
-        data = r.json()
-        vec = data.get("embedding") or (data.get("embeddings") or [None])[0]
-        if vec is None:
-            raise RuntimeError("No 'embedding' in response")
+        vec = request_embedding(ollama_url, resolved_model, t, timeout=timeout)
         return np.array(vec, dtype="float32")
 
     out: List[Optional[np.ndarray]] = [None] * len(texts)
+    out[0] = np.array(first_vec, dtype="float32")
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as ex:
-        futures = {ex.submit(_embed_one, t): i for i, t in enumerate(texts)}
+        futures = {ex.submit(_embed_one, t): i for i, t in enumerate(texts[1:], start=1)}
         
         progress_bar = None
         if on_progress is None and 'tqdm' in globals() and tqdm is not None:
-            progress_bar = tqdm(as_completed(futures), total=len(futures), desc="embed")
+            progress_bar = tqdm(as_completed(futures), total=len(futures), desc=f"embed:{resolved_model}")
         
         iterator = progress_bar if progress_bar else as_completed(futures)
         
-        count = 0
+        count = 1
         for fut in iterator:
             i = futures[fut]
             out[i] = fut.result()
@@ -452,7 +463,7 @@ def run_index(raw: Path|None, enhanced: Path|None, shadow: Path|None, out_dir: P
         enhanced=enhanced,
         shadow=shadow,
         out_dir=out_dir,
-        embed_model=opts.get("embed_model", "dengcao/Qwen3-Embedding-0.6B:F16"),
+        embed_model=opts.get("embed_model", "bge-m3:latest"),
         ollama=opts.get("ollama", "http://localhost:11434"),
         target_chars=opts.get("target_chars", 2500),
         overlap_chars=opts.get("overlap_chars", 200),
@@ -462,6 +473,7 @@ def run_index(raw: Path|None, enhanced: Path|None, shadow: Path|None, out_dir: P
     )
 
     ensure_dir(out_dir)
+    resolved_model, _ = resolve_embed_model(args.ollama, args.embed_model)
 
     shadow_index_path = out_dir / "shadow.index.faiss"
     shadow_meta_path  = out_dir / "shadow.meta.jsonl"
@@ -476,7 +488,7 @@ def run_index(raw: Path|None, enhanced: Path|None, shadow: Path|None, out_dir: P
         s_tot, s_ix, s_dim = build_shadow_any(
             args.shadow, args.enhanced, args.raw,
             shadow_index_path, shadow_meta_path,
-            ollama=args.ollama, model=args.embed_model, concurrency=args.concurrency
+            ollama=args.ollama, model=resolved_model, concurrency=args.concurrency
         )
         results["shadow"] = {"records": s_tot, "indexed": s_ix, "dim": s_dim}
         if on_progress: on_progress("shadow", 0.5, "Shadow index complete.")
@@ -487,7 +499,7 @@ def run_index(raw: Path|None, enhanced: Path|None, shadow: Path|None, out_dir: P
         c_tot, c_ix, c_dim = build_content_any(
             args.enhanced, args.raw,
             content_index_path, content_meta_path,
-            ollama=args.ollama, model=args.embed_model,
+            ollama=args.ollama, model=resolved_model,
             target_chars=args.target_chars, overlap_chars=args.overlap_chars,
             concurrency=args.concurrency
         )
@@ -499,7 +511,7 @@ def run_index(raw: Path|None, enhanced: Path|None, shadow: Path|None, out_dir: P
         return {"status": "warning", "message": "Nothing built."}
 
     if on_progress: on_progress("done", 1.0, "Indexing complete.")
-    return {"status": "ok", "results": results}
+    return {"status": "ok", "results": results, "embed_model": resolved_model}
 
 def main():
     ap = argparse.ArgumentParser(description="Build FAISS indexes (shadow + content) for hybrid RAG with or without enrichment.")

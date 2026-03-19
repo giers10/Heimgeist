@@ -1052,7 +1052,7 @@ async function sendMessage() {
     let citationSources = []
     const contextBlocks = []
 
-    if (chatLibrarySlug) {
+    if (chatLibrarySlug && chatLibrary?.states?.is_indexed) {
       try {
         const resp = await fetch(`${ollamaApiUrl}/libraries/${chatLibrarySlug}/context`, {
           method: 'POST',

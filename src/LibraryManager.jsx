@@ -12,10 +12,7 @@ export default function LibraryManager({
   apiBase,
   library,
   jobs,
-  chatLibrarySlug,
-  pendingChatLibrarySlug,
   onRefresh,
-  onToggleChatLibrary,
   onDeleted
 }) {
   const [busy, setBusy] = useState(false)
@@ -91,14 +88,13 @@ export default function LibraryManager({
   if (!library) {
     return (
       <div className="placeholder-view">
-        <p>Create a database, add files, then add it to chat. Heimgeist will prepare retrieval automatically.</p>
+        <p>Create a database and add files. Heimgeist will keep its retrieval pipeline updated automatically.</p>
       </div>
     )
   }
 
   const activeJobs = (jobs || []).filter(job => job.slug === library.slug && (job.status === 'queued' || job.status === 'running'))
-  const usingInChat = chatLibrarySlug === library.slug
-  const isPreparingForChat = pendingChatLibrarySlug === library.slug
+  const isSyncing = activeJobs.length > 0
   const isReadyForChat = !!library.states?.is_indexed
 
   return (
@@ -124,14 +120,6 @@ export default function LibraryManager({
       <div className="library-toolbar">
         <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
         <button
-          className="button"
-          disabled={busy || isPreparingForChat}
-          title={isPreparingForChat ? 'Preparing this database for chat.' : ''}
-          onClick={() => onToggleChatLibrary(usingInChat ? null : library).catch((error) => setErrorMessage(String(error?.message || error)))}
-        >
-          {usingInChat ? 'Remove From Chat' : isPreparingForChat ? 'Adding To Chat...' : 'Add To Chat'}
-        </button>
-        <button
           className="button danger"
           onClick={() => {
             setConfirmDelete(true)
@@ -145,34 +133,25 @@ export default function LibraryManager({
       <div className="library-states">
         <div className={`state-pill ${library.states?.has_files ? 'ready' : ''}`}>Files: {library.files?.length || 0}</div>
         <div className={`state-pill ${isReadyForChat ? 'ready' : ''}`}>
-          {isPreparingForChat ? 'Preparing' : isReadyForChat ? 'Ready for chat' : library.files?.length ? 'Needs preparation' : 'No data yet'}
-        </div>
-        <div className={`state-pill ${(usingInChat || isPreparingForChat) ? 'ready' : ''}`}>
-          {usingInChat ? 'In chat' : isPreparingForChat ? 'Adding to chat' : 'Not in chat'}
+          {isSyncing ? 'Syncing' : isReadyForChat ? 'Ready' : library.files?.length ? 'Needs sync' : 'No data yet'}
         </div>
       </div>
 
-      {usingInChat && (
+      {isSyncing && (
         <div className="library-chat-note">
-          This database is attached to chat. Heimgeist retrieves relevant snippets before each message and appends them to the prompt.
+          Syncing this database. Heimgeist is rebuilding the corpus, enrichment, embeddings, and indexes automatically.
         </div>
       )}
 
-      {isPreparingForChat && (
-        <div className="library-chat-note">
-          Preparing this database for chat. Heimgeist is reading files, enriching content, and building search indexes automatically.
-        </div>
-      )}
-
-      {!library.files?.length && !usingInChat && !isPreparingForChat && (
+      {!library.files?.length && !isSyncing && (
         <div className="library-chat-note">
           Add files to make this database available in chat.
         </div>
       )}
 
-      {library.files?.length > 0 && !isReadyForChat && !usingInChat && !isPreparingForChat && (
+      {library.files?.length > 0 && !isReadyForChat && !isSyncing && (
         <div className="library-chat-note">
-          Add To Chat will prepare this database automatically before it is used.
+          This database is waiting for its next sync.
         </div>
       )}
 

@@ -13,17 +13,15 @@
       "added_at": "2026-03-19T22:40:40Z",
       "sync_status": "ready",
       "enrich_enabled": false,
-      "synced_at": "2026-03-19T22:46:47Z"
+      "synced_at": "2026-03-19T22:49:59Z"
     }
   ],
   "pipeline": {
-    "corpus_signature": "d4c2c24cce2456d7c532a32aff9e28bca6012b6ed2ab769b0e9b9966adaaed1e",
-    "corpus_updated_at": "2026-03-19T22:46:46Z",
+    "corpus_signature": "573f86d1aa3db0244c8a9f8032bed38625e51daf1bdfdba92821a3f93be90226",
+    "corpus_updated_at": "2026-03-19T22:49:51Z",
     "embed_model": "bge-m3:latest",
-    "embed_model_updated_at": "2026-03-19T22:46:47Z",
-    "indexed_signature": "7d00a908c8b3de8129ede766022aaef7884e463b200c4dde1a0d51eae26b5738",
-    "indexed_updated_at": "2026-03-19T22:46:47Z",
-    "pending_prepare_signature": "0f0b619a1c42a4b21f55ba2f089239a5f9cc36266e4823cca0ddd6701d710cfe",
-    "pending_prepare_updated_at": "2026-03-19T22:49:43Z"
+    "embed_model_updated_at": "2026-03-19T22:49:59Z",
+    "indexed_signature": "0f0b619a1c42a4b21f55ba2f089239a5f9cc36266e4823cca0ddd6701d710cfe",
+    "indexed_updated_at": "2026-03-19T22:49:59Z"
   }
 }

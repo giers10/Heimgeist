@@ -249,6 +249,25 @@ export default function App() {
     return String(error)
   }
 
+  async function fetchLocalLibraryContext(slug, prompt, signal) {
+    if (!slug) return { contextBlock: null, sources: [] }
+
+    const resp = await fetch(`${ollamaApiUrl}/libraries/${slug}/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        prompt,
+        top_k: 5
+      })
+    })
+    const data = await resp.json()
+    return {
+      contextBlock: typeof data?.context_block === 'string' && data.context_block.trim() ? data.context_block.trim() : null,
+      sources: Array.isArray(data?.sources) ? data.sources : [],
+    }
+  }
+
   function startEditMessage(index, content) {
     setEditingMessageIndex(index);
     setEditText(content || '');

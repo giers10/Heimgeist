@@ -1535,7 +1535,7 @@ def process_media(path: Path, args) -> List[Record]:
 
     mpw = args.mp_workers or len(slices)
     device = _resolve_whisper_device(args.whisper_device)
-    ctx = mp.get_context("fork")
+    ctx = mp.get_context("spawn")
     pool = ctx.Pool(processes=mpw, initializer=_whisper_pool_init, initargs=(args.whisper_model, device))
     try:
         jobs = [(fp, i, path.stem) for i, (fp, _s, _e) in enumerate(slices)]

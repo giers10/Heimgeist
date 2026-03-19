@@ -3,6 +3,19 @@
   "name": "dsa",
   "slug": "dsa",
   "created_at": "2026-03-19T20:49:15Z",
-  "files": [],
-  "pipeline": {}
+  "files": [
+    {
+      "sha256": "259b04f8f364d7dc890f081b366e2c324d3c1ec04ac5d0ca92a5acce70f9e630",
+      "path": "/Users/giers/Documents/Dramatic structure - Wikipedia.pdf",
+      "rel": "259b04f8f364d7dc890f081b366e2c324d3c1ec04ac5d0ca92a5acce70f9e630--Dramatic_structure_-_Wikipedia.pdf",
+      "name": "Dramatic structure - Wikipedia.pdf",
+      "size": 672524,
+      "added_at": "2026-03-19T20:49:21Z",
+      "sync_status": "pending"
+    }
+  ],
+  "pipeline": {
+    "pending_prepare_signature": "ac4634da7d1957fd2683d57ca76becac493caccc2a3a6f4383d3d4b5820e6d60",
+    "pending_prepare_updated_at": "2026-03-19T20:49:21Z"
+  }
 }

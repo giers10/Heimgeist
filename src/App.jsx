@@ -1209,23 +1209,16 @@ async function sendMessage() {
     let citationSources = []
     const contextBlocks = []
 
-    if (chatLibrarySlug && chatLibrary?.states?.is_indexed) {
+    const selectedLibrary = getChatLibraryForSession(targetSessionId)
+
+    if (selectedLibrary?.states?.is_indexed) {
       try {
-        const resp = await fetch(`${ollamaApiUrl}/libraries/${chatLibrarySlug}/context`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: requestController.signal,
-          body: JSON.stringify({
-            prompt: userMsg.content,
-            top_k: 5
-          })
-        })
-        const data = await resp.json()
-        if (data && typeof data.context_block === 'string' && data.context_block.trim()) {
-          contextBlocks.push(data.context_block.trim())
+        const localContext = await fetchLocalLibraryContext(selectedLibrary.slug, userMsg.content, requestController.signal)
+        if (localContext.contextBlock) {
+          contextBlocks.push(localContext.contextBlock)
         }
-        if (Array.isArray(data?.sources)) {
-          citationSources.push(...data.sources)
+        if (Array.isArray(localContext.sources)) {
+          citationSources.push(...localContext.sources)
         }
       } catch (error) {
         if (isAbortError(error)) throw error

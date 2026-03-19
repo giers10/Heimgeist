@@ -790,6 +790,12 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [chatLibrarySlug]);
 
   useEffect(() => {
+    if (chatLibrarySlug && chatLibrary && !chatLibrary.states?.is_indexed) {
+      setChatLibrarySlug(null)
+    }
+  }, [chatLibrarySlug, chatLibrary]);
+
+  useEffect(() => {
     if (!ollamaApiUrl) return;
     const interval = setInterval(() => {
       refreshLibraries();

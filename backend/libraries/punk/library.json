@@ -3,22 +3,8 @@
   "name": "punk",
   "slug": "punk",
   "created_at": "2026-03-19T21:16:54Z",
-  "files": [
-    {
-      "sha256": "19f1e5d2ceaab5fd1f1dc58ff07422388f156610d16dfdea2bdb35a5b9e70813",
-      "path": "/Users/giers/Documents/GeorgeJordac-TheVoiceOfHumanJustice.pdf",
-      "rel": "19f1e5d2ceaab5fd1f1dc58ff07422388f156610d16dfdea2bdb35a5b9e70813--GeorgeJordac-TheVoiceOfHumanJustice.pdf",
-      "name": "GeorgeJordac-TheVoiceOfHumanJustice.pdf",
-      "size": 849816,
-      "added_at": "2026-03-19T21:17:22Z",
-      "sync_status": "failed",
-      "enrich_enabled": false,
-      "sync_error": "HTTPError: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/embeddings"
-    }
-  ],
+  "files": [],
   "pipeline": {
-    "pending_prepare_signature": "3eb68db8cef2a242639047a877498e175b2de01652f1617bf54e22ab1847176c",
-    "pending_prepare_updated_at": "2026-03-19T21:17:22Z",
     "corpus_signature": "4ee63713a76f8fb419918759fc04071848fb669a0e7b5b12c15727224c3838d2",
     "corpus_updated_at": "2026-03-19T21:17:25Z"
   }

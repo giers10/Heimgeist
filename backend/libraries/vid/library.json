@@ -11,8 +11,9 @@
       "name": "3 Meter Processor Unit shorts.mp4",
       "size": 4528678,
       "added_at": "2026-03-19T22:26:25Z",
-      "sync_status": "pending",
-      "enrich_enabled": false
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "RuntimeError: Corpus build produced no usable records."
     }
   ],
   "pipeline": {

@@ -14,6 +14,16 @@
       "sync_status": "ready",
       "enrich_enabled": false,
       "synced_at": "2026-03-19T22:09:12Z"
+    },
+    {
+      "sha256": "dd3889a0a32e9f5895d7d444f680421195a41129663afd19ef821817b1b9f516",
+      "path": "/Users/giers/Pictures/giersi1/ELYA3238.jpeg",
+      "rel": "dd3889a0a32e9f5895d7d444f680421195a41129663afd19ef821817b1b9f516--ELYA3238.jpeg",
+      "name": "ELYA3238.jpeg",
+      "size": 113096,
+      "added_at": "2026-03-19T22:13:16Z",
+      "sync_status": "pending",
+      "enrich_enabled": false
     }
   ],
   "pipeline": {
@@ -22,6 +32,8 @@
     "embed_model": "bge-m3:latest",
     "embed_model_updated_at": "2026-03-19T22:09:12Z",
     "indexed_signature": "10b47575a3d348baacc5f3ac610bf7052974b746527263aad088e5e8490662a5",
-    "indexed_updated_at": "2026-03-19T22:09:12Z"
+    "indexed_updated_at": "2026-03-19T22:09:12Z",
+    "pending_prepare_signature": "a5cb9837dcf6e30f608239be2b5d0756cc5bfd99f7cb7a32df48586d053d1c91",
+    "pending_prepare_updated_at": "2026-03-19T22:13:16Z"
   }
 }

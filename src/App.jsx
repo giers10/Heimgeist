@@ -139,6 +139,7 @@ export default function App() {
   const [activeSidebarMode, setActiveSidebarMode] = useState('chats') // 'chats', 'dbs', 'settings'
   const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('General'); // 'General', 'Interface'
   const [editingSessionId, setEditingSessionId] = useState(null); // ID of the session being edited
+  const [editingLibrarySlug, setEditingLibrarySlug] = useState(null)
   const [libraries, setLibraries] = useState([])
   const [libraryJobs, setLibraryJobs] = useState([])
   const [activeLibrarySlug, setActiveLibrarySlug] = useState(null)
@@ -1468,6 +1469,33 @@ async function createNewChat() {
     });
   }
 
+  function handleLibraryRename(slug, newName) {
+    const name = (newName || '').trim()
+    const library = libraries.find(item => item.slug === slug)
+    if (!library) {
+      setEditingLibrarySlug(null)
+      return
+    }
+    if (!name || name === library.name) {
+      setEditingLibrarySlug(null)
+      return
+    }
+
+    fetch(`${ollamaApiUrl}/libraries/${slug}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    })
+    .then(() => {
+      setLibraries(prevLibraries =>
+        prevLibraries.map(item =>
+          item.slug === slug ? { ...item, name } : item
+        )
+      )
+      setEditingLibrarySlug(null)
+    })
+  }
+
   function handleDelete(sessionId) {
     fetch(`${ollamaApiUrl}/sessions/${sessionId}`, { method: 'DELETE' })
     .then(() => {
@@ -1584,9 +1612,33 @@ async function createNewChat() {
                     className={`chat-item ${library.slug === activeLibrarySlug ? 'active' : ''}`}
                     onClick={() => setActiveLibrarySlug(library.slug)}
                   >
-                    <span>{library.name}</span>
-                    {chatLibrarySlug === library.slug && <div className="db-active-badge">Chat</div>}
-                    {pendingChatLibrarySlug === library.slug && <div className="db-active-badge">Preparing</div>}
+                    {editingLibrarySlug === library.slug ? (
+                      <input
+                        type="text"
+                        className="rename-input"
+                        defaultValue={library.name}
+                        onBlur={() => setEditingLibrarySlug(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleLibraryRename(library.slug, e.target.value)
+                          } else if (e.key === 'Escape') {
+                            setEditingLibrarySlug(null)
+                          }
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        <span>{library.name}</span>
+                        <div className="chat-item-buttons">
+                          {chatLibrarySlug === library.slug && <div className="db-active-badge">Chat</div>}
+                          {pendingChatLibrarySlug === library.slug && <div className="db-active-badge">Preparing</div>}
+                          <button className="icon-button" onClick={(e) => { e.stopPropagation(); setEditingLibrarySlug(library.slug) }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-edit-2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))
               )}

@@ -11,8 +11,9 @@
       "name": "ELYA3238.jpeg",
       "size": 113096,
       "added_at": "2026-03-19T22:13:16Z",
-      "sync_status": "pending",
-      "enrich_enabled": false
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "RuntimeError: Corpus build produced no usable records."
     }
   ],
   "pipeline": {

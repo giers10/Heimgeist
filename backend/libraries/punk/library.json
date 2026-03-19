@@ -27,10 +27,18 @@
       "name": "Humanity\u2019s Last Prompt Engineering Guide.pdf",
       "size": 4697895,
       "added_at": "2026-03-19T20:40:56Z"
+    },
+    {
+      "sha256": "38d83f5a4d382ccfc263a1cf98aac4c1d4a323bee3237096474db567d9c49f39",
+      "path": "/Users/giers/Documents/Storyteller Tactics.pdf",
+      "rel": "38d83f5a4d382ccfc263a1cf98aac4c1d4a323bee3237096474db567d9c49f39--Storyteller_Tactics.pdf",
+      "name": "Storyteller Tactics.pdf",
+      "size": 48959517,
+      "added_at": "2026-03-19T20:41:06Z"
     }
   ],
   "pipeline": {
-    "pending_prepare_signature": "0fa90baafcfac660715575ffca127199989d8babd86381865d4ea4cb64cb1e81",
-    "pending_prepare_updated_at": "2026-03-19T20:40:56Z"
+    "pending_prepare_signature": "1e98a25388ed71bb6a0d8d2f7c9cd137956509b7d4904f2725ec12593c5825b3",
+    "pending_prepare_updated_at": "2026-03-19T20:41:06Z"
   }
 }

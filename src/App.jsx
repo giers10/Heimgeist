@@ -868,7 +868,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [activeSessionId]);
 
   useEffect(() => {
-    if (!libraries.length) return
     const validSlugs = new Set(libraries.map(library => library.slug))
     setChatLibraryBySession(prev => {
       let changed = false

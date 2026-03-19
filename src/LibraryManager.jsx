@@ -19,14 +19,10 @@ export default function LibraryManager({
   onDeleted
 }) {
   const [busy, setBusy] = useState(false)
-  const [isRenaming, setIsRenaming] = useState(false)
-  const [renameValue, setRenameValue] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
-    setIsRenaming(false)
-    setRenameValue(library?.name || '')
     setConfirmDelete(false)
     setErrorMessage('')
   }, [library?.slug, library?.name])
@@ -83,25 +79,6 @@ export default function LibraryManager({
     }
   }
 
-  async function renameLibrary() {
-    if (!library) return
-    const name = renameValue.trim()
-    if (!name || name === library.name) {
-      setIsRenaming(false)
-      setRenameValue(library.name || '')
-      return
-    }
-    await runAction(async () => {
-      const response = await fetch(`${apiBase}/libraries/${library.slug}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      })
-      await expectOk(response)
-    })
-    setIsRenaming(false)
-  }
-
   async function deleteLibrary() {
     if (!library) return
     await runAction(async () => {
@@ -123,53 +100,9 @@ export default function LibraryManager({
   const usingInChat = chatLibrarySlug === library.slug
   const isPreparingForChat = pendingChatLibrarySlug === library.slug
   const isReadyForChat = !!library.states?.is_indexed
-  const canStartRename = () => {
-    setRenameValue(library.name || '')
-    setErrorMessage('')
-    setIsRenaming(true)
-    setConfirmDelete(false)
-  }
 
   return (
     <div className="library-panel">
-      {isRenaming && (
-        <div className="library-inline-form">
-          <input
-            type="text"
-            className="rename-input"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                renameLibrary().catch((error) => setErrorMessage(String(error?.message || error)))
-              } else if (e.key === 'Escape') {
-                setIsRenaming(false)
-                setRenameValue(library.name || '')
-              }
-            }}
-            autoFocus
-          />
-          <div className="new-db-actions">
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => renameLibrary().catch((error) => setErrorMessage(String(error?.message || error)))}
-            >
-              Save
-            </button>
-            <button
-              className="button ghost"
-              onClick={() => {
-                setIsRenaming(false)
-                setRenameValue(library.name || '')
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {confirmDelete && (
         <div className="library-inline-form danger-zone">
           <div className="muted-copy">Delete "{library.name}"? This removes the registered files and local retrieval data for this database.</div>
@@ -190,7 +123,6 @@ export default function LibraryManager({
 
       <div className="library-toolbar">
         <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
-        <button className="button" onClick={canStartRename}>Rename</button>
         <button
           className="button"
           disabled={busy || isPreparingForChat}
@@ -203,7 +135,6 @@ export default function LibraryManager({
           className="button danger"
           onClick={() => {
             setConfirmDelete(true)
-            setIsRenaming(false)
             setErrorMessage('')
           }}
         >

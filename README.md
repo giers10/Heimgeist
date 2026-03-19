@@ -18,10 +18,10 @@ The `DBs` tab is no longer a placeholder. You can:
 
 - create and rename libraries
 - register files and folders
-- attach one library to chat context
+- let Heimgeist rebuild retrieval automatically when files change
 - open or remove registered files from the UI
 
-When a library is added to chat, Heimgeist prepares it automatically by building a corpus, enriching the content, and creating retrieval indexes. For each chat turn, Heimgeist queries the active library, turns the top results into a local context block, appends that block to the user prompt, and sends the enriched prompt to Ollama.
+When files are added or removed, Heimgeist automatically rebuilds the local RAG pipeline for that database: corpus, enrichment, embeddings, and indexes. In the chat composer, you can select which database the current chat should use. For each chat turn, Heimgeist queries the selected database, turns the top results into a local context block, appends that block to the user prompt, and sends the enriched prompt to Ollama.
 
 ## Stack
 

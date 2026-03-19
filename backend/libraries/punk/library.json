@@ -3,14 +3,6 @@
   "name": "Punk",
   "slug": "punk",
   "created_at": "2026-03-19T20:02:20Z",
-  "files": [
-    {
-      "sha256": "e816ca61aebd84159747d248fedd6d5ff318c471c36bcc31b1ac6bf9aebcd3c1",
-      "path": "/Users/giers/Documents/The Evolution of Cooperation_Robert Axelrod_liber3.pdf",
-      "rel": "e816ca61aebd84159747d248fedd6d5ff318c471c36bcc31b1ac6bf9aebcd3c1--The_Evolution_of_Cooperation_Robert_Axelrod_liber3.pdf",
-      "name": "The Evolution of Cooperation_Robert Axelrod_liber3.pdf",
-      "size": 1208035,
-      "added_at": "2026-03-19T20:02:53Z"
-    }
-  ]
+  "files": [],
+  "pipeline": {}
 }

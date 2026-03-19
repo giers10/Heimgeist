@@ -1000,6 +1000,7 @@ async def register_paths(slug: str, req: RegisterPathsRequest):
             "size": file_path.stat().st_size,
             "added_at": now_iso(),
             "sync_status": "pending",
+            "enrich_enabled": False,
         }
         data.setdefault("files", []).append(entry)
         added.append(entry)
@@ -1007,7 +1008,7 @@ async def register_paths(slug: str, req: RegisterPathsRequest):
 
     job_id = None
     if added:
-        _set_pending_prepare_signature(data, _source_signature(data.get("files", [])))
+        _set_pending_prepare_signature(data, _prepare_signature(data.get("files", [])))
     write_library(slug, data)
     if added:
         job_id = await _ensure_prepare_job(slug)
@@ -1032,17 +1033,42 @@ async def remove_file(slug: str, req: RemoveFileRequest):
     if symlink_path.exists():
         symlink_path.unlink()
 
-    source_signature = _source_signature(data.get("files", []))
-    _set_pending_prepare_signature(data, source_signature)
+    prepare_signature = _prepare_signature(data.get("files", []))
+    _set_pending_prepare_signature(data, prepare_signature)
     write_library(slug, data)
 
     job_id = None
-    if source_signature:
+    if prepare_signature:
         job_id = await _ensure_prepare_job(slug)
     else:
         _cleanup_generated_artifacts(slug)
 
     return {"ok": True, "job_id": job_id, "library": library_payload(data)}
+
+
+@router.patch("/libraries/{slug}/files/enrichment")
+async def update_file_enrichment(slug: str, req: UpdateFileEnrichmentRequest):
+    data = read_library(slug)
+    files = list(data.get("files", []))
+    target = next((entry for entry in files if entry.get("rel") == req.rel), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    desired = bool(req.enabled)
+    if _file_enrich_enabled(target) == desired:
+        return {"job_id": None, "library": library_payload(data)}
+
+    target["enrich_enabled"] = desired
+    target["sync_status"] = "pending"
+    target.pop("sync_error", None)
+    target.pop("synced_at", None)
+
+    prepare_signature = _prepare_signature(files)
+    _set_pending_prepare_signature(data, prepare_signature)
+    write_library(slug, data)
+
+    job_id = await _ensure_prepare_job(slug)
+    return {"job_id": job_id, "library": library_payload(data)}
 
 
 @router.post("/libraries/{slug}/jobs/build")

@@ -1534,6 +1534,11 @@ async function createNewChat() {
     .then(() => {
       const newSessions = chatSessions.filter(s => s.session_id !== sessionId);
       setChatSessions(newSessions);
+      setChatLibraryBySession(prev => {
+        const next = { ...(prev || {}) }
+        delete next[sessionId]
+        return next
+      })
       if (activeSessionId === sessionId) {
         setActiveSessionId(newSessions.length > 0 ? newSessions[0].session_id : null);
       }

@@ -151,22 +151,30 @@ def sample_evenly_spaced_chunks(chunks: List[str], target_count: int) -> List[st
         picked.append(chunks[source_idx])
     return picked
 
-def plan_content_chunking(txt: str, target_chars: int, overlap_chars: int) -> Dict[str, int | bool | str]:
+def plan_content_chunking(
+    txt: str,
+    target_chars: int,
+    overlap_chars: int,
+    *,
+    baseline_chunks: Optional[int] = None,
+) -> Dict[str, int | bool | str]:
     clean = (txt or "").strip()
     text_len = len(clean)
     base_target = max(400, int(target_chars))
     base_overlap = max(0, int(overlap_chars))
-    approx_raw_chunks = max(1, math.ceil(text_len / max(1, base_target))) if text_len else 1
+    baseline_chunk_count = baseline_chunks
+    if baseline_chunk_count is None:
+        baseline_chunk_count = max(1, math.ceil(text_len / max(1, base_target))) if text_len else 1
 
-    adaptive = approx_raw_chunks > 24
-    chunk_budget = approx_raw_chunks
+    adaptive = baseline_chunk_count > 24
+    chunk_budget = baseline_chunk_count
     planned_target = base_target
     sampling_fallback = False
 
     if adaptive:
         chunk_budget = min(
-            approx_raw_chunks,
-            max(24, math.ceil(3.5 * math.sqrt(approx_raw_chunks))),
+            baseline_chunk_count,
+            max(24, math.ceil(3.5 * math.sqrt(baseline_chunk_count))),
         )
         planned_target = math.ceil(text_len / max(1, chunk_budget)) if text_len else base_target
 
@@ -180,7 +188,7 @@ def plan_content_chunking(txt: str, target_chars: int, overlap_chars: int) -> Di
 
     return {
         "doc_chars": text_len,
-        "baseline_chunks": approx_raw_chunks,
+        "baseline_chunks": baseline_chunk_count,
         "chunk_budget": chunk_budget,
         "target_chars": planned_target,
         "overlap_chars": planned_overlap,
@@ -205,14 +213,26 @@ def chunk_text_for_index(txt: str, target_chars: int, overlap_chars: int) -> Tup
             "chunks_saved": 0,
         }
 
-    plan = plan_content_chunking(clean, target_chars, overlap_chars)
-    chunks = list(
-        chunk_text(
-            clean,
-            int(plan["target_chars"]),
-            int(plan["overlap_chars"]),
-        )
+    base_target = max(400, int(target_chars))
+    base_overlap = max(0, int(overlap_chars))
+    baseline_chunks = list(chunk_text(clean, base_target, base_overlap))
+    plan = plan_content_chunking(
+        clean,
+        target_chars,
+        overlap_chars,
+        baseline_chunks=len(baseline_chunks),
     )
+
+    if not plan["adaptive"]:
+        chunks = baseline_chunks
+    else:
+        chunks = list(
+            chunk_text(
+                clean,
+                int(plan["target_chars"]),
+                int(plan["overlap_chars"]),
+            )
+        )
 
     if plan["adaptive"] and len(chunks) > int(plan["chunk_budget"]):
         chunks = sample_evenly_spaced_chunks(chunks, int(plan["chunk_budget"]))

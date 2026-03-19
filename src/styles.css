@@ -1175,6 +1175,7 @@ input:checked + .slider:before {
 
 .library-file-meta {
   min-width: 0;
+  flex: 1;
 }
 
 .library-file-name {
@@ -1193,4 +1194,79 @@ input:checked + .slider:before {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.library-file-sync {
+  margin-top: 10px;
+}
+
+.library-file-sync-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.library-file-sync-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.library-file-sync-label.ready {
+  color: #69c4a1;
+}
+
+.library-file-sync-label.syncing,
+.library-file-sync-label.pending {
+  color: var(--accent);
+}
+
+.library-file-sync-label.failed {
+  color: #e18282;
+}
+
+.library-file-sync-detail {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.library-file-progress {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 50%, black);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.library-file-progress-bar {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 76%, white), var(--accent));
+  transition: width 180ms ease;
+}
+
+.library-file-progress.ready .library-file-progress-bar {
+  background: linear-gradient(90deg, #5cb48e, #7be1b5);
+}
+
+.library-file-progress.failed .library-file-progress-bar {
+  background: linear-gradient(90deg, #c35d5d, #e18282);
+}
+
+@media (max-width: 760px) {
+  .library-file-row {
+    flex-direction: column;
+  }
+
+  .library-file-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }

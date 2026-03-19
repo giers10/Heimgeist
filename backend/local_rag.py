@@ -412,6 +412,44 @@ def _clear_pending_prepare(slug: str) -> None:
     write_library(slug, data)
 
 
+def _mark_all_files_ready(slug: str) -> None:
+    path = lib_json(slug)
+    if not path.exists():
+        return
+
+    data = _read_json(path)
+    stamp = now_iso()
+    changed = False
+    for entry in data.get("files", []):
+        if entry.get("sync_status") != "ready" or entry.get("synced_at") != stamp:
+            changed = True
+        entry["sync_status"] = "ready"
+        entry["synced_at"] = stamp
+        entry.pop("sync_error", None)
+    if changed:
+        write_library(slug, data)
+
+
+def _mark_pending_files_failed(slug: str, error: Optional[str]) -> None:
+    path = lib_json(slug)
+    if not path.exists():
+        return
+
+    data = _read_json(path)
+    changed = False
+    for entry in data.get("files", []):
+        if entry.get("sync_status") == "ready":
+            continue
+        entry["sync_status"] = "failed"
+        if error:
+            entry["sync_error"] = error
+        else:
+            entry.pop("sync_error", None)
+        changed = True
+    if changed:
+        write_library(slug, data)
+
+
 async def _ensure_prepare_job(slug: str) -> Optional[str]:
     path = lib_json(slug)
     if not path.exists():
@@ -451,14 +489,19 @@ async def _handle_post_job_state(slug: str, job_type: str, status: str) -> None:
         _cleanup_generated_artifacts(slug)
         return
 
-    if pending_signature and payload["states"].get("is_indexed") and payload.get("source_signature") == pending_signature:
+    if payload["states"].get("is_indexed") and (
+        pending_signature is None or payload.get("source_signature") == pending_signature
+    ):
+        _mark_all_files_ready(slug)
         _clear_pending_prepare(slug)
         return
 
-    if status != "succeeded":
+    if status == "failed":
+        failed_job = _latest_library_job(slug, statuses={"failed"})
+        _mark_pending_files_failed(slug, failed_job.get("error") if failed_job else None)
         return
 
-    if pending_signature and not payload["states"].get("is_indexed"):
+    if status == "succeeded" and pending_signature and not payload["states"].get("is_indexed"):
         await _ensure_prepare_job(slug)
 
 

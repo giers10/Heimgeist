@@ -26,7 +26,7 @@ LIB_ROOT = Path(__file__).parent / "libraries"
 LIB_ROOT.mkdir(parents=True, exist_ok=True)
 
 RAW_CORPUS_PROFILE = "per-file-default-v1"
-PREPARE_PROFILE = "selective-enrich-v1"
+PREPARE_PROFILE = "selective-enrich-v2"
 DEFAULT_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_ENRICH_MODEL = "qwen3:4b"
 DEFAULT_ENRICH_MIN_CHARS = 240

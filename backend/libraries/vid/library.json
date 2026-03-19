@@ -22,8 +22,9 @@
       "name": "Schleim Keim - Party im Cannabisbeet.mp3",
       "size": 5785629,
       "added_at": "2026-03-19T22:43:31Z",
-      "sync_status": "pending",
-      "enrich_enabled": false
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "RuntimeError: Corpus build produced no usable records."
     }
   ],
   "pipeline": {

@@ -19,10 +19,18 @@
       "name": "Frischmuth, Barbara - Die Mystifikationen der Sophie Silber (2016, Aufbau Digital) - libgen.li.epub",
       "size": 2122352,
       "added_at": "2026-03-19T20:40:48Z"
+    },
+    {
+      "sha256": "b4d7f8ab4b2661eb958e477b1dc857ffc209d5c6a38374237992ce2044bc0f09",
+      "path": "/Users/giers/Documents/Humanity\u2019s Last Prompt Engineering Guide.pdf",
+      "rel": "b4d7f8ab4b2661eb958e477b1dc857ffc209d5c6a38374237992ce2044bc0f09--Humanity_s_Last_Prompt_Engineering_Guide.pdf",
+      "name": "Humanity\u2019s Last Prompt Engineering Guide.pdf",
+      "size": 4697895,
+      "added_at": "2026-03-19T20:40:56Z"
     }
   ],
   "pipeline": {
-    "pending_prepare_signature": "1e536902a347599832fe9ca05463b074be11d0f36c8f582c11e6eea1c51b8597",
-    "pending_prepare_updated_at": "2026-03-19T20:40:48Z"
+    "pending_prepare_signature": "0fa90baafcfac660715575ffca127199989d8babd86381865d4ea4cb64cb1e81",
+    "pending_prepare_updated_at": "2026-03-19T20:40:56Z"
   }
 }

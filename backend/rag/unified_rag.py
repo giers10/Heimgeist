@@ -31,6 +31,11 @@ import requests
 import threading
 from typing import Callable
 
+try:
+    from backend.rag.ollama_embeddings import resolve_embed_model
+except ModuleNotFoundError:
+    from .ollama_embeddings import resolve_embed_model
+
 # -----------------------------
 # Utilities
 # -----------------------------
@@ -64,16 +69,12 @@ def pick_any_text(rec: Dict) -> str:
     return rec.get("text") or rec.get("shadow_text") or rec.get("content") or rec.get("body") or ""
 
 def embed_query(ollama_url: str, model: str, text: str, timeout_s: int = 60) -> np.ndarray:
-    r = requests.post(
-        f"{ollama_url.rstrip('/')}/api/embeddings",
-        json={"model": model, "prompt": text},
+    resolved_model, vec = resolve_embed_model(
+        ollama_url,
+        model,
+        probe_text=text,
         timeout=timeout_s,
     )
-    r.raise_for_status()
-    data = r.json()
-    vec = data.get("embedding") or (data.get("embeddings") or [None])[0]
-    if vec is None:
-        raise RuntimeError("Ollama /api/embeddings returned no vector.")
     return np.array(vec, dtype="float32")
 
 def load_meta(store_path: str) -> Dict[int, Dict]:
@@ -630,7 +631,7 @@ def run_query(shadow_index: Path, shadow_store: Path,
         query=query,
         answer=answer,
         ollama=opts.get("ollama", "http://localhost:11434"),
-        embed_model=opts.get("embed_model", "dengcao/Qwen3-Embedding-0.6B:F16"),
+        embed_model=opts.get("embed_model", "bge-m3:latest"),
         shadow_candidates=opts.get("shadow_candidates", 400),
         content_candidates=opts.get("content_candidates", 600),
         doc_top=opts.get("doc_top", 40),

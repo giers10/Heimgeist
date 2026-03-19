@@ -27,7 +27,7 @@ LIB_ROOT.mkdir(parents=True, exist_ok=True)
 
 RAW_CORPUS_PROFILE = "per-file-default-v1"
 PREPARE_PROFILE = "selective-enrich-v1"
-DEFAULT_EMBED_MODEL = "dengcao/Qwen3-Embedding-0.6B:F16"
+DEFAULT_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_ENRICH_MODEL = "qwen3:4b"
 DEFAULT_ENRICH_MIN_CHARS = 240
 DEFAULT_ENRICH_MAX_TEXT = 6000
@@ -60,7 +60,7 @@ class UpdateFileEnrichmentRequest(BaseModel):
 
 
 class EmbedLibraryRequest(BaseModel):
-    embed_model: str = DEFAULT_EMBED_MODEL
+    embed_model: Optional[str] = None
     ollama: str = "http://localhost:11434"
     target_chars: int = 2000
     overlap_chars: int = 200
@@ -71,7 +71,7 @@ class LibraryContextRequest(BaseModel):
     prompt: str
     top_k: int = 5
     ollama: str = "http://localhost:11434"
-    embed_model: str = DEFAULT_EMBED_MODEL
+    embed_model: Optional[str] = None
     gen_model: str = "qwen3:4b"
 
 

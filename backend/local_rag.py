@@ -791,6 +791,11 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             emit="per-file",
             lang_detect=False,
         )
+        build_errors = list((results.get("build") or {}).get("errors") or [])
+        if not paths["corpus"].exists() or _line_count(paths["corpus"]) == 0:
+            if build_errors:
+                raise RuntimeError(build_errors[0])
+            raise RuntimeError("Corpus build produced no usable records.")
         _mark_pipeline_stage(slug, "build", corpus_signature)
         states["has_corpus"] = True
         states["is_enriched"] = False

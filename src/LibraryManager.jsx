@@ -139,6 +139,7 @@ export default function LibraryManager({
 
   const activeJobs = (jobs || []).filter(job => job.slug === library.slug && (job.status === 'queued' || job.status === 'running'))
   const usingInChat = chatLibrarySlug === library.slug
+  const canUseInChat = usingInChat || !!library.states?.is_indexed
   const canStartRename = () => {
     setRenameValue(library.name || '')
     setErrorMessage('')
@@ -210,7 +211,12 @@ export default function LibraryManager({
         <button className="button" disabled={busy || !library.states?.has_corpus} onClick={() => startJob('enrich')}>Enrich</button>
         <button className="button" disabled={busy || !library.states?.has_corpus} onClick={() => startJob('embed')}>Index</button>
         <button className="button" onClick={canStartRename}>Rename</button>
-        <button className="button" onClick={() => onToggleChatLibrary(usingInChat ? null : library.slug)}>
+        <button
+          className="button"
+          disabled={!canUseInChat}
+          title={!canUseInChat ? 'Index this database before using it in chat.' : ''}
+          onClick={() => onToggleChatLibrary(usingInChat ? null : library.slug)}
+        >
           {usingInChat ? 'Stop Using In Chat' : 'Use In Chat'}
         </button>
         <button
@@ -235,6 +241,12 @@ export default function LibraryManager({
       {usingInChat && (
         <div className="library-chat-note">
           This database will be queried before each chat request and its context will be appended to the prompt.
+        </div>
+      )}
+
+      {!library.states?.is_indexed && !usingInChat && (
+        <div className="library-chat-note">
+          Run Index before using this database in chat.
         </div>
       )}
 

@@ -932,12 +932,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
 
     setPendingChatLibrarySlug(slug)
-    if (!library.states?.has_corpus) {
-      await startLibraryJob(slug, 'build')
-    } else {
-      await startLibraryJob(slug, 'embed')
-    }
-    await refreshLibraries()
   }
 
   // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)

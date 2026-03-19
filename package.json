@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "dev:backend": "backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload",
+    "dev:backend": "node scripts/run-backend.cjs",
     "dev:renderer": "vite --port 5173 --strictPort",
     "dev:electron": "wait-on http://localhost:5173 tcp:8000 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "build": "vite build",

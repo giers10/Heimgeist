@@ -648,6 +648,9 @@ def enrich_one(
 
     is_short = len(base_text) < args.min_chars
     sampled = base_text if len(base_text) <= args.max_text else head_mid_tail_sample(base_text, args.max_text)
+    target_lang = args.summary_lang
+    if target_lang == "auto":
+        target_lang = str(rec.get("lang") or "").strip().lower() or (detect_lang_quick(sampled) or "en")
     qa_target = QA_TARGET_SHORT if is_short else QA_TARGET_DEFAULT
 
     # short fast-path (no LLM)
@@ -689,7 +692,7 @@ def enrich_one(
         doc_hint += " The TEXT appears noisy/garbled (possibly OCR). Summarize what the document likely conveys and any clearly legible details; avoid copying garbled strings."
 
     # caching
-    key = stable_hash(sampled, args.model, args.summary_lang, rec_id, rec_type)
+    key = stable_hash(sampled, args.model, target_lang, rec_id, rec_type)
     if not args.force:
         hit = cache_main.get(key)
         if hit is not None:
@@ -718,8 +721,8 @@ def enrich_one(
     def perform_translate(kind: str, payload: str, need_pairs: int) -> Dict[str, Any] | str:
         if kind == "__QATOPUP__":
             # request exactly need_pairs additional pairs
-            sys_prompt = build_system(args.summary_lang)
-            usr_prompt = build_user_qa_topup(sampled, args.summary_lang, need_pairs)
+            sys_prompt = build_system(target_lang)
+            usr_prompt = build_user_qa_topup(sampled, target_lang, need_pairs)
             opts = {"temperature": 0.2, "repeat_penalty": 1.1, "top_p": 0.9, "num_predict": 280}
             with sem:
                 tries, backoff, last = 2, 1.5, None
@@ -734,13 +737,13 @@ def enrich_one(
                 return {"qa": []}
         else:
             # per-field translation caching
-            tr_key = stable_hash(payload, args.model, args.summary_lang, kind, "translate")
+            tr_key = stable_hash(payload, args.model, target_lang, kind, "translate")
             if not args.force:
                 tr_hit = cache_tr.get(tr_key)
                 if tr_hit is not None:
                     return tr_hit
-            sys_prompt = build_system_translate(args.summary_lang)
-            usr_prompt = build_user_translate(payload, args.summary_lang)
+            sys_prompt = build_system_translate(target_lang)
+            usr_prompt = build_user_translate(payload, target_lang)
             opts = {"temperature": 0.2, "repeat_penalty": 1.05, "top_p": 0.9, "num_predict": 200}
             with sem:
                 tries, backoff, last = 2, 1.5, None
@@ -761,8 +764,8 @@ def enrich_one(
                 return {"text": payload}  # give up: return original
 
     # main call
-    system = build_system(args.summary_lang)
-    user = build_user_main(sampled, args.summary_lang, doc_hint, qa_target)
+    system = build_system(target_lang)
+    user = build_user_main(sampled, target_lang, doc_hint, qa_target)
     options = {"temperature": 0.2, "repeat_penalty": 1.1, "top_p": 0.9, "num_predict": 320}
 
     with sem:
@@ -802,7 +805,7 @@ def enrich_one(
                 # post-enforce schema + language
                 fixed = enforce_schema_and_language(
                     out,
-                    target_lang=args.summary_lang,
+                    target_lang=target_lang,
                     rec_text_sample=sampled,
                     rec_is_short=is_short,
                     perform_translate=perform_translate,

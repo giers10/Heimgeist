@@ -762,6 +762,7 @@ def _run_selected_enrichment(slug: str, on_progress=None, **opts) -> Dict[str, A
 def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
     data = read_library(slug)
     payload = library_payload(data)
+    pipeline = _pipeline_meta(data)
     files = list(data.get("files", []))
     source_signature = payload.get("source_signature")
     corpus_signature = payload.get("corpus_signature")
@@ -776,6 +777,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
 
     build_runner = _load_pipeline_fn("corpus_builder", "run_build")
     index_runner = _load_pipeline_fn("index_builder", "run_index")
+    embed_model = opts.get("embed_model") or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
 
     if on_progress:
         on_progress("prepare", 0.01, "Preparing database for chat...")
@@ -829,7 +831,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             shadow=paths["shadow"] if paths["shadow"].exists() else None,
             out_dir=paths["indexes"],
             on_progress=index_progress,
-            embed_model=opts.get("embed_model", DEFAULT_EMBED_MODEL),
+            embed_model=embed_model,
             ollama=opts.get("ollama", "http://localhost:11434"),
             target_chars=opts.get("target_chars", 2000),
             overlap_chars=opts.get("overlap_chars", 200),

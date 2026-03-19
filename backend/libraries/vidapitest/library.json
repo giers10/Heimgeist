@@ -1,0 +1,22 @@
+{
+  "id": "880cad5597294fe2a8fe74bb6be49376",
+  "name": "vidapitest",
+  "slug": "vidapitest",
+  "created_at": "2026-03-19T22:36:33Z",
+  "files": [
+    {
+      "sha256": "c72f7a5856dd680c4a08578bc90200a2d089d20a3c9295ef292602cd6c29d33a",
+      "path": "/private/tmp/heimgeist-rag-test/video-test.mp4",
+      "rel": "c72f7a5856dd680c4a08578bc90200a2d089d20a3c9295ef292602cd6c29d33a--video-test.mp4",
+      "name": "video-test.mp4",
+      "size": 52501,
+      "added_at": "2026-03-19T22:36:33Z",
+      "sync_status": "pending",
+      "enrich_enabled": false
+    }
+  ],
+  "pipeline": {
+    "pending_prepare_signature": "7c00490e24c726896021fc9bd224342d404dbe575219995af3f4a6290e36d061",
+    "pending_prepare_updated_at": "2026-03-19T22:36:33Z"
+  }
+}

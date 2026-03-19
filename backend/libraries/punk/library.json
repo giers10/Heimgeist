@@ -3,6 +3,21 @@
   "name": "punk",
   "slug": "punk",
   "created_at": "2026-03-19T21:57:31Z",
-  "files": [],
-  "pipeline": {}
+  "files": [
+    {
+      "sha256": "95abaff996e9a675ea5af6323bab9293ff474cf420761be9df063a41bdc2d1b0",
+      "path": "/Users/giers/Schleim Keim - Party im Cannabisbeet.mp3",
+      "rel": "95abaff996e9a675ea5af6323bab9293ff474cf420761be9df063a41bdc2d1b0--Schleim_Keim_-_Party_im_Cannabisbeet.mp3",
+      "name": "Schleim Keim - Party im Cannabisbeet.mp3",
+      "size": 5785629,
+      "added_at": "2026-03-19T22:04:21Z",
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "RuntimeError: 95abaff996e9a675ea5af6323bab9293ff474cf420761be9df063a41bdc2d1b0--Schleim_Keim_-_Party_im_Cannabisbeet.mp3: RuntimeError: Audio/video transcription requires the optional 'openai-whisper' package. Install it in backend/.venv, for example: pip install -U openai-whisper"
+    }
+  ],
+  "pipeline": {
+    "pending_prepare_signature": "10b47575a3d348baacc5f3ac610bf7052974b746527263aad088e5e8490662a5",
+    "pending_prepare_updated_at": "2026-03-19T22:04:21Z"
+  }
 }

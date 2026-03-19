@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react'
 
 function statusLabel(job) {
   if (!job) return null
+  const type = job.type === 'prepare' ? 'prepare' : job.type
   const progress = typeof job.progress === 'number' ? `${job.progress.toFixed(0)}%` : null
   const detail = job.detail ? ` ${job.detail}` : ''
-  return `${job.type} · ${job.status}${progress ? ` · ${progress}` : ''}${detail}`
+  return `${type} · ${job.status}${progress ? ` · ${progress}` : ''}${detail}`
 }
 
 export default function LibraryManager({
@@ -110,30 +111,10 @@ export default function LibraryManager({
     onDeleted?.(library.slug)
   }
 
-  async function startJob(kind) {
-    if (!library) return
-    try {
-      await runAction(async () => {
-        const endpoint = `${apiBase}/libraries/${library.slug}/jobs/${kind}`
-        const options = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        }
-        if (kind === 'embed') {
-          options.body = JSON.stringify({})
-        }
-        const response = await fetch(endpoint, options)
-        await expectOk(response)
-      })
-    } catch (error) {
-      setErrorMessage(String(error?.message || error))
-    }
-  }
-
   if (!library) {
     return (
       <div className="placeholder-view">
-        <p>Create a database, add files or folders, then build and index it for local RAG.</p>
+        <p>Create a database, add files, then add it to chat. Heimgeist will prepare retrieval automatically.</p>
       </div>
     )
   }
@@ -141,6 +122,7 @@ export default function LibraryManager({
   const activeJobs = (jobs || []).filter(job => job.slug === library.slug && (job.status === 'queued' || job.status === 'running'))
   const usingInChat = chatLibrarySlug === library.slug
   const isPreparingForChat = pendingChatLibrarySlug === library.slug
+  const isReadyForChat = !!library.states?.is_indexed
   const canStartRename = () => {
     setRenameValue(library.name || '')
     setErrorMessage('')
@@ -190,7 +172,7 @@ export default function LibraryManager({
 
       {confirmDelete && (
         <div className="library-inline-form danger-zone">
-          <div className="muted-copy">Delete "{library.name}"? This removes the local index and metadata for this database.</div>
+          <div className="muted-copy">Delete "{library.name}"? This removes the registered files and local retrieval data for this database.</div>
           <div className="new-db-actions">
             <button
               className="button danger"
@@ -208,9 +190,6 @@ export default function LibraryManager({
 
       <div className="library-toolbar">
         <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
-        <button className="button" disabled={busy || !library.files?.length} onClick={() => startJob('build')}>Build Corpus</button>
-        <button className="button" disabled={busy || !library.states?.has_corpus} onClick={() => startJob('enrich')}>Enrich</button>
-        <button className="button" disabled={busy || !library.states?.has_corpus} onClick={() => startJob('embed')}>Index</button>
         <button className="button" onClick={canStartRename}>Rename</button>
         <button
           className="button"
@@ -218,7 +197,7 @@ export default function LibraryManager({
           title={isPreparingForChat ? 'Preparing this database for chat.' : ''}
           onClick={() => onToggleChatLibrary(usingInChat ? null : library).catch((error) => setErrorMessage(String(error?.message || error)))}
         >
-          {usingInChat ? 'Stop Using In Chat' : isPreparingForChat ? 'Preparing For Chat...' : 'Use In Chat'}
+          {usingInChat ? 'Remove From Chat' : isPreparingForChat ? 'Adding To Chat...' : 'Add To Chat'}
         </button>
         <button
           className="button danger"
@@ -234,26 +213,35 @@ export default function LibraryManager({
 
       <div className="library-states">
         <div className={`state-pill ${library.states?.has_files ? 'ready' : ''}`}>Files: {library.files?.length || 0}</div>
-        <div className={`state-pill ${library.states?.has_corpus ? 'ready' : ''}`}>Corpus: {library.artifacts?.corpus_records || 0}</div>
-        <div className={`state-pill ${library.states?.is_enriched ? 'ready' : ''}`}>Enriched: {library.artifacts?.enhanced_records || 0}</div>
-        <div className={`state-pill ${library.states?.is_indexed ? 'ready' : ''}`}>Indexed</div>
+        <div className={`state-pill ${isReadyForChat ? 'ready' : ''}`}>
+          {isPreparingForChat ? 'Preparing' : isReadyForChat ? 'Ready for chat' : library.files?.length ? 'Needs preparation' : 'No data yet'}
+        </div>
+        <div className={`state-pill ${(usingInChat || isPreparingForChat) ? 'ready' : ''}`}>
+          {usingInChat ? 'In chat' : isPreparingForChat ? 'Adding to chat' : 'Not in chat'}
+        </div>
       </div>
 
       {usingInChat && (
         <div className="library-chat-note">
-          This database will be queried before each chat request and its context will be appended to the prompt.
+          This database is attached to chat. Heimgeist retrieves relevant snippets before each message and appends them to the prompt.
         </div>
       )}
 
       {isPreparingForChat && (
         <div className="library-chat-note">
-          Preparing this database for chat. Heimgeist will build and index it automatically.
+          Preparing this database for chat. Heimgeist is reading files, enriching content, and building search indexes automatically.
         </div>
       )}
 
-      {!library.states?.is_indexed && !usingInChat && !isPreparingForChat && (
+      {!library.files?.length && !usingInChat && !isPreparingForChat && (
         <div className="library-chat-note">
-          Use In Chat will prepare this database automatically if it is not ready yet.
+          Add files to make this database available in chat.
+        </div>
+      )}
+
+      {library.files?.length > 0 && !isReadyForChat && !usingInChat && !isPreparingForChat && (
+        <div className="library-chat-note">
+          Add To Chat will prepare this database automatically before it is used.
         </div>
       )}
 

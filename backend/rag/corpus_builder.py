@@ -380,8 +380,8 @@ def parse_args():
     p.add_argument("--writer-rotate-mb", type=int, default=0, help="Rotate (close/reopen) writer every N MB; 0=off")
 
     # External tools
-    p.add_argument("--ffmpeg", default=shutil.which("ffmpeg") or "/usr/bin/ffmpeg", help="Path to ffmpeg")
-    p.add_argument("--ffprobe", default=shutil.which("ffprobe") or "/usr/bin/ffprobe", help="Path to ffprobe")
+    p.add_argument("--ffmpeg", default=resolve_binary_path(None, "HEIMGEIST_FFMPEG_PATH", "ffmpeg", "/usr/bin/ffmpeg"), help="Path to ffmpeg")
+    p.add_argument("--ffprobe", default=resolve_binary_path(None, "HEIMGEIST_FFPROBE_PATH", "ffprobe", "/usr/bin/ffprobe"), help="Path to ffprobe")
     p.add_argument("--tesseract", default=shutil.which("tesseract") or "/usr/bin/tesseract", help="Path to tesseract")
     p.add_argument("--ebook-convert", dest="ebook_convert", default=shutil.which("ebook-convert"), help="Path to Calibre's ebook-convert (optional)")
     p.add_argument("--pandoc", default=shutil.which("pandoc"), help="Path to pandoc (optional)")

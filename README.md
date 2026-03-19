@@ -59,15 +59,11 @@ Manual startup:
 ```bash
 python3.13 -m venv backend/.venv
 backend/.venv/bin/python -m pip install --upgrade pip
+# Steam Deck / SteamOS / CPU-only Linux:
+# backend/.venv/bin/python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
 backend/.venv/bin/python -m pip install -r backend/requirements.txt
 npm install
 npm run dev
-```
-
-On Steam Deck / SteamOS, or any non-NVIDIA Linux host where you want Whisper on CPU, install CPU-only PyTorch first:
-
-```bash
-backend/.venv/bin/python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
 ```
 
 ## Project Layout

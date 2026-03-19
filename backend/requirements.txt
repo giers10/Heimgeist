@@ -20,8 +20,8 @@ Pillow>=10.0.0
 langid>=1.1.6
 langdetect>=1.0.9
 tqdm>=4.66.0
+openai-whisper
 
 # Optional but recommended for richer ingestion / reranking:
-# openai-whisper  # audio/video transcription
 # opencv-python-headless
 # sentence-transformers

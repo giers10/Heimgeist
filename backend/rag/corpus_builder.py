@@ -46,6 +46,8 @@ Python deps (install as needed):
 from __future__ import annotations
 import argparse
 import concurrent.futures as cf
+import importlib
+import importlib.util
 import json
 import os
 import re
@@ -244,17 +246,8 @@ try:
 except ImportError:
     cv2 = None
 
-# Whisper (OpenAI)
-try:
-    import whisper
-except ImportError:
-    whisper = None
-
-# Optional: device hinting for Whisper
-try:
-    import torch
-except Exception:
-    torch = None
+# Whisper/Torch are imported lazily inside the AV path so the long-lived backend
+# process does not keep OpenMP-heavy runtimes loaded after a media build.
 
 # Optional language detection (either works)
 try:
@@ -1425,8 +1418,20 @@ def slice_audio(audio_path: Path, out_dir: Path, num_slices: int, overlap_sec: f
 
 _WHISPER_MODEL = None
 
+def _load_whisper_module():
+    try:
+        return importlib.import_module("whisper")
+    except Exception:
+        return None
+
+def _load_torch_module():
+    try:
+        return importlib.import_module("torch")
+    except Exception:
+        return None
+
 def whisper_runtime_error() -> Optional[str]:
-    if whisper is None:
+    if importlib.util.find_spec("whisper") is None:
         return (
             "Audio/video transcription requires the optional 'openai-whisper' package. "
             "Install it in backend/.venv, for example: pip install -U openai-whisper"
@@ -1437,7 +1442,8 @@ def _resolve_whisper_device(flag: str) -> Optional[str]:
     if flag and flag != "auto":
         return flag
     try:
-        if torch is not None and getattr(torch.cuda, "is_available", lambda: False)():
+        torch_mod = _load_torch_module()
+        if torch_mod is not None and getattr(torch_mod.cuda, "is_available", lambda: False)():
             return "cuda"
     except Exception:
         pass
@@ -1445,15 +1451,16 @@ def _resolve_whisper_device(flag: str) -> Optional[str]:
 
 def _whisper_pool_init(model_name: str, device: Optional[str] = None):
     global _WHISPER_MODEL
-    if whisper is None:
+    whisper_mod = _load_whisper_module()
+    if whisper_mod is None:
         raise RuntimeError("Whisper package is required (pip install -U openai-whisper)")
     warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
     if device in (None, "auto"):
         device = _resolve_whisper_device("auto")
     try:
-        _WHISPER_MODEL = whisper.load_model(model_name, device=device)
+        _WHISPER_MODEL = whisper_mod.load_model(model_name, device=device)
     except TypeError:
-        _WHISPER_MODEL = whisper.load_model(model_name)
+        _WHISPER_MODEL = whisper_mod.load_model(model_name)
 
 def _transcribe_slice(task: str, tup: Tuple[Path, int, str]) -> Tuple[int, str]:
     global _WHISPER_MODEL

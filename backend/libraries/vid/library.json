@@ -11,19 +11,17 @@
       "name": "3 Meter Processor Unit shorts.mp4",
       "size": 4528678,
       "added_at": "2026-03-19T22:40:40Z",
-      "sync_status": "failed",
+      "sync_status": "ready",
       "enrich_enabled": false,
-      "sync_error": "RuntimeError: Corpus build produced no usable records."
+      "synced_at": "2026-03-19T22:41:10Z"
     }
   ],
   "pipeline": {
-    "corpus_signature": "9aa1bb80f420e87cce15106b4c6d488d56e02eb71aef99abedf328530906b71b",
-    "corpus_updated_at": "2026-03-19T22:28:07Z",
+    "corpus_signature": "573f86d1aa3db0244c8a9f8032bed38625e51daf1bdfdba92821a3f93be90226",
+    "corpus_updated_at": "2026-03-19T22:41:08Z",
     "embed_model": "bge-m3:latest",
-    "embed_model_updated_at": "2026-03-19T22:30:22Z",
-    "indexed_signature": "35edbcbc01e6ba1cb1bd960a48f977a97e4e44688cee4138c4407bcabebcc4f1",
-    "indexed_updated_at": "2026-03-19T22:30:22Z",
-    "pending_prepare_signature": "0f0b619a1c42a4b21f55ba2f089239a5f9cc36266e4823cca0ddd6701d710cfe",
-    "pending_prepare_updated_at": "2026-03-19T22:40:58Z"
+    "embed_model_updated_at": "2026-03-19T22:41:10Z",
+    "indexed_signature": "0f0b619a1c42a4b21f55ba2f089239a5f9cc36266e4823cca0ddd6701d710cfe",
+    "indexed_updated_at": "2026-03-19T22:41:10Z"
   }
 }

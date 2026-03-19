@@ -755,6 +755,7 @@ async def register_paths(slug: str, req: RegisterPathsRequest):
             "name": file_path.name,
             "size": file_path.stat().st_size,
             "added_at": now_iso(),
+            "sync_status": "pending",
         }
         data.setdefault("files", []).append(entry)
         added.append(entry)

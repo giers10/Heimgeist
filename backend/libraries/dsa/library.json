@@ -3,29 +3,8 @@
   "name": "dsa",
   "slug": "dsa",
   "created_at": "2026-03-19T20:49:15Z",
-  "files": [
-    {
-      "sha256": "259b04f8f364d7dc890f081b366e2c324d3c1ec04ac5d0ca92a5acce70f9e630",
-      "path": "/Users/giers/Documents/Dramatic structure - Wikipedia.pdf",
-      "rel": "259b04f8f364d7dc890f081b366e2c324d3c1ec04ac5d0ca92a5acce70f9e630--Dramatic_structure_-_Wikipedia.pdf",
-      "name": "Dramatic structure - Wikipedia.pdf",
-      "size": 672524,
-      "added_at": "2026-03-19T20:49:21Z",
-      "sync_status": "pending"
-    },
-    {
-      "sha256": "ee60f8138669faf3b708b07b711caa0085c302331c94ce3f62816009e4cb3275",
-      "path": "/Users/giers/Documents/Daniel Kahneman - Schnelles Denken, langsames Denken (2012, Siedler Verlag) - libgen.li.pdf",
-      "rel": "ee60f8138669faf3b708b07b711caa0085c302331c94ce3f62816009e4cb3275--Daniel_Kahneman_-_Schnelles_Denken_langsames_Denken_2012_Siedler_Verlag_-_libgen.li.pdf",
-      "name": "Daniel Kahneman - Schnelles Denken, langsames Denken (2012, Siedler Verlag) - libgen.li.pdf",
-      "size": 3078733,
-      "added_at": "2026-03-19T20:51:16Z",
-      "sync_status": "pending"
-    }
-  ],
+  "files": [],
   "pipeline": {
-    "pending_prepare_signature": "681fecaea08d1dc8acd4bff0ee7d347b169fe40ac4561b3b4d646f3e8884cb48",
-    "pending_prepare_updated_at": "2026-03-19T20:51:16Z",
     "corpus_signature": "ac4634da7d1957fd2683d57ca76becac493caccc2a3a6f4383d3d4b5820e6d60",
     "corpus_updated_at": "2026-03-19T20:49:24Z"
   }

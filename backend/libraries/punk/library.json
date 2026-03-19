@@ -11,8 +11,9 @@
       "name": "20130218_2058112.png",
       "size": 2191120,
       "added_at": "2026-03-19T22:18:00Z",
-      "sync_status": "pending",
-      "enrich_enabled": false
+      "sync_status": "failed",
+      "enrich_enabled": false,
+      "sync_error": "RuntimeError: Corpus build produced no usable records."
     }
   ],
   "pipeline": {

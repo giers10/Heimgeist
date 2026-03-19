@@ -850,8 +850,15 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     return libraries.find(lib => lib.slug === pendingChatLibrarySlug) || null;
   }, [pendingChatLibrarySlug, libraries]);
 
+  const chatAttachmentLibrary = useMemo(() => {
+    return chatLibrary || pendingChatLibrary || null;
+  }, [chatLibrary, pendingChatLibrary]);
+
   useEffect(() => {
     if (chatLibrarySlug && chatLibrary && !chatLibrary.states?.is_indexed) {
+      if (chatLibrary.files?.length) {
+        setPendingChatLibrarySlug(chatLibrarySlug)
+      }
       setChatLibrarySlug(null)
     }
   }, [chatLibrarySlug, chatLibrary]);
@@ -891,11 +898,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     let cancelled = false
     ;(async () => {
       try {
-        if (!pendingChatLibrary.states?.has_corpus) {
-          await startLibraryJob(pendingChatLibrarySlug, 'build')
-        } else {
-          await startLibraryJob(pendingChatLibrarySlug, 'embed')
-        }
+        await startLibraryJob(pendingChatLibrarySlug, 'prepare')
         if (!cancelled) {
           await refreshLibraries()
         }
@@ -932,7 +935,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
 
     if (!library.files?.length) {
-      throw new Error('Add files before using this database in chat.')
+      throw new Error('Add files before adding this database to chat.')
     }
 
     setPendingChatLibrarySlug(slug)

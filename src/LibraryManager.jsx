@@ -14,13 +14,14 @@ function fileSyncMeta(file) {
   const progress = Math.max(0, Math.min(100, Number(sync.progress) || 0))
   const detail = String(sync.detail || '').trim()
   const error = String(sync.error || '').trim()
+  const enrichEnabled = !!file?.enrich_enabled
 
   if (status === 'ready') {
     return {
       status,
       progress: 100,
       label: 'Available',
-      detail: detail || 'Ready in chat.'
+      detail: detail || (enrichEnabled ? 'Ready in chat with enrichment enabled.' : 'Ready in chat with raw indexing only.')
     }
   }
 
@@ -118,6 +119,22 @@ export default function LibraryManager({
     }
   }
 
+  async function updateFileEnrichment(rel, enabled) {
+    if (!library) return
+    try {
+      await runAction(async () => {
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/files/enrichment`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rel, enabled })
+        })
+        await expectOk(response)
+      })
+    } catch (error) {
+      setErrorMessage(String(error?.message || error))
+    }
+  }
+
   async function deleteLibrary() {
     if (!library) return
     await runAction(async () => {
@@ -192,6 +209,9 @@ export default function LibraryManager({
 
       <div className="library-states">
         <div className={`state-pill ${library.states?.has_files ? 'ready' : ''}`}>Files: {library.files?.length || 0}</div>
+        <div className={`state-pill ${(library.states?.enrichment_enabled_files || 0) > 0 ? 'ready' : ''}`}>
+          Enrich: {library.states?.enrichment_enabled_files || 0}
+        </div>
         <div className={`state-pill ${isReadyForChat ? 'ready' : ''}`}>
           {isSyncing ? 'Syncing' : isReadyForChat ? 'Ready' : library.files?.length ? 'Needs sync' : 'No data yet'}
         </div>
@@ -206,6 +226,12 @@ export default function LibraryManager({
       {!library.files?.length && !isSyncing && (
         <div className="library-chat-note">
           Add files to make this database available in chat.
+        </div>
+      )}
+
+      {!!library.files?.length && !isSyncing && (
+        <div className="library-chat-note">
+          Raw indexing is the default fast path. Turn on enrichment only for files that need better summaries, entities, and semantic recall.
         </div>
       )}
 
@@ -236,6 +262,9 @@ export default function LibraryManager({
                   <div className="library-file-meta">
                     <div className="library-file-name">{file.name || file.path}</div>
                     <div className="library-file-path">{file.path}</div>
+                    <div className={`library-file-mode ${file.enrich_enabled ? 'enabled' : ''}`}>
+                      {file.enrich_enabled ? 'Enrichment on' : 'Raw only'}
+                    </div>
                     <div className="library-file-sync">
                       <div className="library-file-sync-row">
                         <span className={`library-file-sync-label ${sync.status}`}>{sync.label}</span>
@@ -257,8 +286,15 @@ export default function LibraryManager({
                     </div>
                   </div>
                   <div className="library-file-actions">
+                    <button
+                      className="button ghost"
+                      disabled={busy || isSyncing}
+                      onClick={() => updateFileEnrichment(file.rel, !file.enrich_enabled)}
+                    >
+                      {file.enrich_enabled ? 'Use Raw Only' : 'Enable Enrich'}
+                    </button>
                     <button className="button ghost" onClick={() => window.electronAPI?.openPath?.(file.path)}>Open</button>
-                    <button className="button ghost" onClick={() => removeFile(file.rel)}>Remove</button>
+                    <button className="button ghost" disabled={busy || isSyncing} onClick={() => removeFile(file.rel)}>Remove</button>
                   </div>
                 </div>
               )

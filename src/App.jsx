@@ -773,22 +773,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
   }
 
-  async function startLibraryJob(slug, kind) {
-    const options = {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    }
-    if (kind === 'embed') {
-      options.body = JSON.stringify({})
-    }
-    const response = await fetch(`${ollamaApiUrl}/libraries/${slug}/jobs/${kind}`, options)
-    if (!response.ok) {
-      const detail = await response.text()
-      throw new Error(detail || `HTTP ${response.status}`)
-    }
-    await refreshLibraryJobs()
-  }
-
   async function createLibrary(nameOverride = null) {
     const rawName = typeof nameOverride === 'string' ? nameOverride : newLibraryName
     const name = rawName.trim()

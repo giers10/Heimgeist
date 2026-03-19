@@ -16,12 +16,10 @@
     }
   ],
   "pipeline": {
-    "corpus_signature": "48442ae21239ae2a9fc3056ecb9e8a019e01a58f2f3b47566ded4e075889fd70",
-    "corpus_updated_at": "2026-03-19T22:09:08Z",
+    "corpus_signature": "9aa1bb80f420e87cce15106b4c6d488d56e02eb71aef99abedf328530906b71b",
+    "corpus_updated_at": "2026-03-19T23:01:40Z",
     "embed_model": "bge-m3:latest",
     "embed_model_updated_at": "2026-03-19T22:09:12Z",
-    "indexed_signature": "10b47575a3d348baacc5f3ac610bf7052974b746527263aad088e5e8490662a5",
-    "indexed_updated_at": "2026-03-19T22:09:12Z",
     "pending_prepare_signature": "35edbcbc01e6ba1cb1bd960a48f977a97e4e44688cee4138c4407bcabebcc4f1",
     "pending_prepare_updated_at": "2026-03-19T23:01:36Z"
   }

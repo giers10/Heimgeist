@@ -461,6 +461,24 @@ def _mark_pipeline_stage(slug: str, stage: str, source_signature: Optional[str])
     write_library(slug, data)
 
 
+def _set_pipeline_embed_model(slug: str, embed_model: Optional[str]) -> None:
+    if not embed_model:
+        return
+
+    path = lib_json(slug)
+    if not path.exists():
+        return
+
+    data = _read_json(path)
+    pipeline = data.get("pipeline")
+    if not isinstance(pipeline, dict):
+        pipeline = {}
+        data["pipeline"] = pipeline
+    pipeline["embed_model"] = embed_model
+    pipeline["embed_model_updated_at"] = now_iso()
+    write_library(slug, data)
+
+
 def _set_pending_prepare_signature(data: Dict[str, Any], source_signature: Optional[str]) -> None:
     pipeline = data.get("pipeline")
     if not isinstance(pipeline, dict):

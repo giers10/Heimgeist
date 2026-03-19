@@ -14,6 +14,16 @@
       "sync_status": "ready",
       "enrich_enabled": false,
       "synced_at": "2026-03-19T22:30:22Z"
+    },
+    {
+      "sha256": "bd0f618ae2c977bda2ea78bfa45dfae8a5e93b77e1fbd5d1bde44691a1ec1bb0",
+      "path": "/Users/giers/Movies/3 Meter Processor Unit shorts.mp4",
+      "rel": "bd0f618ae2c977bda2ea78bfa45dfae8a5e93b77e1fbd5d1bde44691a1ec1bb0--3_Meter_Processor_Unit_shorts.mp4",
+      "name": "3 Meter Processor Unit shorts.mp4",
+      "size": 4528678,
+      "added_at": "2026-03-19T22:40:40Z",
+      "sync_status": "pending",
+      "enrich_enabled": false
     }
   ],
   "pipeline": {
@@ -22,6 +32,8 @@
     "embed_model": "bge-m3:latest",
     "embed_model_updated_at": "2026-03-19T22:30:22Z",
     "indexed_signature": "35edbcbc01e6ba1cb1bd960a48f977a97e4e44688cee4138c4407bcabebcc4f1",
-    "indexed_updated_at": "2026-03-19T22:30:22Z"
+    "indexed_updated_at": "2026-03-19T22:30:22Z",
+    "pending_prepare_signature": "c1836cd424a5f4b49ae502f48733d04f4312ba118478ecdcb12cd6672e093e2f",
+    "pending_prepare_updated_at": "2026-03-19T22:40:40Z"
   }
 }

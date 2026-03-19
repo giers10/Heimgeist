@@ -1183,6 +1183,25 @@ input:checked + .slider:before {
   margin-bottom: 4px;
 }
 
+.library-file-mode {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.library-file-mode.enabled {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .library-file-path,
 .muted-copy {
   color: var(--muted);

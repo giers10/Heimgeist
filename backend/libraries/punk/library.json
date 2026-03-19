@@ -5,28 +5,14 @@
   "created_at": "2026-03-19T20:02:20Z",
   "files": [
     {
-      "sha256": "19f1e5d2ceaab5fd1f1dc58ff07422388f156610d16dfdea2bdb35a5b9e70813",
-      "path": "/Users/giers/Documents/GeorgeJordac-TheVoiceOfHumanJustice.pdf",
-      "rel": "19f1e5d2ceaab5fd1f1dc58ff07422388f156610d16dfdea2bdb35a5b9e70813--GeorgeJordac-TheVoiceOfHumanJustice.pdf",
-      "name": "GeorgeJordac-TheVoiceOfHumanJustice.pdf",
-      "size": 849816,
-      "added_at": "2026-03-19T20:40:28Z"
-    },
-    {
-      "sha256": "1382a12d7c29a62012b1b64b6aa68af3cd69d7b7809ef1112e1ccea5fda6b5c1",
-      "path": "/Users/giers/Documents/Frischmuth, Barbara - Die Mystifikationen der Sophie Silber (2016, Aufbau Digital) - libgen.li.epub",
-      "rel": "1382a12d7c29a62012b1b64b6aa68af3cd69d7b7809ef1112e1ccea5fda6b5c1--Frischmuth_Barbara_-_Die_Mystifikationen_der_Sophie_Silber_2016_Aufbau_Digital_-_libgen.li.epub",
-      "name": "Frischmuth, Barbara - Die Mystifikationen der Sophie Silber (2016, Aufbau Digital) - libgen.li.epub",
-      "size": 2122352,
-      "added_at": "2026-03-19T20:40:48Z"
-    },
-    {
       "sha256": "b4d7f8ab4b2661eb958e477b1dc857ffc209d5c6a38374237992ce2044bc0f09",
       "path": "/Users/giers/Documents/Humanity\u2019s Last Prompt Engineering Guide.pdf",
       "rel": "b4d7f8ab4b2661eb958e477b1dc857ffc209d5c6a38374237992ce2044bc0f09--Humanity_s_Last_Prompt_Engineering_Guide.pdf",
       "name": "Humanity\u2019s Last Prompt Engineering Guide.pdf",
       "size": 4697895,
-      "added_at": "2026-03-19T20:40:56Z"
+      "added_at": "2026-03-19T20:40:56Z",
+      "sync_status": "failed",
+      "sync_error": "ModuleNotFoundError: No module named 'tqdm'"
     },
     {
       "sha256": "38d83f5a4d382ccfc263a1cf98aac4c1d4a323bee3237096474db567d9c49f39",
@@ -34,11 +20,13 @@
       "rel": "38d83f5a4d382ccfc263a1cf98aac4c1d4a323bee3237096474db567d9c49f39--Storyteller_Tactics.pdf",
       "name": "Storyteller Tactics.pdf",
       "size": 48959517,
-      "added_at": "2026-03-19T20:41:06Z"
+      "added_at": "2026-03-19T20:41:06Z",
+      "sync_status": "failed",
+      "sync_error": "ModuleNotFoundError: No module named 'tqdm'"
     }
   ],
   "pipeline": {
-    "pending_prepare_signature": "1e98a25388ed71bb6a0d8d2f7c9cd137956509b7d4904f2725ec12593c5825b3",
-    "pending_prepare_updated_at": "2026-03-19T20:41:06Z"
+    "pending_prepare_signature": "b2336450f8c5d6d2b352193a72e03dc62a3db85b963de641b71ba2b1f05dbe45",
+    "pending_prepare_updated_at": "2026-03-19T20:46:36Z"
   }
 }

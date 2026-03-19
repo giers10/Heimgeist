@@ -3,13 +3,26 @@
   "name": "punk",
   "slug": "punk",
   "created_at": "2026-03-19T21:57:31Z",
-  "files": [],
+  "files": [
+    {
+      "sha256": "1cee9d9a40442189449575e4db90342a17c6ca0d2ffa964f32bd08cf55ef359b",
+      "path": "/Users/giers/Pictures/giersi1/20130218_2058112.png",
+      "rel": "1cee9d9a40442189449575e4db90342a17c6ca0d2ffa964f32bd08cf55ef359b--20130218_2058112.png",
+      "name": "20130218_2058112.png",
+      "size": 2191120,
+      "added_at": "2026-03-19T22:18:00Z",
+      "sync_status": "pending",
+      "enrich_enabled": false
+    }
+  ],
   "pipeline": {
     "corpus_signature": "48442ae21239ae2a9fc3056ecb9e8a019e01a58f2f3b47566ded4e075889fd70",
     "corpus_updated_at": "2026-03-19T22:09:08Z",
     "embed_model": "bge-m3:latest",
     "embed_model_updated_at": "2026-03-19T22:09:12Z",
     "indexed_signature": "10b47575a3d348baacc5f3ac610bf7052974b746527263aad088e5e8490662a5",
-    "indexed_updated_at": "2026-03-19T22:09:12Z"
+    "indexed_updated_at": "2026-03-19T22:09:12Z",
+    "pending_prepare_signature": "1d9c306912dd637e10ae3f8ddeb20aad787e0a687b5ed0f16de72b7256fd16b9",
+    "pending_prepare_updated_at": "2026-03-19T22:18:00Z"
   }
 }

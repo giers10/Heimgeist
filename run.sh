@@ -51,6 +51,27 @@ write_torch_state() {
   current_torch_state > "$TORCH_STATE_FILE"
 }
 
+python_deps_usable() {
+  "$VENV_DIR/bin/python" - <<'PY' >/dev/null 2>&1
+import fastapi
+import httpx
+import pydantic
+import sqlalchemy
+import uvicorn
+import whisper
+PY
+}
+
+node_deps_usable() {
+  node - <<'NODE' >/dev/null 2>&1
+require('concurrently')
+require('electron')
+require('react')
+require('vite')
+require('wait-on')
+NODE
+}
+
 is_linux_x86_64() {
   [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]
 }
@@ -186,6 +207,20 @@ fi
 
 printf '%s\n' "$TORCH_FLAVOR" > "$TORCH_FLAVOR_FILE"
 echo "Using PyTorch flavor: $TORCH_FLAVOR"
+
+if [ "$RECREATE_VENV" -eq 0 ] && python_deps_usable; then
+  if [ ! -r "$PYTHON_DEPS_STATE_FILE" ]; then
+    write_state "$PYTHON_DEPS_STATE_FILE" backend/requirements.txt
+  fi
+  if [ -z "$HEIMGEIST_TORCH_INDEX_URL" ] && [ ! -r "$TORCH_STATE_FILE" ]; then
+    write_torch_state
+  fi
+fi
+
+if [ -d node_modules ] && [ ! -r "$NODE_DEPS_STATE_FILE" ] && node_deps_usable; then
+  write_state "$NODE_DEPS_STATE_FILE" package.json package-lock.json
+fi
+
 NEED_PYTHON_DEPS_INSTALL="$RECREATE_VENV"
 NEED_TORCH_INSTALL="$RECREATE_VENV"
 NEED_NODE_DEPS_INSTALL=0

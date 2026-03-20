@@ -853,7 +853,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   // Load messages for the active session
   useEffect(() => {
     fetchHistory(activeSessionId);
-  }, [activeSessionId]);
+  }, [activeSessionId, backendApiUrl]);
 
   useEffect(() => {
     const validSlugs = new Set(libraries.map(library => library.slug))

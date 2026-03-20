@@ -345,6 +345,10 @@ async function createMainWindow() {
     applyUiScaleToWindow(mainWindow)
   })
 
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('Main window failed to load:', { errorCode, errorDescription, validatedURL })
+  })
+
   mainWindow.on('focus', () => {
     mainWindow.webContents.send('window-focused')
   })
@@ -390,6 +394,10 @@ async function createSettingsWindow() {
 
   settingsWindow.webContents.on('did-finish-load', () => {
     applyUiScaleToWindow(settingsWindow)
+  })
+
+  settingsWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('Settings window failed to load:', { errorCode, errorDescription, validatedURL })
   })
 
   settingsWindow.on('closed', () => {

@@ -60,7 +60,14 @@ export function loadStoredWebsearchEngines(rawValue) {
 
   try {
     const parsed = JSON.parse(rawValue)
-    return normalizeWebsearchEngines(parsed)
+    if (!Array.isArray(parsed)) return [...DEFAULT_WEBSEARCH_ENGINES]
+
+    const normalized = normalizeWebsearchEngines(parsed)
+    if (parsed.length > 0 && normalized.length === 0) {
+      return [...DEFAULT_WEBSEARCH_ENGINES]
+    }
+
+    return normalized
   } catch {
     return [...DEFAULT_WEBSEARCH_ENGINES]
   }

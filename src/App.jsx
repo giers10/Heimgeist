@@ -178,6 +178,7 @@ export default function App() {
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);
   const [startupTaskMessage, setStartupTaskMessage] = useState('');
+  const [startupTaskBusy, setStartupTaskBusy] = useState(false);
   const [searxUrl, setSearxUrl] = useState(() => migrateLegacySearxUrl(localStorage.getItem(WEBSEARCH_URL_KEY)));
   const [searxEngines, setSearxEngines] = useState(() => {
     try {
@@ -752,12 +753,11 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [activeSidebarMode]);
 
   useEffect(() => {
-    if (!settingsLoaded || !backendApiUrl || startupOllamaCheckRanRef.current) return
+    if (!settingsLoaded || loading || !backendApiUrl || startupOllamaCheckRanRef.current) return
     startupOllamaCheckRanRef.current = true
 
     let cancelled = false
-
-    ;(async () => {
+    const timerId = window.setTimeout(() => { ;(async () => {
       let actionStarted = false
       try {
         let status = await fetchStartupOllamaStatus()
@@ -770,6 +770,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           if (cancelled) return
           if (confirmed) {
             actionStarted = true
+            setStartupTaskBusy(true)
             setStartupTaskMessage('Starting Ollama in the background...')
             const response = await fetch(`${backendApiUrl}/ollama/start`, { method: 'POST' })
             status = await expectBackendJson(response)
@@ -784,7 +785,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           if (cancelled) return
           if (confirmed) {
             actionStarted = true
-            setStartupTaskMessage(`Pulling ${status.selected_embed_model} in Ollama...`)
+            setStartupTaskBusy(true)
+            setStartupTaskMessage(`Downloading ${status.selected_embed_model} from Ollama. This can take a while on first install.`)
             const response = await fetch(`${backendApiUrl}/ollama/pull`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -803,15 +805,17 @@ async function regenerateFromIndex(index, overrideUserText = null) {
         }
       } finally {
         if (!cancelled) {
+          setStartupTaskBusy(false)
           setStartupTaskMessage('')
         }
       }
-    })()
+    })() }, 1200)
 
     return () => {
       cancelled = true
+      window.clearTimeout(timerId)
     }
-  }, [backendApiUrl, settingsLoaded]);
+  }, [backendApiUrl, loading, settingsLoaded]);
 
   // Apply color scheme whenever it changes
   useEffect(() => {
@@ -1876,7 +1880,8 @@ async function createNewChat() {
       <div className="main-content">
         {startupTaskMessage && (
           <div className="startup-task-banner" role="status" aria-live="polite">
-            {startupTaskMessage}
+            {startupTaskBusy && <div className="spinner startup-task-banner__spinner"></div>}
+            <div className="startup-task-banner__text">{startupTaskMessage}</div>
           </div>
         )}
         {activeSidebarMode === 'chats' && (

@@ -835,13 +835,34 @@ input:checked + .slider:before {
 }
 
 .startup-task-banner {
-  margin: 16px 16px 0;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: min(420px, calc(100vw - 32px));
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   line-height: 1.5;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+  pointer-events: none;
+}
+
+.startup-task-banner__spinner {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  border-width: 2px;
+  flex: 0 0 auto;
+}
+
+.startup-task-banner__text {
+  flex: 1 1 auto;
 }
 
 /* Spinner Styles */

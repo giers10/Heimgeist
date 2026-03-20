@@ -237,6 +237,18 @@ async function performUpdateCheck(trigger = 'manual') {
 
     const { stdout: updatedStdout } = await runGitCommand(['rev-parse', 'HEAD'])
     const updatedLocalCommit = updatedStdout.trim()
+
+    if (!updatedLocalCommit || updatedLocalCommit === localCommit) {
+      return setUpdateStatus({
+        state: 'up-to-date',
+        trigger,
+        branch: branch || UPDATE_BRANCH,
+        localCommit,
+        remoteCommit,
+        message: 'No newer remote update was applied. Local checkout already contains the latest pulled state.',
+      })
+    }
+
     const result = setUpdateStatus({
       state: 'updated',
       trigger,

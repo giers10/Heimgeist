@@ -25,6 +25,7 @@ let activeUpdateCheck = null
 const DEFAULT_UI_SCALE = 1
 const MIN_UI_SCALE = 0.7
 const MAX_UI_SCALE = 1.3
+const DEFAULT_OPEN_DEVTOOLS_ON_STARTUP = false
 
 const defaultSettings = {
   backendApiUrl: DEFAULT_BACKEND_API_URL,
@@ -32,6 +33,7 @@ const defaultSettings = {
   embedModel: DEFAULT_EMBED_MODEL,
   colorScheme: 'Default',
   uiScale: DEFAULT_UI_SCALE,
+  openDevToolsOnStartup: DEFAULT_OPEN_DEVTOOLS_ON_STARTUP,
   chatModel: 'llama3',
 }
 
@@ -76,9 +78,14 @@ function migrateSettings(rawSettings) {
     migrated = true
   }
 
+  if (!Object.prototype.hasOwnProperty.call(source, 'openDevToolsOnStartup')) {
+    migrated = true
+  }
+
   nextSettings.backendApiUrl = String(nextSettings.backendApiUrl || '').trim()
   nextSettings.ollamaApiUrl = String(nextSettings.ollamaApiUrl || '').trim()
   nextSettings.embedModel = normalizeEmbedModel(nextSettings.embedModel)
+  nextSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(nextSettings.openDevToolsOnStartup)
 
   return { nextSettings, migrated }
 }
@@ -92,6 +99,21 @@ function normalizeUiScale(value) {
   return Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, Math.round(numericValue * 100) / 100))
 }
 
+function normalizeOpenDevToolsOnStartup(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase()
+    if (trimmed === 'true' || trimmed === '1' || trimmed === 'yes' || trimmed === 'on') {
+      return true
+    }
+
+    if (trimmed === 'false' || trimmed === '0' || trimmed === 'no' || trimmed === 'off' || trimmed === '') {
+      return false
+    }
+  }
+
+  return value === true
+}
+
 function applyUiScaleToWindow(window) {
   if (!window || window.isDestroyed()) {
     return
@@ -102,6 +124,36 @@ function applyUiScaleToWindow(window) {
 
 function applyUiScaleToAllWindows() {
   BrowserWindow.getAllWindows().forEach(applyUiScaleToWindow)
+}
+
+function shouldAutoOpenDevTools() {
+  return is.dev && appSettings.openDevToolsOnStartup === true
+}
+
+function applyDevToolsPreferenceToWindow(window) {
+  if (!is.dev || !window || window.isDestroyed()) {
+    return
+  }
+
+  const webContents = window.webContents
+  if (!webContents) {
+    return
+  }
+
+  if (shouldAutoOpenDevTools()) {
+    if (!webContents.isDevToolsOpened()) {
+      webContents.openDevTools({ mode: 'detach' })
+    }
+    return
+  }
+
+  if (webContents.isDevToolsOpened()) {
+    webContents.closeDevTools()
+  }
+}
+
+function applyDevToolsPreferenceToAllWindows() {
+  BrowserWindow.getAllWindows().forEach(applyDevToolsPreferenceToWindow)
 }
 
 function loadSettings() {
@@ -357,7 +409,7 @@ async function createMainWindow() {
   if (is.dev && process.env.VITE_DEV_SERVER_URL) {
     console.log(`Electron: loading renderer ${process.env.VITE_DEV_SERVER_URL}`)
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
+    applyDevToolsPreferenceToWindow(mainWindow)
   } else {
     console.log('Electron: loading bundled renderer')
     await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
@@ -409,7 +461,7 @@ async function createSettingsWindow() {
 
   if (is.dev && process.env.VITE_DEV_SERVER_URL) {
     await settingsWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}#/settings`)
-    settingsWindow.webContents.openDevTools({ mode: 'detach' })
+    applyDevToolsPreferenceToWindow(settingsWindow)
   } else {
     await settingsWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/settings' })
   }
@@ -485,12 +537,16 @@ ipcMain.handle('set-setting', (event, key, value) => {
     appSettings[key] = normalizeUiScale(value)
   } else if (key === 'embedModel') {
     appSettings[key] = normalizeEmbedModel(value)
+  } else if (key === 'openDevToolsOnStartup') {
+    appSettings[key] = normalizeOpenDevToolsOnStartup(value)
   } else {
     appSettings[key] = value
   }
   saveSettings()
   if (key === 'uiScale') {
     applyUiScaleToAllWindows()
+  } else if (key === 'openDevToolsOnStartup') {
+    applyDevToolsPreferenceToAllWindows()
   }
   return true
 })
@@ -499,9 +555,13 @@ ipcMain.handle('update-settings', (event, settings) => {
   appSettings = { ...appSettings, ...settings }
   appSettings.uiScale = normalizeUiScale(appSettings.uiScale)
   appSettings.embedModel = normalizeEmbedModel(appSettings.embedModel)
+  appSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(appSettings.openDevToolsOnStartup)
   saveSettings()
   if (Object.prototype.hasOwnProperty.call(settings, 'uiScale')) {
     applyUiScaleToAllWindows()
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'openDevToolsOnStartup')) {
+    applyDevToolsPreferenceToAllWindows()
   }
   return true
 })

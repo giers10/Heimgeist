@@ -475,20 +475,9 @@ ipcMain.handle('update-settings', (event, settings) => {
   return true
 })
 
-function pickDialogProperties(kind) {
-  if (kind === 'directories') {
-    return ['openDirectory', 'multiSelections']
-  }
-  if (kind === 'mixed') {
-    return ['openFile', 'openDirectory', 'multiSelections']
-  }
-  return ['openFile', 'multiSelections']
-}
-
-ipcMain.handle('pick-paths', async (event, options = {}) => {
-  const kind = typeof options?.kind === 'string' ? options.kind : 'files'
+ipcMain.handle('pick-paths', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    properties: pickDialogProperties(kind),
+    properties: ['openFile', 'multiSelections'],
   })
   return result.canceled ? [] : result.filePaths
 })

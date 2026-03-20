@@ -53,11 +53,9 @@ export default function LibraryManager({
   apiBase,
   library,
   jobs,
-  onRefresh,
-  onDeleted
+  onRefresh
 }) {
   const [busy, setBusy] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [toasts, setToasts] = useState([])
   const toastTimeoutsRef = useRef(new Map())
@@ -65,7 +63,6 @@ export default function LibraryManager({
   const previousLibraryStateRef = useRef(null)
 
   useEffect(() => {
-    setConfirmDelete(false)
     setErrorMessage('')
   }, [library?.slug, library?.name])
 
@@ -114,7 +111,6 @@ export default function LibraryManager({
     try {
       setErrorMessage('')
       await fn()
-      setConfirmDelete(false)
     } finally {
       setBusy(false)
       await onRefresh()
@@ -132,9 +128,9 @@ export default function LibraryManager({
     })
   }
 
-  async function addPaths(kind = 'files') {
+  async function addPaths() {
     if (!library) return
-    const paths = await window.electronAPI?.pickPaths?.({ kind })
+    const paths = await window.electronAPI?.pickPaths?.()
     if (!Array.isArray(paths) || paths.length === 0) return
     try {
       await registerPaths(paths)
@@ -173,15 +169,6 @@ export default function LibraryManager({
     } catch (error) {
       setErrorMessage(String(error?.message || error))
     }
-  }
-
-  async function deleteLibrary() {
-    if (!library) return
-    await runAction(async () => {
-      const response = await fetch(`${apiBase}/libraries/${library.slug}`, { method: 'DELETE' })
-      await expectOk(response)
-    })
-    onDeleted?.(library.slug)
   }
 
   async function retrySync() {
@@ -276,22 +263,6 @@ export default function LibraryManager({
   return (
     <div className="library-panel">
       <div className="library-panel-scroll">
-        {confirmDelete && (
-          <div className="library-inline-form danger-zone">
-            <div className="muted-copy">Delete "{library.name}"? This removes the registered files and local retrieval data for this database.</div>
-            <div className="new-db-actions">
-              <button
-                className="button danger"
-                disabled={busy}
-                onClick={() => deleteLibrary().catch((error) => setErrorMessage(String(error?.message || error)))}
-              >
-                Confirm Delete
-              </button>
-              <button className="button ghost" onClick={() => setConfirmDelete(false)}>Cancel</button>
-            </div>
-          </div>
-        )}
-
         {errorMessage && <div className="form-error">{errorMessage}</div>}
 
         <div className="library-files">
@@ -350,20 +321,10 @@ export default function LibraryManager({
       </div>
 
       <div className="library-footer-actions">
-        <button className="button" disabled={busy} onClick={() => addPaths('files')}>Add Files</button>
-        <button className="button ghost" disabled={busy} onClick={() => addPaths('directories')}>Add Folder</button>
+        <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
         {library.files?.length > 0 && !isSyncing && !isReadyForChat && (
           <button className="button ghost" disabled={busy} onClick={retrySync}>Retry Sync</button>
         )}
-        <button
-          className="button danger"
-          onClick={() => {
-            setConfirmDelete(true)
-            setErrorMessage('')
-          }}
-        >
-          Delete
-        </button>
       </div>
 
       {toasts.length > 0 && (

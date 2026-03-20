@@ -1532,6 +1532,28 @@ async function createNewChat() {
     });
   }
 
+  function handleLibraryDelete(slug) {
+    fetch(`${backendApiUrl}/libraries/${slug}`, { method: 'DELETE' })
+    .then(async (response) => {
+      if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(detail || `HTTP ${response.status}`)
+      }
+
+      const nextLibraries = libraries.filter(library => library.slug !== slug)
+      setLibraries(nextLibraries)
+      setLibraryJobs(prevJobs => prevJobs.filter(job => job.slug !== slug))
+      setEditingLibrarySlug(current => current === slug ? null : current)
+      if (activeLibrarySlug === slug) {
+        setActiveLibrarySlug(nextLibraries[0]?.slug || null)
+      }
+      removeLibraryFromChatSelections(slug)
+    })
+    .catch((error) => {
+      console.error('Failed to delete library', error)
+    })
+  }
+
   // Auto-delete empty "New Chat" sessions
   useEffect(() => {
     const emptyNewChats = chatSessions.filter(
@@ -1660,6 +1682,9 @@ async function createNewChat() {
                           {isLibrarySyncing(library.slug) && <div className="db-active-badge">Syncing</div>}
                           <button className="icon-button" onClick={(e) => { e.stopPropagation(); setEditingLibrarySlug(library.slug) }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-edit-2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                          </button>
+                          <button className="icon-button" onClick={(e) => { e.stopPropagation(); handleLibraryDelete(library.slug) }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                           </button>
                         </div>
                       </>
@@ -1990,13 +2015,6 @@ async function createNewChat() {
               onRefresh={async () => {
                 await refreshLibraries();
                 await refreshLibraryJobs();
-              }}
-              onDeleted={(slug) => {
-                if (activeLibrarySlug === slug) {
-                  const next = libraries.find(lib => lib.slug !== slug);
-                  setActiveLibrarySlug(next?.slug || null);
-                }
-                removeLibraryFromChatSelections(slug)
               }}
             />
           </>

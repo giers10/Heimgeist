@@ -17,7 +17,7 @@ Heimgeist is a local desktop chat client for Ollama. It combines an Electron + R
 The `DBs` tab is no longer a placeholder. You can:
 
 - create and rename libraries
-- register files and folders
+- register files
 - let Heimgeist rebuild retrieval automatically when files change
 - open or remove registered files from the UI
 

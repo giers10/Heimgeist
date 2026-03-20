@@ -19,6 +19,11 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from .app_settings import (
+    DEFAULT_EMBED_MODEL as DEFAULT_EMBED_MODEL_SETTING,
+    get_embed_model_preference,
+    get_ollama_api_url,
+)
 
 router = APIRouter(tags=["local-rag"])
 
@@ -27,7 +32,7 @@ LIB_ROOT.mkdir(parents=True, exist_ok=True)
 
 RAW_CORPUS_PROFILE = "per-file-default-v1"
 PREPARE_PROFILE = "selective-enrich-v2"
-DEFAULT_EMBED_MODEL = "bge-m3:latest"
+DEFAULT_EMBED_MODEL = DEFAULT_EMBED_MODEL_SETTING
 DEFAULT_ENRICH_MODEL = "qwen3:4b"
 DEFAULT_ENRICH_MIN_CHARS = 240
 DEFAULT_ENRICH_MAX_TEXT = 6000
@@ -61,7 +66,7 @@ class UpdateFileEnrichmentRequest(BaseModel):
 
 class EmbedLibraryRequest(BaseModel):
     embed_model: Optional[str] = None
-    ollama: str = "http://localhost:11434"
+    ollama: Optional[str] = None
     target_chars: int = 2000
     overlap_chars: int = 200
     concurrency: int = 6
@@ -70,9 +75,23 @@ class EmbedLibraryRequest(BaseModel):
 class LibraryContextRequest(BaseModel):
     prompt: str
     top_k: int = 5
-    ollama: str = "http://localhost:11434"
+    ollama: Optional[str] = None
     embed_model: Optional[str] = None
     gen_model: str = "qwen3:4b"
+
+
+def _default_ollama_url() -> str:
+    return get_ollama_api_url()
+
+
+def _default_embed_model() -> str:
+    return get_embed_model_preference()
+
+
+def _resolve_ollama_url(value: Optional[str] = None) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip().rstrip("/")
+    return _default_ollama_url()
 
 
 def now_iso() -> str:
@@ -745,7 +764,7 @@ def _run_selected_enrichment(slug: str, on_progress=None, **opts) -> Dict[str, A
         out=paths["enhanced"],
         shadow_out=paths["shadow_partial"],
         on_progress=on_progress,
-        ollama=opts.get("ollama", "http://localhost:11434"),
+        ollama=_resolve_ollama_url(opts.get("ollama")),
         model=opts.get("enrich_model", DEFAULT_ENRICH_MODEL),
         summary_lang=opts.get("summary_lang", "auto"),
         concurrency=opts.get("enrich_concurrency", DEFAULT_ENRICH_CONCURRENCY),
@@ -777,7 +796,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
 
     build_runner = _load_pipeline_fn("corpus_builder", "run_build")
     index_runner = _load_pipeline_fn("index_builder", "run_index")
-    embed_model = opts.get("embed_model") or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
+    embed_model = opts.get("embed_model") or _default_embed_model() or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
 
     if on_progress:
         on_progress("prepare", 0.01, "Preparing database for chat...")
@@ -807,7 +826,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             results["enrich"] = _run_selected_enrichment(
                 slug,
                 on_progress=enrich_progress,
-                ollama=opts.get("ollama", "http://localhost:11434"),
+                ollama=_resolve_ollama_url(opts.get("ollama")),
                 enrich_model=opts.get("enrich_model", DEFAULT_ENRICH_MODEL),
                 summary_lang=opts.get("summary_lang", "auto"),
                 enrich_concurrency=opts.get("enrich_concurrency", DEFAULT_ENRICH_CONCURRENCY),
@@ -837,7 +856,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             out_dir=paths["indexes"],
             on_progress=index_progress,
             embed_model=embed_model,
-            ollama=opts.get("ollama", "http://localhost:11434"),
+            ollama=_resolve_ollama_url(opts.get("ollama")),
             target_chars=opts.get("target_chars", 2000),
             overlap_chars=opts.get("overlap_chars", 200),
             concurrency=opts.get("concurrency", 6),
@@ -1189,7 +1208,7 @@ async def embed_library(slug: str, req: EmbedLibraryRequest):
     paths = _collect_library_paths(slug)
     if not payload["states"].get("has_corpus"):
         raise HTTPException(status_code=400, detail="Build the corpus before indexing.")
-    embed_model = req.embed_model or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
+    embed_model = req.embed_model or _default_embed_model() or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
     lock = LIB_LOCKS.setdefault(slug, asyncio.Lock())
     async with lock:
         if _has_active_job(slug):
@@ -1202,7 +1221,7 @@ async def embed_library(slug: str, req: EmbedLibraryRequest):
             shadow=paths["shadow"] if paths["shadow"].exists() else None,
             out_dir=paths["indexes"],
             embed_model=embed_model,
-            ollama=req.ollama,
+            ollama=_resolve_ollama_url(req.ollama),
             target_chars=req.target_chars,
             overlap_chars=req.overlap_chars,
             concurrency=req.concurrency,
@@ -1247,7 +1266,7 @@ def library_context(slug: str, req: LibraryContextRequest):
     paths = _collect_library_paths(slug)
     if not payload["states"].get("is_indexed"):
         raise HTTPException(status_code=400, detail="Prepare the library before using it in chat.")
-    embed_model = req.embed_model or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
+    embed_model = req.embed_model or pipeline.get("embed_model") or _default_embed_model() or DEFAULT_EMBED_MODEL
     try:
         run_query = _load_pipeline_fn("unified_rag", "run_query")
         result = run_query(
@@ -1257,7 +1276,7 @@ def library_context(slug: str, req: LibraryContextRequest):
             content_store=paths["content_store"],
             query=req.prompt,
             answer=False,
-            ollama=req.ollama,
+            ollama=_resolve_ollama_url(req.ollama),
             embed_model=embed_model,
             gen_model=req.gen_model,
             no_rerank=True,

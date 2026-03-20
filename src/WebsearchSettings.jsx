@@ -38,7 +38,7 @@ return (
         className="input"
         value={searxUrl}
         onChange={e => setSearxUrl(e.target.value)}
-        placeholder="e.g., http://localhost:8888"
+        placeholder="e.g., http://127.0.0.1:8888"
       />
     </div>
 

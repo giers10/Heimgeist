@@ -127,6 +127,7 @@ const COLOR_SCHEME_KEY = 'colorScheme';
 const WEBSEARCH_URL_KEY = 'websearch.searxUrl';
 const WEBSEARCH_ENGINES_KEY = 'websearch.engines';
 const CHAT_LIBRARY_MAP_KEY = 'chat.libraryBySession';
+const DEFAULT_SEARX_URL = 'http://127.0.0.1:8888';
 
 // Initial API value will be set by useEffect after settings are loaded
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
@@ -135,6 +136,13 @@ const BOTTOM_EPSILON = 24; // px tolerance for treating as bottom
 
 function resolveBackendApiUrl(settings) {
   return settings.backendApiUrl || settings.ollamaApiUrl || API;
+}
+
+function migrateLegacySearxUrl(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return DEFAULT_SEARX_URL;
+  if (trimmed === 'http://localhost:8888') return DEFAULT_SEARX_URL;
+  return trimmed;
 }
 
 export default function App() {
@@ -169,7 +177,8 @@ export default function App() {
   const [backendApiUrl, setBackendApiUrl] = useState(API); // State for Heimgeist backend URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);
-  const [searxUrl, setSearxUrl] = useState(localStorage.getItem(WEBSEARCH_URL_KEY) || 'http://localhost:8888');
+  const [startupTaskMessage, setStartupTaskMessage] = useState('');
+  const [searxUrl, setSearxUrl] = useState(() => migrateLegacySearxUrl(localStorage.getItem(WEBSEARCH_URL_KEY)));
   const [searxEngines, setSearxEngines] = useState(() => {
     try {
       const raw = localStorage.getItem(WEBSEARCH_ENGINES_KEY);
@@ -191,6 +200,8 @@ export default function App() {
   const [loading, setLoading] = useState(true); // Loading state for initial session fetch
   const [unreadSessions, setUnreadSessions] = useState([]); // Track unread messages
   const [scrollPositions, setScrollPositions] = useState({}); // Store scroll positions for each session
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const startupOllamaCheckRanRef = useRef(false);
   // Editing state for user messages
   const [editingMessageIndex, setEditingMessageIndex] = useState(null);
   const [editText, setEditText] = useState('');
@@ -251,6 +262,20 @@ export default function App() {
   function getErrorText(error) {
     if (error instanceof Error && error.message) return error.message
     return String(error)
+  }
+
+  async function expectBackendJson(response) {
+    const data = await response.json().catch(() => null)
+    if (response.ok) return data
+    const detail = typeof data?.detail === 'string'
+      ? data.detail
+      : (typeof data?.message === 'string' ? data.message : '')
+    throw new Error(detail || `HTTP ${response.status}`)
+  }
+
+  async function fetchStartupOllamaStatus() {
+    const response = await fetch(`${backendApiUrl}/ollama/startup-status`)
+    return expectBackendJson(response)
   }
 
   async function fetchLocalLibraryContext(slug, prompt, signal) {
@@ -705,6 +730,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       setStreamOutput(settings.streamOutput || false);
       setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
       applyColorScheme(settings.colorScheme || 'Default'); // Apply initial scheme
+    }).finally(() => {
+      setSettingsLoaded(true);
     });
 
     const handleFocus = () => {
@@ -723,6 +750,68 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       // for the lifetime of the app.
     };
   }, [activeSidebarMode]);
+
+  useEffect(() => {
+    if (!settingsLoaded || !backendApiUrl || startupOllamaCheckRanRef.current) return
+    startupOllamaCheckRanRef.current = true
+
+    let cancelled = false
+
+    ;(async () => {
+      let actionStarted = false
+      try {
+        let status = await fetchStartupOllamaStatus()
+        if (cancelled) return
+
+        if (!status?.ollama_running && status?.can_manage_locally) {
+          const confirmed = window.confirm(
+            `Ollama is not running at ${status.ollama_url}. Start it in the background now with "ollama serve"?`
+          )
+          if (cancelled) return
+          if (confirmed) {
+            actionStarted = true
+            setStartupTaskMessage('Starting Ollama in the background...')
+            const response = await fetch(`${backendApiUrl}/ollama/start`, { method: 'POST' })
+            status = await expectBackendJson(response)
+            if (cancelled) return
+          }
+        }
+
+        if (status?.ollama_running && !status?.embedding_model_available && status?.can_manage_locally) {
+          const confirmed = window.confirm(
+            `The selected embedding model "${status.selected_embed_model}" is not installed in Ollama. Pull it now?`
+          )
+          if (cancelled) return
+          if (confirmed) {
+            actionStarted = true
+            setStartupTaskMessage(`Pulling ${status.selected_embed_model} in Ollama...`)
+            const response = await fetch(`${backendApiUrl}/ollama/pull`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: status.selected_embed_model })
+            })
+            await expectBackendJson(response)
+            if (cancelled) return
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('startup Ollama check failed', error)
+          if (actionStarted) {
+            window.alert(`Startup action failed: ${getErrorText(error)}`)
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setStartupTaskMessage('')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [backendApiUrl, settingsLoaded]);
 
   // Apply color scheme whenever it changes
   useEffect(() => {
@@ -1785,6 +1874,11 @@ async function createNewChat() {
         <div className="resizer" onMouseDown={startResizing}></div>
       </div>
       <div className="main-content">
+        {startupTaskMessage && (
+          <div className="startup-task-banner" role="status" aria-live="polite">
+            {startupTaskMessage}
+          </div>
+        )}
         {activeSidebarMode === 'chats' && (
           <>
             <div className="header">

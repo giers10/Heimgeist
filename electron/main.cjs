@@ -11,6 +11,8 @@ const execFileAsync = promisify(execFile)
 
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000'
 const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434'
+const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest'
+const BGE_EMBED_MODEL = 'bge-m3:latest'
 const REPO_ROOT = path.resolve(__dirname, '..')
 const UPDATE_REMOTE_URL = 'https://giers10.uber.space/giers10/Heimgeist.git'
 const UPDATE_BRANCH = 'master'
@@ -27,9 +29,18 @@ const MAX_UI_SCALE = 1.3
 const defaultSettings = {
   backendApiUrl: DEFAULT_BACKEND_API_URL,
   ollamaApiUrl: DEFAULT_OLLAMA_API_URL,
+  embedModel: DEFAULT_EMBED_MODEL,
   colorScheme: 'Default',
   uiScale: DEFAULT_UI_SCALE,
   chatModel: 'llama3',
+}
+
+function normalizeEmbedModel(value) {
+  const trimmed = String(value || '').trim().toLowerCase()
+  if (trimmed === 'bge' || trimmed === 'bge-m3' || trimmed === BGE_EMBED_MODEL) {
+    return BGE_EMBED_MODEL
+  }
+  return DEFAULT_EMBED_MODEL
 }
 
 function looksLikeOllamaUrl(value) {
@@ -67,6 +78,7 @@ function migrateSettings(rawSettings) {
 
   nextSettings.backendApiUrl = String(nextSettings.backendApiUrl || '').trim()
   nextSettings.ollamaApiUrl = String(nextSettings.ollamaApiUrl || '').trim()
+  nextSettings.embedModel = normalizeEmbedModel(nextSettings.embedModel)
 
   return { nextSettings, migrated }
 }
@@ -457,7 +469,13 @@ ipcMain.handle('get-update-status', () => lastUpdateCheckResult)
 ipcMain.handle('check-for-updates', () => checkForUpdates('manual'))
 
 ipcMain.handle('set-setting', (event, key, value) => {
-  appSettings[key] = key === 'uiScale' ? normalizeUiScale(value) : value
+  if (key === 'uiScale') {
+    appSettings[key] = normalizeUiScale(value)
+  } else if (key === 'embedModel') {
+    appSettings[key] = normalizeEmbedModel(value)
+  } else {
+    appSettings[key] = value
+  }
   saveSettings()
   if (key === 'uiScale') {
     applyUiScaleToAllWindows()
@@ -468,6 +486,7 @@ ipcMain.handle('set-setting', (event, key, value) => {
 ipcMain.handle('update-settings', (event, settings) => {
   appSettings = { ...appSettings, ...settings }
   appSettings.uiScale = normalizeUiScale(appSettings.uiScale)
+  appSettings.embedModel = normalizeEmbedModel(appSettings.embedModel)
   saveSettings()
   if (Object.prototype.hasOwnProperty.call(settings, 'uiScale')) {
     applyUiScaleToAllWindows()

@@ -546,6 +546,42 @@ textarea.input {
   flex-wrap: wrap;
 }
 
+.setting-switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.setting-switch-label {
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: color 0.2s ease;
+}
+
+.setting-switch-label.active {
+  color: var(--text);
+}
+
+.toggle-switch--binary-select .slider {
+  background-color: var(--input-bg);
+  border-color: var(--border);
+}
+
+.toggle-switch--binary-select .slider:before {
+  background-color: var(--text);
+}
+
+.toggle-switch--binary-select input:checked + .slider {
+  background-color: var(--input-bg);
+  border-color: var(--border);
+}
+
+.toggle-switch--binary-select input:checked + .slider:before {
+  background-color: var(--text);
+}
+
 .range-input {
   width: min(360px, 100%);
   accent-color: var(--accent);
@@ -796,6 +832,16 @@ input:checked + .slider {
 input:checked + .slider:before {
   transform: translateX(22px);
   background-color: var(--panel);
+}
+
+.startup-task-banner {
+  margin: 16px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  line-height: 1.5;
 }
 
 /* Spinner Styles */

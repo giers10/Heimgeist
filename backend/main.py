@@ -9,6 +9,7 @@ import json
 from . import models, schemas
 from .database import Base, engine, SessionLocal, ensure_sources_column
 from .local_rag import router as local_rag_router
+from .ollama_admin import inspect_ollama_startup, pull_local_model, start_local_ollama
 from .ollama_client import list_models as ollama_list, chat as ollama_chat, chat_stream as ollama_chat_stream
 from .websearch import enrich_prompt
 
@@ -46,6 +47,31 @@ async def get_models():
         return {"models": [{"name": n} for n in data.get("models", [])]}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ollama not available: {e}")
+
+
+@app.get("/ollama/startup-status")
+async def ollama_startup_status():
+    return await inspect_ollama_startup()
+
+
+@app.post("/ollama/start")
+async def ollama_start_route():
+    try:
+        return await start_local_ollama()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/ollama/pull")
+async def ollama_pull_route(req: schemas.OllamaPullRequest):
+    try:
+        return await pull_local_model(req.model)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.get("/sessions", response_model=schemas.SessionsResponse)
 def get_sessions(db: Session = Depends(get_db)):

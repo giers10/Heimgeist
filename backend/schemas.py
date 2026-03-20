@@ -67,3 +67,7 @@ class WebSearchResponse(BaseModel):
     enriched_prompt: str
     sources: List[str] = []
     context_block: str = ""
+
+
+class OllamaPullRequest(BaseModel):
+    model: Optional[str] = None

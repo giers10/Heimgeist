@@ -7,10 +7,11 @@ import json
 import traceback
 import hashlib
 
+from .app_settings import get_embed_model_preference, get_ollama_api_url
 from .ollama_client import chat as ollama_chat
 
 # Configure your local SearXNG instance URL (no trailing slash)
-SEARX_URL = "http://localhost:8888"
+SEARX_URL = "http://127.0.0.1:8888"
 
 # ----- Utilities ----------------------------------------------------------------
 
@@ -263,7 +264,7 @@ async def rerank(
     docs: List[Tuple[str, str]],
     model: str,                  # kept for signature compatibility (unused here)
     context_excerpt: str,
-    embed_model: str = "bge-m3:latest"  # prefer explicit tag; we will auto-fallback
+    embed_model: Optional[str] = None,
 ) -> List[Tuple[str, str, float]]:
     """
     Embedding-based reranker (bge-m3 via Ollama) using cosine similarity.
@@ -277,6 +278,8 @@ async def rerank(
     """
     import time
     t0 = time.perf_counter()
+    embed_model = (embed_model or get_embed_model_preference()).strip()
+    ollama_url = get_ollama_api_url().rstrip("/")
 
     # --- optional fast cosine via NumPy ---------------------------------------
     try:
@@ -357,9 +360,9 @@ async def rerank(
         async def _one(text: str) -> Tuple[List[float], Optional[str]]:
             payload = {"model": model_name, "prompt": text}
             try:
-                async with sem:
-                    async with httpx.AsyncClient(timeout=timeout) as client:
-                        r = await client.post("http://localhost:11434/api/embeddings", json=payload)
+                    async with sem:
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            r = await client.post(f"{ollama_url}/api/embeddings", json=payload)
                         r.raise_for_status()
                         data = r.json()
             except httpx.HTTPStatusError as e:

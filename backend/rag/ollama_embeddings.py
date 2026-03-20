@@ -6,8 +6,8 @@ import requests
 
 
 DEFAULT_EMBED_CANDIDATES = (
-    "bge-m3:latest",
     "nomic-embed-text:latest",
+    "bge-m3:latest",
     "dengcao/Qwen3-Embedding-0.6B:F16",
 )
 
@@ -21,7 +21,17 @@ def _cache_key(ollama_url: str, preferred_model: Optional[str]) -> Tuple[str, st
 def _candidate_models(preferred_model: Optional[str]) -> List[str]:
     out: List[str] = []
     seen = set()
-    for model in [preferred_model, *DEFAULT_EMBED_CANDIDATES]:
+    if preferred_model:
+        primary = str(preferred_model).strip()
+        candidates = [primary]
+        if primary.endswith(":latest"):
+            candidates.append(primary[:-7])
+        else:
+            candidates.append(f"{primary}:latest")
+    else:
+        candidates = list(DEFAULT_EMBED_CANDIDATES)
+
+    for model in candidates:
         name = str(model or "").strip()
         if not name or name in seen:
             continue

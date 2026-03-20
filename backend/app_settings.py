@@ -10,9 +10,12 @@ from typing import Any, Dict
 APP_NAME = "Heimgeist"
 DEFAULT_BACKEND_API_URL = "http://127.0.0.1:8000"
 DEFAULT_OLLAMA_API_URL = "http://127.0.0.1:11434"
+DEFAULT_EMBED_MODEL = "nomic-embed-text:latest"
+BGE_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "backendApiUrl": DEFAULT_BACKEND_API_URL,
     "ollamaApiUrl": DEFAULT_OLLAMA_API_URL,
+    "embedModel": DEFAULT_EMBED_MODEL,
 }
 
 
@@ -56,6 +59,16 @@ def _normalize_url(value: Any, fallback: str) -> str:
     return trimmed or fallback
 
 
+def normalize_embed_model(value: Any) -> str:
+    if not isinstance(value, str):
+        return DEFAULT_EMBED_MODEL
+
+    trimmed = value.strip().lower()
+    if trimmed in {"bge", "bge-m3", BGE_EMBED_MODEL}:
+        return BGE_EMBED_MODEL
+    return DEFAULT_EMBED_MODEL
+
+
 def load_app_settings() -> Dict[str, Any]:
     path = settings_path()
     try:
@@ -79,6 +92,7 @@ def load_app_settings() -> Dict[str, Any]:
     else:
         settings["backendApiUrl"] = _normalize_url(settings.get("backendApiUrl"), DEFAULT_BACKEND_API_URL)
         settings["ollamaApiUrl"] = _normalize_url(settings.get("ollamaApiUrl"), DEFAULT_OLLAMA_API_URL)
+    settings["embedModel"] = normalize_embed_model(settings.get("embedModel"))
 
     return settings
 
@@ -86,3 +100,8 @@ def load_app_settings() -> Dict[str, Any]:
 def get_ollama_api_url() -> str:
     settings = load_app_settings()
     return _normalize_url(settings.get("ollamaApiUrl"), DEFAULT_OLLAMA_API_URL)
+
+
+def get_embed_model_preference() -> str:
+    settings = load_app_settings()
+    return normalize_embed_model(settings.get("embedModel"))

@@ -37,7 +37,7 @@ Requirements:
 - Node.js 18+
 - Python 3.13
 - Ollama running locally
-- Optional: SearXNG on `http://localhost:8888`
+- Optional: SearXNG on `http://127.0.0.1:8888`
 
 Quick start:
 

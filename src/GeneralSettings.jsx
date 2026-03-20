@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 
 const BACKEND_API_URL_KEY = 'backendApiUrl';
 const OLLAMA_API_URL_KEY = 'ollamaApiUrl';
+const EMBED_MODEL_KEY = 'embedModel';
 const MODEL_KEY = 'chatModel';
 const STREAM_KEY = 'streamOutput';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
 const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434';
+const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest';
+const BGE_EMBED_MODEL = 'bge-m3:latest';
 const DEFAULT_UPDATE_STATUS = {
   state: 'idle',
   message: '',
@@ -32,6 +35,7 @@ function getStatusTone(state) {
 export default function GeneralSettings({ onModelChange, onStreamOutputChange, onLibrariesPurged }) {
   const [backendApiUrl, setBackendApiUrl] = useState('');
   const [ollamaApiUrl, setOllamaApiUrl] = useState('');
+  const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [streamOutput, setStreamOutput] = useState(false);
@@ -53,6 +57,7 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
 
       setBackendApiUrl(resolveBackendApiUrl(settings));
       setOllamaApiUrl(settings.ollamaApiUrl || DEFAULT_OLLAMA_API_URL);
+      setEmbedModel(settings.embedModel || DEFAULT_EMBED_MODEL);
       setSelectedModel(settings.chatModel || '');
       setStreamOutput(settings.streamOutput || false);
       setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
@@ -100,6 +105,12 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
     if (onModelChange) {
       onModelChange(newModel);
     }
+  };
+
+  const handleEmbedModelToggle = () => {
+    const nextModel = embedModel === BGE_EMBED_MODEL ? DEFAULT_EMBED_MODEL : BGE_EMBED_MODEL;
+    setEmbedModel(nextModel);
+    window.electronAPI.setSetting(EMBED_MODEL_KEY, nextModel);
   };
 
   const handleStreamToggle = () => {
@@ -198,6 +209,28 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
           placeholder={`e.g., ${DEFAULT_OLLAMA_API_URL}`}
         />
         <p className="setting-description">Heimgeist uses this URL to talk to Ollama for models and chat generation.</p>
+      </div>
+      <div className="setting-section">
+        <h3>Embedding Model</h3>
+        <div className="setting-switch-row">
+          <span className={"setting-switch-label" + (embedModel !== BGE_EMBED_MODEL ? " active" : "")}>
+            nomic
+          </span>
+          <label className="toggle-switch toggle-switch--binary-select">
+            <input
+              type="checkbox"
+              checked={embedModel === BGE_EMBED_MODEL}
+              onChange={handleEmbedModelToggle}
+            />
+            <span className="slider"></span>
+          </label>
+          <span className={"setting-switch-label" + (embedModel === BGE_EMBED_MODEL ? " active" : "")}>
+            bge-m3
+          </span>
+        </div>
+        <p className="setting-description">
+          Heimgeist uses this model for web-search reranking and for building or rebuilding local database embeddings.
+        </p>
       </div>
       <div className="setting-section">
         <h3>Chat Model</h3>

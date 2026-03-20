@@ -4,8 +4,52 @@ set -eu
 PYTHON_BIN="${PYTHON_BIN:-python3.13}"
 VENV_DIR="backend/.venv"
 TORCH_FLAVOR_FILE="$VENV_DIR/.heimgeist-torch-flavor"
+TORCH_STATE_FILE="$VENV_DIR/.heimgeist-torch-state"
+PYTHON_DEPS_STATE_FILE="$VENV_DIR/.heimgeist-python-deps-state"
+NODE_DEPS_STATE_FILE="node_modules/.heimgeist-node-deps-state"
 HEIMGEIST_TORCH_FLAVOR="${HEIMGEIST_TORCH_FLAVOR:-auto}"
 HEIMGEIST_TORCH_INDEX_URL="${HEIMGEIST_TORCH_INDEX_URL:-}"
+HEIMGEIST_FORCE_BOOTSTRAP="${HEIMGEIST_FORCE_BOOTSTRAP:-0}"
+
+manifest_state() {
+  for manifest_path in "$@"; do
+    if [ -f "$manifest_path" ]; then
+      checksum="$(cksum "$manifest_path" | awk '{print $1 ":" $2}')"
+      printf '%s %s\n' "$manifest_path" "$checksum"
+    else
+      printf '%s missing\n' "$manifest_path"
+    fi
+  done
+}
+
+state_matches() {
+  state_file="$1"
+  shift
+  [ -r "$state_file" ] || return 1
+  current_state="$(manifest_state "$@")"
+  saved_state="$(cat "$state_file")"
+  [ "$saved_state" = "$current_state" ]
+}
+
+write_state() {
+  state_file="$1"
+  shift
+  manifest_state "$@" > "$state_file"
+}
+
+current_torch_state() {
+  printf 'flavor=%s\nindex=%s\n' "$TORCH_FLAVOR" "$HEIMGEIST_TORCH_INDEX_URL"
+}
+
+torch_state_matches() {
+  [ -r "$TORCH_STATE_FILE" ] || return 1
+  saved_state="$(cat "$TORCH_STATE_FILE")"
+  [ "$saved_state" = "$(current_torch_state)" ]
+}
+
+write_torch_state() {
+  current_torch_state > "$TORCH_STATE_FILE"
+}
 
 is_linux_x86_64() {
   [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]
@@ -142,8 +186,49 @@ fi
 
 printf '%s\n' "$TORCH_FLAVOR" > "$TORCH_FLAVOR_FILE"
 echo "Using PyTorch flavor: $TORCH_FLAVOR"
-"$VENV_DIR/bin/python" -m pip install --upgrade pip
-install_selected_torch "$TORCH_FLAVOR"
-"$VENV_DIR/bin/python" -m pip install -r backend/requirements.txt
-npm install
+NEED_PYTHON_DEPS_INSTALL="$RECREATE_VENV"
+NEED_TORCH_INSTALL="$RECREATE_VENV"
+NEED_NODE_DEPS_INSTALL=0
+
+if [ "$HEIMGEIST_FORCE_BOOTSTRAP" = "1" ]; then
+  NEED_PYTHON_DEPS_INSTALL=1
+  NEED_TORCH_INSTALL=1
+  NEED_NODE_DEPS_INSTALL=1
+fi
+
+if [ "$NEED_PYTHON_DEPS_INSTALL" -eq 0 ] && ! state_matches "$PYTHON_DEPS_STATE_FILE" backend/requirements.txt; then
+  NEED_PYTHON_DEPS_INSTALL=1
+fi
+
+if [ "$NEED_TORCH_INSTALL" -eq 0 ] && ! torch_state_matches; then
+  NEED_TORCH_INSTALL=1
+fi
+
+if [ "$NEED_PYTHON_DEPS_INSTALL" -eq 1 ]; then
+  echo "Installing Python dependencies"
+  "$VENV_DIR/bin/python" -m pip install --upgrade pip
+  if [ "$NEED_TORCH_INSTALL" -eq 1 ]; then
+    install_selected_torch "$TORCH_FLAVOR"
+    write_torch_state
+  fi
+  "$VENV_DIR/bin/python" -m pip install -r backend/requirements.txt
+  write_state "$PYTHON_DEPS_STATE_FILE" backend/requirements.txt
+elif [ "$NEED_TORCH_INSTALL" -eq 1 ]; then
+  install_selected_torch "$TORCH_FLAVOR"
+  write_torch_state
+fi
+
+if [ ! -d node_modules ]; then
+  NEED_NODE_DEPS_INSTALL=1
+elif ! state_matches "$NODE_DEPS_STATE_FILE" package.json package-lock.json; then
+  NEED_NODE_DEPS_INSTALL=1
+fi
+
+if [ "$NEED_NODE_DEPS_INSTALL" -eq 1 ]; then
+  echo "Installing Node dependencies"
+  npm install --no-fund --no-audit
+  mkdir -p node_modules
+  write_state "$NODE_DEPS_STATE_FILE" package.json package-lock.json
+fi
+
 npm run dev

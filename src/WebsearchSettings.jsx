@@ -1,5 +1,6 @@
 // src/WebsearchSettings.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
+import { WEBSEARCH_ENGINE_OPTIONS, normalizeWebsearchEngines } from './websearchEngines'
 
 export default function WebsearchSettings({
   searxUrl,
@@ -7,27 +8,11 @@ export default function WebsearchSettings({
   engines,
   setEngines,
 }) {
-  const KNOWN_ENGINES = useMemo(
-    () => ["google","bing","yahoo","duckduckgo","brave","github","stackoverflow","reddit","arxiv"],
-    []
-  );
-
-  const [custom, setCustom] = useState("");
-
   const toggleEngine = (name) => {
     const set = new Set(engines || []);
     if (set.has(name)) set.delete(name); else set.add(name);
-    setEngines(Array.from(set));
-  };
-
-  const addCustom = () => {
-    const name = custom.trim();
-    if (!name) return;
-    const set = new Set(engines || []);
-    set.add(name);
-    setEngines(Array.from(set));
-    setCustom("");
-  };
+    setEngines(normalizeWebsearchEngines(Array.from(set)));
+  }
 
 return (
   <div className="settings-content-panel">
@@ -45,14 +30,14 @@ return (
     <div className="setting-section">
       <h3>Search Engines</h3>
       <div className="engine-grid">
-        {KNOWN_ENGINES.map(name => (
-          <label key={name} className="engine-row">
+        {WEBSEARCH_ENGINE_OPTIONS.map(({ value, label }) => (
+          <label key={value} className="engine-row">
             <input
               type="checkbox"
-              checked={Array.isArray(engines) ? engines.includes(name) : false}
-              onChange={() => toggleEngine(name)}
+              checked={Array.isArray(engines) ? engines.includes(value) : false}
+              onChange={() => toggleEngine(value)}
             />
-            <span>{name}</span>
+            <span>{label}</span>
           </label>
         ))}
       </div>

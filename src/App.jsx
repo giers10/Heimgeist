@@ -8,6 +8,10 @@ import LibraryManager from './LibraryManager'
 import WebsearchSettings from './WebsearchSettings'
 import { markdownToHTML  } from './markdown';
 import { applyColorScheme } from './colorSchemes'
+import {
+  loadStoredWebsearchEngines,
+  normalizeWebsearchEngines,
+} from './websearchEngines'
 // Extract <think> or <thinking> block (first occurrence) and return { think, answer }
 function splitThinkBlocks(text) {
   if (!text) return { think: null, answer: '' };
@@ -180,20 +184,19 @@ export default function App() {
   const [startupTaskMessage, setStartupTaskMessage] = useState('');
   const [startupTaskBusy, setStartupTaskBusy] = useState(false);
   const [searxUrl, setSearxUrl] = useState(() => migrateLegacySearxUrl(localStorage.getItem(WEBSEARCH_URL_KEY)));
-  const [searxEngines, setSearxEngines] = useState(() => {
-    try {
-      const raw = localStorage.getItem(WEBSEARCH_ENGINES_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return ["duckduckgo","bing","wikipedia","github","stack_overflow"];
-  });
+  const [searxEngines, setSearxEngines] = useState(() =>
+    loadStoredWebsearchEngines(localStorage.getItem(WEBSEARCH_ENGINES_KEY))
+  );
   useEffect(() => {
     localStorage.setItem(WEBSEARCH_URL_KEY, searxUrl || '');
   }, [searxUrl]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(WEBSEARCH_ENGINES_KEY, JSON.stringify(searxEngines || []));
+      localStorage.setItem(
+        WEBSEARCH_ENGINES_KEY,
+        JSON.stringify(normalizeWebsearchEngines(searxEngines))
+      );
     } catch {}
   }, [searxEngines]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
@@ -2148,7 +2151,7 @@ async function createNewChat() {
                 searxUrl={searxUrl}
                 setSearxUrl={setSearxUrl}
                 engines={searxEngines}
-                setEngines={setSearxEngines}
+                setEngines={(next) => setSearxEngines(normalizeWebsearchEngines(next))}
               />
             )}
           </>

@@ -19,6 +19,14 @@ ensure_sources_column(engine)
 
 app = FastAPI(title="LLM Desktop Backend", version="0.1.0" )
 
+
+def sanitize_generated_chat_title(title: str) -> str:
+    cleaned_title = html.unescape(title or "")
+    cleaned_title = re.sub(r'<think(?:ing)?>.*?</think(?:ing)?>', '', cleaned_title, flags=re.DOTALL | re.IGNORECASE)
+    cleaned_title = re.sub(r'[*#]', '', cleaned_title)
+    cleaned_title = re.sub(r'\s+', ' ', cleaned_title)
+    return cleaned_title.strip()
+
 # CORS (dev-friendly; tighten later)
 app.add_middleware(
     CORSMiddleware,
@@ -201,20 +209,14 @@ async def generate_title(req: schemas.GenerateTitleRequest, db: Session = Depend
 
     print(f"Original title from LLM: {title}") # Debugging line to see the raw title
 
-    # HTML unescape the title first to handle encoded tags
-    unescaped_title = html.unescape(title)
-    print(f"Unescaped title: {unescaped_title}") # Debugging line to see the unescaped title
+    cleaned_title = sanitize_generated_chat_title(title)
 
-    # Remove <think> blocks from the unescaped title
-    # Use re.IGNORECASE to handle potential variations in casing (e.g., <Think>)
-    cleaned_title = re.sub(r'<think>.*?</think>', '', unescaped_title, flags=re.DOTALL | re.IGNORECASE)
-    
-    print(f"Cleaned title before saving: {cleaned_title.strip()}") # Debugging line to see the cleaned title
+    print(f"Cleaned title before saving: {cleaned_title}") # Debugging line to see the cleaned title
 
-    session.name = cleaned_title.strip() # Use .strip() to remove any leading/trailing whitespace after removal
+    session.name = cleaned_title
     db.commit()
 
-    return {"title": cleaned_title.strip()}
+    return {"title": cleaned_title}
 
 @app.delete("/sessions/{session_id}")
 def delete_session(session_id: str, db: Session = Depends(get_db)):

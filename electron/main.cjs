@@ -6,17 +6,59 @@ const fs = require('fs')
 let mainWindow
 let settingsWindow = null
 
-const settingsFilePath = path.join(app.getPath('userData'), 'settings.json')
+const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000'
+const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434'
+const settingsFilePath = process.env.HEIMGEIST_SETTINGS_FILE || path.join(app.getPath('userData'), 'settings.json')
 let appSettings = {}
 const DEFAULT_UI_SCALE = 1
 const MIN_UI_SCALE = 0.7
 const MAX_UI_SCALE = 1.3
 
 const defaultSettings = {
-  ollamaApiUrl: 'http://127.0.0.1:8000',
+  backendApiUrl: DEFAULT_BACKEND_API_URL,
+  ollamaApiUrl: DEFAULT_OLLAMA_API_URL,
   colorScheme: 'Default',
   uiScale: DEFAULT_UI_SCALE,
   chatModel: 'llama3',
+}
+
+function looksLikeOllamaUrl(value) {
+  if (typeof value !== 'string') {
+    return false
+  }
+
+  try {
+    const parsed = new URL(value)
+    if (parsed.port === '11434') {
+      return true
+    }
+
+    return /^\/api\/?$/i.test(parsed.pathname || '')
+  } catch (_error) {
+    return false
+  }
+}
+
+function migrateSettings(rawSettings) {
+  const source = rawSettings && typeof rawSettings === 'object' ? rawSettings : {}
+  const nextSettings = { ...defaultSettings, ...source }
+  let migrated = false
+
+  if (!Object.prototype.hasOwnProperty.call(source, 'backendApiUrl') && typeof source.ollamaApiUrl === 'string') {
+    if (looksLikeOllamaUrl(source.ollamaApiUrl)) {
+      nextSettings.backendApiUrl = DEFAULT_BACKEND_API_URL
+      nextSettings.ollamaApiUrl = source.ollamaApiUrl
+    } else {
+      nextSettings.backendApiUrl = source.ollamaApiUrl
+      nextSettings.ollamaApiUrl = DEFAULT_OLLAMA_API_URL
+    }
+    migrated = true
+  }
+
+  nextSettings.backendApiUrl = String(nextSettings.backendApiUrl || '').trim()
+  nextSettings.ollamaApiUrl = String(nextSettings.ollamaApiUrl || '').trim()
+
+  return { nextSettings, migrated }
 }
 
 function normalizeUiScale(value) {
@@ -44,7 +86,11 @@ function loadSettings() {
   try {
     if (fs.existsSync(settingsFilePath)) {
       const data = fs.readFileSync(settingsFilePath, 'utf8')
-      appSettings = { ...defaultSettings, ...JSON.parse(data) }
+      const { nextSettings, migrated } = migrateSettings(JSON.parse(data))
+      appSettings = nextSettings
+      if (migrated) {
+        saveSettings()
+      }
     } else {
       appSettings = { ...defaultSettings }
       saveSettings()

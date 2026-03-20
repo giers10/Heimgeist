@@ -104,6 +104,7 @@ function loadSettings() {
 
 function saveSettings() {
   try {
+    fs.mkdirSync(path.dirname(settingsFilePath), { recursive: true })
     fs.writeFileSync(settingsFilePath, JSON.stringify(appSettings, null, 2), 'utf8')
   } catch (error) {
     console.error('Failed to save settings:', error)

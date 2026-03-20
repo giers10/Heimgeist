@@ -104,6 +104,21 @@ fi
 TORCH_FLAVOR="$(resolve_torch_flavor)"
 RECREATE_VENV=0
 
+if [ -z "${HEIMGEIST_SETTINGS_FILE:-}" ]; then
+  case "$(uname -s)" in
+    Darwin)
+      HEIMGEIST_SETTINGS_FILE="${HOME}/Library/Application Support/Heimgeist/settings.json"
+      ;;
+    Linux)
+      HEIMGEIST_SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/Heimgeist/settings.json"
+      ;;
+  esac
+  if [ -n "${HEIMGEIST_SETTINGS_FILE:-}" ]; then
+    export HEIMGEIST_SETTINGS_FILE
+    mkdir -p "$(dirname "$HEIMGEIST_SETTINGS_FILE")"
+  fi
+fi
+
 if [ ! -x "$VENV_DIR/bin/python" ] || ! "$VENV_DIR/bin/python" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)'; then
   RECREATE_VENV=1
 fi

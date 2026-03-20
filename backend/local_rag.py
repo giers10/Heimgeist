@@ -984,6 +984,48 @@ def create_library(req: CreateLibraryRequest):
     return library_payload(data)
 
 
+@router.post("/libraries/purge")
+def purge_libraries():
+    active_jobs = [
+        job for job in JOBS.values()
+        if job["status"] in {"queued", "running"}
+    ]
+    if active_jobs:
+        active_slugs = sorted({str(job.get("slug") or "") for job in active_jobs if job.get("slug")})
+        detail = "Cannot purge databases while library sync jobs are still running."
+        if active_slugs:
+            detail = f"{detail} Active databases: {', '.join(active_slugs)}."
+        raise HTTPException(status_code=409, detail=detail)
+
+    removed: List[str] = []
+    failures: List[str] = []
+
+    for path in list(LIB_ROOT.iterdir()):
+        if not path.is_dir():
+            continue
+        try:
+            shutil.rmtree(path)
+            removed.append(path.name)
+        except Exception as exc:
+            failures.append(f"{path.name}: {type(exc).__name__}: {exc}")
+
+    LIB_ROOT.mkdir(parents=True, exist_ok=True)
+    JOBS.clear()
+    LIB_LOCKS.clear()
+
+    if failures:
+        preview = "; ".join(failures[:3])
+        if len(failures) > 3:
+            preview = f"{preview}; ..."
+        raise HTTPException(status_code=500, detail=f"Failed to purge some databases. {preview}")
+
+    return {
+        "ok": True,
+        "count": len(removed),
+        "removed": removed,
+    }
+
+
 @router.get("/libraries/{slug}")
 def get_library(slug: str):
     return library_payload(read_library(slug))

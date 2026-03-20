@@ -808,6 +808,17 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
   }
 
+  async function handleLibrariesPurged() {
+    setLibraries([])
+    setLibraryJobs([])
+    setActiveLibrarySlug(null)
+    setEditingLibrarySlug(null)
+    setIsDbPickerOpen(false)
+    setChatLibraryBySession({})
+    await refreshLibraries()
+    await refreshLibraryJobs()
+  }
+
   // Load chat sessions from backend on initial render
   useEffect(() => {
     if (!backendApiUrl) return;

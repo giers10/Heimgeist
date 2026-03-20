@@ -29,7 +29,7 @@ function getStatusTone(state) {
   return 'neutral';
 }
 
-export default function GeneralSettings({ onModelChange, onStreamOutputChange }) {
+export default function GeneralSettings({ onModelChange, onStreamOutputChange, onLibrariesPurged }) {
   const [backendApiUrl, setBackendApiUrl] = useState('');
   const [ollamaApiUrl, setOllamaApiUrl] = useState('');
   const [models, setModels] = useState([]);
@@ -37,6 +37,8 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
   const [streamOutput, setStreamOutput] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(DEFAULT_UPDATE_STATUS);
   const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
+  const [isPurgingLibraries, setIsPurgingLibraries] = useState(false);
+  const [libraryPurgeStatus, setLibraryPurgeStatus] = useState({ tone: 'neutral', message: '' });
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +129,48 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
     }
   };
 
+  const handlePurgeLibraries = async () => {
+    const confirmed = window.confirm(
+      'Delete all Heimgeist databases, staged files, and indexes from local storage? Chat history will be kept.'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsPurgingLibraries(true);
+    setLibraryPurgeStatus({ tone: 'neutral', message: '' });
+
+    try {
+      const response = await fetch(`${backendApiUrl}/libraries/purge`, {
+        method: 'POST',
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || `HTTP ${response.status}`);
+      }
+
+      const count = Number(data?.count) || 0;
+      setLibraryPurgeStatus({
+        tone: 'success',
+        message: count > 0
+          ? `Removed ${count} database${count === 1 ? '' : 's'} from local storage.`
+          : 'No local databases were found to remove.',
+      });
+
+      if (onLibrariesPurged) {
+        await Promise.resolve(onLibrariesPurged());
+      }
+    } catch (error) {
+      setLibraryPurgeStatus({
+        tone: 'error',
+        message: `Database purge failed: ${error.message || String(error)}`,
+      });
+    } finally {
+      setIsPurgingLibraries(false);
+    }
+  };
+
   const updateCheckedAtLabel = updateStatus.checkedAt
     ? new Date(updateStatus.checkedAt).toLocaleString()
     : null;
@@ -203,6 +247,27 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
             {updateStatus.remoteCommit && <div>Remote: <code>{shortCommit(updateStatus.remoteCommit)}</code></div>}
             {updateCheckedAtLabel && <div>Last checked: {updateCheckedAtLabel}</div>}
           </div>
+        )}
+      </div>
+      <div className="setting-section danger-zone">
+        <h3>Purge Databases</h3>
+        <div className="setting-control-row">
+          <button
+            type="button"
+            className="button danger"
+            onClick={handlePurgeLibraries}
+            disabled={isPurgingLibraries || !backendApiUrl}
+          >
+            {isPurgingLibraries ? 'Purging...' : 'Delete All Databases'}
+          </button>
+        </div>
+        <p className="setting-description">
+          Removes every local Heimgeist database, including staged files, corpora, and indexes. This is meant as a recovery action when the DB panel becomes unusable. Chat history stays intact.
+        </p>
+        {libraryPurgeStatus.message && (
+          <p className={`setting-status ${libraryPurgeStatus.tone}`}>
+            {libraryPurgeStatus.message}
+          </p>
         )}
       </div>
     </div>

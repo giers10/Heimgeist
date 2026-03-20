@@ -1,0 +1,200 @@
+Mar 20 10:34:46 steamdeck systemd[1357]: Started flatpak session helper.
+Mar 20 10:34:46 steamdeck systemd[1357]: Started app-flatpak-org.mozilla.firefox-14968.scope.
+Mar 20 10:34:47 steamdeck flatpak[14988]: [2] Sandbox: CanCreateUserNamespace() clone() failure: EPERM
+Mar 20 10:34:47 steamdeck firefox-bin[14988]: Failed to load module "canberra-gtk-module"
+Mar 20 10:34:47 steamdeck firefox-bin[14988]: Failed to load module "colorreload-gtk-module"
+Mar 20 10:34:47 steamdeck firefox-bin[14988]: Failed to load module "window-decorations-gtk-module"
+Mar 20 10:34:48 steamdeck flatpak[14988]: ATTENTION: default value of option mesa_glthread overridden by environment.
+Mar 20 10:34:53 steamdeck systemd[1357]: Started Thunderbird - Mail Client.
+Mar 20 10:34:53 steamdeck systemd[1357]: Started app-flatpak-org.mozilla.Thunderbird-15395.scope.
+Mar 20 10:34:53 steamdeck flatpak[15407]: [2] Sandbox: CanCreateUserNamespace() clone() failure: EPERM
+Mar 20 10:34:53 steamdeck thunderbird-bin[15407]: Failed to load module "canberra-gtk-module"
+Mar 20 10:34:54 steamdeck flatpak[15407]: ATTENTION: default value of option mesa_glthread overridden by environment.
+Mar 20 10:34:56 steamdeck systemd[1357]: app-flatpak-org.mozilla.firefox-14968.scope: Consumed 8.220s CPU time, 821.5M memory peak.
+Mar 20 10:35:08 steamdeck kglobalacceld[3289]: kf.globalaccel.kglobalacceld: KKeyServer::xcbKeyPressEventToQt failed
+Mar 20 10:35:12 steamdeck kwin_x11[3347]: kwin_core: XCB error: 152 (BadDamage), sequence: 62511, resource id: 23105910, major code: 143 (DAMAGE), minor code: 3 (Subtract)
+Mar 20 10:35:36 steamdeck kglobalacceld[3289]: kf.globalaccel.kglobalacceld: KKeyServer::xcbKeyPressEventToQt failed
+Mar 20 10:35:36 steamdeck kglobalacceld[3289]: kf.globalaccel.kglobalacceld: KKeyServer::xcbKeyPressEventToQt failed
+Mar 20 10:35:36 steamdeck kglobalacceld[3289]: kf.globalaccel.kglobalacceld: KKeyServer::xcbKeyPressEventToQt failed
+Mar 20 10:35:37 steamdeck kglobalacceld[3289]: kf.globalaccel.kglobalacceld: KKeyServer::xcbKeyPressEventToQt failed
+Mar 20 10:38:57 steamdeck flatpak[15407]: [GFX1-]: RenderCompositorSWGL failed mapping default framebuffer, no dt
+Mar 20 10:39:17 steamdeck kglobalacceld[3289]: kf.globalaccel.kglobalacceld: KKeyServer::xcbKeyPressEventToQt failed
+Mar 20 10:42:05 steamdeck systemd[1357]: app-flatpak-org.mozilla.Thunderbird-15395.scope: Consumed 7min 16.070s CPU time, 557.5M memory peak.
+Mar 20 10:53:53 steamdeck polkit-agent-helper-1[16894]: pam_unix(polkit-1:auth): authentication failure; logname=deck uid=1000 euid=0 tty= ruser=deck rhost=  user=deck
+Mar 20 10:54:46 steamdeck systemd[1357]: Created slice Slice /user.
+Mar 20 10:54:46 steamdeck systemd[1357]: Started podman-16977.scope.
+Mar 20 10:54:46 steamdeck systemd[1357]: Started podman-pause-508fa5b2.scope.
+Mar 20 10:54:53 steamdeck sudo[17001]:     deck : TTY=pts/4 ; PWD=/home/deck ; USER=root ; COMMAND=/usr/bin/podman logs -f searxng
+Mar 20 10:54:53 steamdeck sudo[17001]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 10:54:53 steamdeck sudo[17001]: pam_unix(sudo:session): session closed for user root
+Mar 20 10:54:59 steamdeck systemd[1357]: Started podman-17031.scope.
+Mar 20 10:55:36 steamdeck sudo[17050]:     deck : TTY=pts/4 ; PWD=/home/deck ; USER=root ; COMMAND=/usr/bin/ufw allow 8080
+Mar 20 10:55:36 steamdeck sudo[17050]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 10:55:36 steamdeck sudo[17050]: pam_unix(sudo:session): session closed for user root
+Mar 20 10:55:47 steamdeck sudo[17081]:     deck : TTY=pts/4 ; PWD=/home/deck ; USER=root ; COMMAND=/usr/bin/ufw disable
+Mar 20 10:55:47 steamdeck sudo[17081]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 10:55:47 steamdeck sudo[17081]: pam_unix(sudo:session): session closed for user root
+Mar 20 10:55:56 steamdeck sshd-session[16809]: Received disconnect from 172.20.10.3 port 62526:11: disconnected by user
+Mar 20 10:55:56 steamdeck sshd-session[16809]: Disconnected from user deck 172.20.10.3 port 62526
+Mar 20 10:56:18 steamdeck systemd[1357]: Started podman-17298.scope.
+Mar 20 10:56:28 steamdeck sudo[17317]:     deck : TTY=pts/4 ; PWD=/home/deck ; USER=root ; COMMAND=/usr/bin/ufw enable
+Mar 20 10:56:28 steamdeck sudo[17317]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 10:56:32 steamdeck sudo[17317]: pam_unix(sudo:session): session closed for user root
+Mar 20 10:57:10 steamdeck systemd[1357]: Started podman-17481.scope.
+Mar 20 11:03:15 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:03:17 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:03:17 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:03:17 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:03:18 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:03:18 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:13:13 steamdeck sudo[22399]:     deck : TTY=pts/4 ; PWD=/home/deck/searxng/config ; USER=root ; COMMAND=/usr/bin/nano settings.yml
+Mar 20 11:13:13 steamdeck sudo[22399]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 11:13:52 steamdeck sudo[22399]: pam_unix(sudo:session): session closed for user root
+Mar 20 11:13:55 steamdeck sudo[22414]:     deck : TTY=pts/4 ; PWD=/home/deck/searxng/config ; USER=root ; COMMAND=/usr/bin/systemctl restart searxng
+Mar 20 11:13:55 steamdeck sudo[22414]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 11:13:55 steamdeck sudo[22414]: pam_unix(sudo:session): session closed for user root
+Mar 20 11:14:04 steamdeck systemd[1357]: Started podman-22433.scope.
+Mar 20 11:14:13 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:14:13 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:18:16 steamdeck systemd[1357]: Started podman-23220.scope.
+Mar 20 11:18:54 steamdeck systemd[1357]: Started podman-23250.scope.
+Mar 20 11:18:54 steamdeck systemd[1357]: Started podman-23273.scope.
+Mar 20 11:18:54 steamdeck systemd[1357]: Started podman-23292.scope.
+Mar 20 11:19:21 steamdeck sudo[23329]:     deck : TTY=pts/4 ; PWD=/home/deck ; USER=root ; COMMAND=/usr/bin/nano searxng/config/settings.yml
+Mar 20 11:19:21 steamdeck sudo[23329]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 11:19:58 steamdeck sudo[23329]: pam_unix(sudo:session): session closed for user root
+Mar 20 11:20:05 steamdeck systemd[1357]: Started podman-23350.scope.
+Mar 20 11:21:55 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:24:22 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:24:22 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:24:22 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:24:22 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:29:06 steamdeck sudo[28938]:     deck : TTY=pts/4 ; PWD=/home/deck ; USER=root ; COMMAND=/usr/bin/nano searxng/config/settings.yml
+Mar 20 11:29:06 steamdeck sudo[28938]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 11:29:43 steamdeck sudo[28938]: pam_unix(sudo:session): session closed for user root
+Mar 20 11:29:45 steamdeck systemd[1357]: Started podman-28958.scope.
+Mar 20 11:29:54 steamdeck kglobalacceld[3289]: kf.globalaccel.kglobalacceld: KKeyServer::xcbKeyPressEventToQt failed
+Mar 20 11:31:14 steamdeck sudo[31682]:     deck : TTY=pts/4 ; PWD=/home/deck ; USER=root ; COMMAND=/usr/bin/ufw status verbose
+Mar 20 11:31:14 steamdeck sudo[31682]: pam_unix(sudo:session): session opened for user root(uid=0) by deck(uid=1000)
+Mar 20 11:31:15 steamdeck sudo[31682]: pam_unix(sudo:session): session closed for user root
+Mar 20 11:32:24 steamdeck systemd[1357]: Started podman-33094.scope.
+Mar 20 11:32:25 steamdeck systemd[1357]: Started podman-33170.scope.
+Mar 20 11:34:13 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:34:13 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:34:13 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:34:14 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device Steam Deck Motion Sensors (/dev/input/js1)\n(II) No input driver specified, ignoring this device.\n(II) This device may have been added with another device file.\n"
+Mar 20 11:34:14 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device Steam Deck (/dev/input/js0)\n(II) No input driver specified, ignoring this device.\n(II) This device may have been added with another device file.\n"
+Mar 20 11:34:14 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device Steam Deck (/dev/input/event19)\n"
+Mar 20 11:34:14 steamdeck sddm-helper-start-x11user[3199]: "(II) No input driver specified, ignoring this device.\n(II) This device may have been added with another device file.\n"
+Mar 20 11:34:14 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device Steam Deck Motion Sensors (/dev/input/event22)\n"
+Mar 20 11:34:14 steamdeck sddm-helper-start-x11user[3199]: "(II) No input driver specified, ignoring this device.\n(II) This device may have been added with another device file.\n"
+Mar 20 11:34:15 steamdeck steam[3909]: [2026-03-20 11:34:15] Shutdown
+Mar 20 11:34:15 steamdeck kded6[3346]: Service  ":1.91" unregistered
+Mar 20 11:34:27 steamdeck systemd[1357]: app-steam@autostart.service: Consumed 7min 38.983s CPU time, 1G memory peak, 283.2M memory swap peak.
+Mar 20 11:35:36 steamdeck systemd[1357]: Started Firefox - Web Browser.
+Mar 20 11:35:36 steamdeck systemd[1357]: Started app-flatpak-org.mozilla.firefox-35291.scope.
+Mar 20 11:35:36 steamdeck flatpak[35304]: [2] Sandbox: CanCreateUserNamespace() clone() failure: EPERM
+Mar 20 11:35:37 steamdeck firefox-bin[35304]: Failed to load module "canberra-gtk-module"
+Mar 20 11:35:37 steamdeck firefox-bin[35304]: Failed to load module "colorreload-gtk-module"
+Mar 20 11:35:37 steamdeck firefox-bin[35304]: Failed to load module "window-decorations-gtk-module"
+Mar 20 11:35:37 steamdeck flatpak[35304]: ATTENTION: default value of option mesa_glthread overridden by environment.
+Mar 20 11:35:42 steamdeck flatpak[35437]: libva info: VA-API version 1.22.0
+Mar 20 11:35:42 steamdeck flatpak[35437]: libva info: User environment variable requested driver 'radeonsi'
+Mar 20 11:35:42 steamdeck flatpak[35437]: libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/radeonsi_drv_video.so
+Mar 20 11:35:42 steamdeck flatpak[35437]: libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/intel-vaapi-driver/radeonsi_drv_video.so
+Mar 20 11:35:42 steamdeck flatpak[35437]: libva info: Trying to open /usr/lib/x86_64-linux-gnu/GL/lib/dri/radeonsi_drv_video.so
+Mar 20 11:35:42 steamdeck flatpak[35437]: libva info: Found init function __vaDriverInit_1_22
+Mar 20 11:35:42 steamdeck flatpak[35437]: libva info: va_openDriver() returns 0
+Mar 20 11:35:44 steamdeck systemd[1357]: app-flatpak-org.mozilla.firefox-35291.scope: Consumed 13.250s CPU time, 1G memory peak.
+Mar 20 11:37:16 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:37:16 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:37:16 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:37:16 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:38:21 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:38:21 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:38:21 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:38:22 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:38:22 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:46:13 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:46:13 steamdeck plasmashell[3407]: kf.plasma.quick: Exposed with no visual parent. Window positioning broken.
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device removed\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: removing device  USB OPTICAL MOUSE\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"fd\" \"137\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II)"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: " UnloadModule: \"libinput\"\n(II) systemd-logind: releasing fd for 13:74\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device  USB OPTICAL MOUSE (/dev/input/mouse1)\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: Applying InputClass \"Pointer\"\n(II) Using input driver 'libinput' for ' USB OPTICAL MOUSE'\n(**)  USB OPTICAL MOUSE: always reports core events\n(**) Option \"Device\" \"/dev/input/mouse1\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) mouse1  - not using input device '/dev/input/mouse1'.\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(EE) libinput:  USB OPTICAL MOUSE: Failed to create a device for /dev/input/mouse1\n(EE) PreInit returned 2 for \" USB OPTICAL MOUSE\"\n(II) UnloadModule: \"libinput\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device  USB OPTICAL MOUSE (/dev/input/event10)\n(**)  USB OPTICAL MOUSE: Applying InputClass \"libinput pointer catchall\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: Applying InputClass \"Pointer\"\n(II) Using input driver 'libinput' for ' USB OPTICAL MOUSE'\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) systemd-logind: got fd for /dev/input/event10 13:74 fd 81 paused 0\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: always reports core events\n(**) Option \"Device\" \"/dev/input/event10\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: is tagged by udev as: Mouse\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device is a pointer\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device removed\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"AccelSpeed\" \"0\"\n(**) Option \"AccelProfile\" \"flat\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) libinput:  USB OPTICAL MOUSE: Step value 0 was provided, libinput Fallback acceleration function is used.\n(II) libinput:  USB OPTICAL MOUSE: Step value 0 was provided, libinput Fallback acceleration function is used.\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) libinput:  USB OPTICAL MOUSE: Step value 0 was provided, libinput Fallback acceleration function is used.\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"config_info\" \"udev:/sys/devices/pci0000:00/0000:00:08.1/0000:04:00.3/usb1/1-1/1-1.2/1-1.2:1.0/0003:0000:3825.0011/input/input48/event10\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) XINPUT: Adding extended input device \" USB OPTICAL MOUSE\" (type: MOUSE, id 11)\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"AccelerationScheme\" \"none\"\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: (accel) selected scheme none/0\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: (accel) acceleration factor: 2.000\n(**)  USB OPTICAL MOUSE: (accel) acceleration threshold: 4\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: is tagged by udev as: Mouse\n"
+Mar 20 11:51:58 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device is a pointer\n"
+Mar 20 11:51:59 steamdeck kcminit[35959]: Initializing  "/usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_mouse.so"
+Mar 20 11:51:59 steamdeck kcminit[35959]: Initializing  "/usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_touchpad.so"
+Mar 20 11:51:59 steamdeck kcminit[35959]: kcm_touchpad: Using X11 backend
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device removed\n"
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: removing device  USB OPTICAL MOUSE\n"
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"fd\" \"81\""
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: "\n"
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: "(II)"
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: " UnloadModule: \"libinput\"\n(II) systemd-logind: releasing fd for 13:74\n"
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device  USB OPTICAL MOUSE (/dev/input/mouse1)\n"
+Mar 20 11:52:00 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: Applying InputClass \"Pointer\"\n(II) Using input driver 'libinput' for ' USB OPTICAL MOUSE'\n(**)  USB OPTICAL MOUSE: always reports core events\n(**) Option \"Device\" \"/dev/input/mouse1\"\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) mouse1  - not using input device '/dev/input/mouse1'.\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(EE) libinput:  USB OPTICAL MOUSE: Failed to create a device for /dev/input/mouse1\n(EE) PreInit returned 2 for \" USB OPTICAL MOUSE\"\n(II) UnloadModule: \"libinput\"\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) config/udev: Adding input device  USB OPTICAL MOUSE (/dev/input/event10)\n(**)  USB OPTICAL MOUSE: Applying InputClass \"libinput pointer catchall\"\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: Applying InputClass \"Pointer\"\n(II) Using input driver 'libinput' for ' USB OPTICAL MOUSE'\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) systemd-logind: got fd for /dev/input/event10 13:74 fd 81 paused 0\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: always reports core events\n(**) Option \"Device\" \"/dev/input/event10\"\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: is tagged by udev as: Mouse\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device is a pointer\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device removed\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"AccelSpeed\" \"0\"\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"AccelProfile\" \"flat\"\n(II) libinput:  USB OPTICAL MOUSE: Step value 0 was provided, libinput Fallback acceleration function is used.\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) libinput:  USB OPTICAL MOUSE: Step value 0 was provided, libinput Fallback acceleration function is used.\n(II) libinput:  USB OPTICAL MOUSE: Step value 0 was provided, libinput Fallback acceleration function is used.\n(**) Option \"config_info\" \"udev:/sys/devices/pci0000:00/0000:00:08.1/0000:04:00.3/usb1/1-1/1-1.2/1-1.2:1.0/0003:0000:3825.0012/input/input49/event10\"\n(II) XINPUT: Adding extended input device \" USB OPTICAL MOUSE\" (type: MOUSE, id 11)\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(**) Option \"AccelerationScheme\" \"none\"\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: (accel) selected scheme none/0\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(**)  USB OPTICAL MOUSE: (accel) acceleration factor: 2.000\n(**)  USB OPTICAL MOUSE: (accel) acceleration threshold: 4\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: is tagged by udev as: Mouse\n"
+Mar 20 11:52:01 steamdeck sddm-helper-start-x11user[3199]: "(II) event10 -  USB OPTICAL MOUSE: device is a pointer\n"
+Mar 20 11:52:01 steamdeck kcminit[36008]: Initializing  "/usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_mouse.so"
+Mar 20 11:52:01 steamdeck kcminit[36008]: Initializing  "/usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_touchpad.so"
+Mar 20 11:52:01 steamdeck kcminit[36008]: kcm_touchpad: Using X11 backend
+Mar 20 12:06:13 steamdeck kwin_x11[3347]: kwin_core: XCB error: 152 (BadDamage), sequence: 55769, resource id: 23207116, major code: 143 (DAMAGE), minor code: 2 (Destroy)
+Mar 20 12:06:13 steamdeck kwin_x11[3347]: kwin_core: XCB error: 3 (BadWindow), sequence: 55770, resource id: 2097186, major code: 129 (SHAPE), minor code: 6 (Input)
+Mar 20 12:06:23 steamdeck kwin_x11[3347]: kwin_core: XCB error: 152 (BadDamage), sequence: 60041, resource id: 23207786, major code: 143 (DAMAGE), minor code: 2 (Destroy)
+Mar 20 12:06:23 steamdeck kwin_x11[3347]: kwin_core: XCB error: 3 (BadWindow), sequence: 60042, resource id: 2097187, major code: 129 (SHAPE), minor code: 6 (Input)
+Mar 20 12:06:35 steamdeck kwin_x11[3347]: kwin_core: XCB error: 152 (BadDamage), sequence: 65013, resource id: 23208486, major code: 143 (DAMAGE), minor code: 2 (Destroy)
+Mar 20 12:06:35 steamdeck kwin_x11[3347]: kwin_core: XCB error: 3 (BadWindow), sequence: 65014, resource id: 2097189, major code: 129 (SHAPE), minor code: 6 (Input)
+Mar 20 12:13:19 steamdeck systemd[1357]: Started Firefox - Web Browser.
+Mar 20 12:13:19 steamdeck systemd[1357]: Started app-flatpak-org.mozilla.firefox-38192.scope.
+Mar 20 12:13:19 steamdeck flatpak[38205]: [2] Sandbox: CanCreateUserNamespace() clone() failure: EPERM
+Mar 20 12:13:19 steamdeck firefox-bin[38205]: Failed to load module "canberra-gtk-module"
+Mar 20 12:13:19 steamdeck firefox-bin[38205]: Failed to load module "colorreload-gtk-module"
+Mar 20 12:13:19 steamdeck firefox-bin[38205]: Failed to load module "window-decorations-gtk-module"
+Mar 20 12:13:20 steamdeck flatpak[38205]: ATTENTION: default value of option mesa_glthread overridden by environment.
+Mar 20 12:13:28 steamdeck flatpak[38205]: ATTENTION: default value of option mesa_glthread overridden by environment.
+Mar 20 12:13:28 steamdeck flatpak[38205]: ATTENTION: default value of option mesa_glthread overridden by environment.
+Mar 20 12:13:28 steamdeck flatpak[38205]: ATTENTION: default value of option mesa_glthread overridden by environment.
+Mar 20 12:14:12 steamdeck systemd[1357]: app-flatpak-org.mozilla.firefox-38192.scope: Consumed 29.493s CPU time, 941.7M memory peak.
+Mar 20 12:17:17 steamdeck kwin_x11[3347]: kwin_core: XCB error: 152 (BadDamage), sequence: 15998, resource id: 23239729, major code: 143 (DAMAGE), minor code: 2 (Destroy)
+Mar 20 12:17:17 steamdeck kwin_x11[3347]: kwin_core: XCB error: 3 (BadWindow), sequence: 15999, resource id: 2097188, major code: 129 (SHAPE), minor code: 6 (Input)
+Mar 20 12:25:55 steamdeck podman[42059]: 2026-03-20 12:25:55.838940074 +0100 CET m=+0.035206979 system refresh
+Mar 20 12:25:55 steamdeck systemd[1357]: Started podman-42059.scope.
+Mar 20 12:25:55 steamdeck systemd[1357]: Started podman-pause-044fa0d2.scope.
+Mar 20 12:25:55 steamdeck sshd-session[42034]: Received disconnect from 172.20.10.3 port 63993:11: disconnected by user
+Mar 20 12:25:55 steamdeck sshd-session[42034]: Disconnected from user deck 172.20.10.3 port 63993

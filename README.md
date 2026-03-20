@@ -66,7 +66,7 @@ npm install
 npm run dev
 ```
 
-## Project Tree
+## File Tree
 
 ```text
 .

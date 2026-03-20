@@ -121,19 +121,23 @@ export default function LibraryManager({
     }
   }
 
-  async function addPaths() {
+  async function registerPaths(paths) {
+    await runAction(async () => {
+      const response = await fetch(`${apiBase}/libraries/${library.slug}/files/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths })
+      })
+      await expectOk(response)
+    })
+  }
+
+  async function addPaths(kind = 'files') {
     if (!library) return
-    const paths = await window.electronAPI?.pickPaths?.()
+    const paths = await window.electronAPI?.pickPaths?.({ kind })
     if (!Array.isArray(paths) || paths.length === 0) return
     try {
-      await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/files/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paths })
-        })
-        await expectOk(response)
-      })
+      await registerPaths(paths)
     } catch (error) {
       setErrorMessage(String(error?.message || error))
     }
@@ -346,7 +350,8 @@ export default function LibraryManager({
       </div>
 
       <div className="library-footer-actions">
-        <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
+        <button className="button" disabled={busy} onClick={() => addPaths('files')}>Add Files</button>
+        <button className="button ghost" disabled={busy} onClick={() => addPaths('directories')}>Add Folder</button>
         {library.files?.length > 0 && !isSyncing && !isReadyForChat && (
           <button className="button ghost" disabled={busy} onClick={retrySync}>Retry Sync</button>
         )}

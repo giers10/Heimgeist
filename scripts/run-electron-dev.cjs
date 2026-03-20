@@ -5,10 +5,11 @@ const waitOn = require('wait-on')
 const projectRoot = path.resolve(__dirname, '..')
 const electronBinary = require('electron')
 const relaunchExitCode = 75
-const startupResources = ['http://localhost:5173', 'tcp:8000']
+const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173'
+const startupResources = [devServerUrl, 'http://127.0.0.1:8000/health']
 const env = {
   ...process.env,
-  VITE_DEV_SERVER_URL: process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173',
+  VITE_DEV_SERVER_URL: devServerUrl,
   HEIMGEIST_DEV_WRAPPER: '1',
   HEIMGEIST_DEV_RELAUNCH_CODE: String(relaunchExitCode),
 }
@@ -42,6 +43,7 @@ function runElectronOnce() {
 
 async function main() {
   await waitForDependencies()
+  console.log(`Electron dev wrapper: dependencies ready, launching ${env.VITE_DEV_SERVER_URL}`)
 
   while (true) {
     const { code, signal } = await runElectronOnce()

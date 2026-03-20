@@ -3,6 +3,7 @@ import { colorSchemes, applyColorScheme } from './colorSchemes'
 
 const COLOR_SCHEME_KEY = 'colorScheme'
 const UI_SCALE_KEY = 'uiScale'
+const OPEN_DEVTOOLS_ON_STARTUP_KEY = 'openDevToolsOnStartup'
 const DEFAULT_UI_SCALE = 1
 const MIN_UI_SCALE = 0.7
 const MAX_UI_SCALE = 1.3
@@ -20,12 +21,14 @@ function normalizeUiScale(value) {
 export default function InterfaceSettings() {
   const [selectedColorScheme, setSelectedColorScheme] = useState('Default')
   const [uiScale, setUiScale] = useState(DEFAULT_UI_SCALE)
+  const [openDevToolsOnStartup, setOpenDevToolsOnStartup] = useState(false)
 
   useEffect(() => {
     window.electronAPI.getSettings().then(settings => {
       const schemeName = settings.colorScheme || 'Default'
       setSelectedColorScheme(schemeName)
       setUiScale(normalizeUiScale(settings.uiScale))
+      setOpenDevToolsOnStartup(settings.openDevToolsOnStartup === true)
       applyColorScheme(schemeName)
     })
   }, [])
@@ -52,6 +55,12 @@ export default function InterfaceSettings() {
 
   const handleUiScaleReset = () => {
     persistUiScale(DEFAULT_UI_SCALE)
+  }
+
+  const handleOpenDevToolsOnStartupToggle = () => {
+    const nextValue = !openDevToolsOnStartup
+    setOpenDevToolsOnStartup(nextValue)
+    window.electronAPI.setSetting(OPEN_DEVTOOLS_ON_STARTUP_KEY, nextValue)
   }
 
   return (
@@ -94,6 +103,20 @@ export default function InterfaceSettings() {
         </div>
         <p className="setting-description">
           Scales the whole interface, including fonts, spacing, and controls. 100% is the default size.
+        </p>
+      </div>
+      <div className="setting-section">
+        <h3>Open DevTools on Startup</h3>
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            checked={openDevToolsOnStartup}
+            onChange={handleOpenDevToolsOnStartupToggle}
+          />
+          <span className="slider"></span>
+        </label>
+        <p className="setting-description">
+          Only applies in Electron development mode. When enabled, Heimgeist opens detached DevTools for new windows and updates currently open windows right away.
         </p>
       </div>
     </div>

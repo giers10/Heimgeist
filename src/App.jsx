@@ -122,7 +122,7 @@ function AssistantMessageContent({ content, streamOutput, sources }) {
   );
 }
 
-const API_URL_KEY = 'ollamaApiUrl';
+const API_URL_KEY = 'backendApiUrl';
 const COLOR_SCHEME_KEY = 'colorScheme';
 const WEBSEARCH_URL_KEY = 'websearch.searxUrl';
 const WEBSEARCH_ENGINES_KEY = 'websearch.engines';
@@ -132,6 +132,10 @@ const CHAT_LIBRARY_MAP_KEY = 'chat.libraryBySession';
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
 const TOP_ALIGN_OFFSET = 48; // match .chat padding + header height for exact top alignment (should be more dynamic depending on header height)
 const BOTTOM_EPSILON = 24; // px tolerance for treating as bottom
+
+function resolveBackendApiUrl(settings) {
+  return settings.backendApiUrl || settings.ollamaApiUrl || API;
+}
 
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])
@@ -162,7 +166,7 @@ export default function App() {
   const chatRef = useRef(null)
   const textareaRef = useRef(null); // Ref for the textarea
   const dbPickerRef = useRef(null)
-  const [ollamaApiUrl, setOllamaApiUrl] = useState(API); // State for Ollama API URL
+  const [backendApiUrl, setBackendApiUrl] = useState(API); // State for Heimgeist backend URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);
   const [searxUrl, setSearxUrl] = useState(localStorage.getItem(WEBSEARCH_URL_KEY) || 'http://localhost:8888');
@@ -252,7 +256,7 @@ export default function App() {
   async function fetchLocalLibraryContext(slug, prompt, signal) {
     if (!slug) return { contextBlock: null, sources: [] }
 
-    const resp = await fetch(`${ollamaApiUrl}/libraries/${slug}/context`, {
+    const resp = await fetch(`${backendApiUrl}/libraries/${slug}/context`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal,
@@ -318,7 +322,7 @@ export default function App() {
     requestAnimationFrame(() => scrollToBottom('auto', sessionId));
 
     try {
-      const resp = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/messages/${index}`, {
+      const resp = await fetch(`${backendApiUrl}/sessions/${sessionId}/messages/${index}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: next })
@@ -397,7 +401,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           historyForSearch[historyForSearch.length - 1] = { role: 'user', content: promptText }
         }
 
-        const resp = await fetch(`${ollamaApiUrl}/websearch`, {
+        const resp = await fetch(`${backendApiUrl}/websearch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: requestController.signal,
@@ -442,7 +446,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       )
 
       try {
-        const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
+        const res = await fetch(`${backendApiUrl}/sessions/${sessionId}/regenerate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: requestController.signal,
@@ -496,7 +500,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
         return
       }
     } else {
-      const res = await fetch(`${ollamaApiUrl}/sessions/${sessionId}/regenerate`, {
+      const res = await fetch(`${backendApiUrl}/sessions/${sessionId}/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: requestController.signal,
@@ -695,7 +699,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   // Load settings on startup
   useEffect(() => {
     window.electronAPI.getSettings().then(settings => {
-      setOllamaApiUrl(settings.ollamaApiUrl);
+      setBackendApiUrl(resolveBackendApiUrl(settings));
       setColorScheme(settings.colorScheme || 'Default');
       setModel(settings.chatModel || ''); // Load the selected model, with a fallback
       setStreamOutput(settings.streamOutput || false);
@@ -726,8 +730,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [colorScheme]);
 
   const fetchHistory = (sessionId) => {
-    if (!sessionId || !ollamaApiUrl) return;
-    fetch(`${ollamaApiUrl}/history?session_id=${encodeURIComponent(sessionId)}`)
+    if (!sessionId || !backendApiUrl) return;
+    fetch(`${backendApiUrl}/history?session_id=${encodeURIComponent(sessionId)}`)
       .then(r => r.json())
       .then(data => {
         setChatSessions(prevSessions =>
@@ -742,9 +746,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   };
 
   async function refreshLibraries() {
-    if (!ollamaApiUrl) return;
+    if (!backendApiUrl) return;
     try {
-      const response = await fetch(`${ollamaApiUrl}/libraries`);
+      const response = await fetch(`${backendApiUrl}/libraries`);
       const data = await response.json();
       const nextLibraries = Array.isArray(data.libraries) ? data.libraries : [];
       setLibraries(nextLibraries);
@@ -763,9 +767,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }
 
   async function refreshLibraryJobs() {
-    if (!ollamaApiUrl) return;
+    if (!backendApiUrl) return;
     try {
-      const response = await fetch(`${ollamaApiUrl}/jobs`);
+      const response = await fetch(`${backendApiUrl}/jobs`);
       const data = await response.json();
       setLibraryJobs(Array.isArray(data.jobs) ? data.jobs : []);
     } catch (error) {
@@ -782,7 +786,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
     try {
       setLibraryCreateError('')
-      const response = await fetch(`${ollamaApiUrl}/libraries`, {
+      const response = await fetch(`${backendApiUrl}/libraries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -806,9 +810,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
   // Load chat sessions from backend on initial render
   useEffect(() => {
-    if (!ollamaApiUrl) return;
+    if (!backendApiUrl) return;
     setLoading(true);
-    fetch(`${ollamaApiUrl}/sessions`)
+    fetch(`${backendApiUrl}/sessions`)
       .then(r => r.json())
       .then(data => {
         const sessionsWithMessages = data.sessions.map(s => ({ ...s, messages: [] }));
@@ -823,13 +827,13 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       .catch(() => {
         setLoading(false);
       });
-  }, [ollamaApiUrl]);
+  }, [backendApiUrl]);
 
   useEffect(() => {
-    if (!ollamaApiUrl) return;
+    if (!backendApiUrl) return;
     refreshLibraries();
     refreshLibraryJobs();
-  }, [ollamaApiUrl]);
+  }, [backendApiUrl]);
 
   useEffect(() => {
     try {
@@ -838,13 +842,13 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [chatLibraryBySession]);
 
   useEffect(() => {
-    if (!ollamaApiUrl) return;
+    if (!backendApiUrl) return;
     const interval = setInterval(() => {
       refreshLibraries();
       refreshLibraryJobs();
     }, 3000);
     return () => clearInterval(interval);
-  }, [ollamaApiUrl, activeSidebarMode, activeLibrarySlug]);
+  }, [backendApiUrl, activeSidebarMode, activeLibrarySlug]);
 
   // Load messages for the active session
   useEffect(() => {
@@ -1211,7 +1215,7 @@ async function sendMessage() {
 
     if (webSearchEnabled) {
       try {
-        const resp = await fetch(`${ollamaApiUrl}/websearch`, {
+        const resp = await fetch(`${backendApiUrl}/websearch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: requestController.signal,
@@ -1255,7 +1259,7 @@ async function sendMessage() {
       )
 
       try {
-        const res = await fetch(`${ollamaApiUrl}/chat`, {
+        const res = await fetch(`${backendApiUrl}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: requestController.signal,
@@ -1318,7 +1322,7 @@ async function sendMessage() {
         return
       }
     } else {
-      const res = await fetch(`${ollamaApiUrl}/chat`, {
+      const res = await fetch(`${backendApiUrl}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: requestController.signal,
@@ -1368,7 +1372,7 @@ async function sendMessage() {
     }
 
     if (isNewChat) {
-      fetch(`${ollamaApiUrl}/generate-title`, {
+      fetch(`${backendApiUrl}/generate-title`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1415,7 +1419,7 @@ function toggleWebSearch() {
 
 async function createNewChat() {
     const newSessionId = 'sess-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const res = await fetch(`${ollamaApiUrl}/sessions`, {
+    const res = await fetch(`${backendApiUrl}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: newSessionId })
@@ -1470,7 +1474,7 @@ async function createNewChat() {
   }
 
   function handleRename(sessionId, newName) {
-    fetch(`${ollamaApiUrl}/sessions/${sessionId}/rename`, {
+    fetch(`${backendApiUrl}/sessions/${sessionId}/rename`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: newName })
@@ -1497,7 +1501,7 @@ async function createNewChat() {
       return
     }
 
-    fetch(`${ollamaApiUrl}/libraries/${slug}`, {
+    fetch(`${backendApiUrl}/libraries/${slug}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
@@ -1513,7 +1517,7 @@ async function createNewChat() {
   }
 
   function handleDelete(sessionId) {
-    fetch(`${ollamaApiUrl}/sessions/${sessionId}`, { method: 'DELETE' })
+    fetch(`${backendApiUrl}/sessions/${sessionId}`, { method: 'DELETE' })
     .then(() => {
       const newSessions = chatSessions.filter(s => s.session_id !== sessionId);
       setChatSessions(newSessions);
@@ -1538,7 +1542,7 @@ async function createNewChat() {
         handleDelete(chat.session_id);
       });
     }
-  }, [activeSessionId, chatSessions, ollamaApiUrl]);
+  }, [activeSessionId, chatSessions, backendApiUrl]);
 
   const handleChatFrameClick = (e) => {
     const selection = window.getSelection();
@@ -1980,7 +1984,7 @@ async function createNewChat() {
               )}
             </div>
             <LibraryManager
-              apiBase={ollamaApiUrl}
+              apiBase={backendApiUrl}
               library={activeLibrary}
               jobs={libraryJobs}
               onRefresh={async () => {

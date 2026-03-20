@@ -12,6 +12,15 @@ import {
   loadStoredWebsearchEngines,
   normalizeWebsearchEngines,
 } from './websearchEngines'
+
+function sanitizeGeneratedChatTitle(title) {
+  return (title || '')
+    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+    .replace(/[*#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // Extract <think> or <thinking> block (first occurrence) and return { think, answer }
 function splitThinkBlocks(text) {
   if (!text) return { think: null, answer: '' };
@@ -1495,7 +1504,7 @@ async function sendMessage() {
       })
       .then(r => r.json())
       .then(data => {
-        const sanitizedTitle = data.title.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/i, '').trim()
+        const sanitizedTitle = sanitizeGeneratedChatTitle(data.title)
         setChatSessions(prevSessions =>
           prevSessions.map(session =>
             session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session

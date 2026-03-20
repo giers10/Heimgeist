@@ -208,7 +208,15 @@ fi
 printf '%s\n' "$TORCH_FLAVOR" > "$TORCH_FLAVOR_FILE"
 echo "Using PyTorch flavor: $TORCH_FLAVOR"
 
-if [ "$RECREATE_VENV" -eq 0 ] && python_deps_usable; then
+NEEDS_LEGACY_PYTHON_STATE=0
+if [ ! -r "$PYTHON_DEPS_STATE_FILE" ]; then
+  NEEDS_LEGACY_PYTHON_STATE=1
+fi
+if [ -z "$HEIMGEIST_TORCH_INDEX_URL" ] && [ ! -r "$TORCH_STATE_FILE" ]; then
+  NEEDS_LEGACY_PYTHON_STATE=1
+fi
+
+if [ "$RECREATE_VENV" -eq 0 ] && [ "$NEEDS_LEGACY_PYTHON_STATE" -eq 1 ] && python_deps_usable; then
   if [ ! -r "$PYTHON_DEPS_STATE_FILE" ]; then
     write_state "$PYTHON_DEPS_STATE_FILE" backend/requirements.txt
   fi

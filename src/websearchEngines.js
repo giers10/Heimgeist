@@ -4,8 +4,6 @@ export const WEBSEARCH_ENGINE_OPTIONS = [
   { value: 'yahoo', label: 'Yahoo' },
   { value: 'duckduckgo', label: 'DuckDuckGo' },
   { value: 'brave', label: 'Brave' },
-  { value: 'startpage', label: 'Startpage' },
-  { value: 'wikipedia', label: 'Wikipedia' },
   { value: 'github', label: 'GitHub' },
   { value: 'stack_overflow', label: 'Stack Overflow' },
   { value: 'reddit', label: 'Reddit' },
@@ -15,9 +13,9 @@ export const WEBSEARCH_ENGINE_OPTIONS = [
 export const DEFAULT_WEBSEARCH_ENGINES = [
   'google',
   'bing',
+  'yahoo',
   'duckduckgo',
   'brave',
-  'startpage',
 ]
 
 const WEBSEARCH_ENGINE_ALIASES = {

@@ -21,7 +21,7 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
   useEffect(() => {
     window.electronAPI.getSettings().then(settings => {
       setBackendApiUrl(resolveBackendApiUrl(settings));
-      setOllamaApiUrl(settings.ollamaApiUrl);
+      setOllamaApiUrl(settings.ollamaApiUrl || DEFAULT_OLLAMA_API_URL);
       setSelectedModel(settings.chatModel || '');
       setStreamOutput(settings.streamOutput || false);
     });
@@ -43,7 +43,7 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
         })
         .catch(err => console.error('Failed to load models', err));
     }
-  }, [backendApiUrl, selectedModel]); // Depend on selectedModel to re-evaluate default selection
+  }, [backendApiUrl, ollamaApiUrl, selectedModel]); // Depend on selectedModel to re-evaluate default selection
 
   const handleBackendUrlChange = (e) => {
     const newUrl = e.target.value;

@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 // Expose a secure API to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
   updateSettings: (settings) => ipcRenderer.invoke('update-settings', settings),
   pickPaths: () => ipcRenderer.invoke('pick-paths'),

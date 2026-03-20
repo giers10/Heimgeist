@@ -6,9 +6,27 @@ const MODEL_KEY = 'chatModel';
 const STREAM_KEY = 'streamOutput';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
 const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434';
+const DEFAULT_UPDATE_STATUS = {
+  state: 'idle',
+  message: '',
+  checkedAt: null,
+  localCommit: null,
+  remoteCommit: null,
+};
 
 function resolveBackendApiUrl(settings) {
   return settings.backendApiUrl || settings.ollamaApiUrl || DEFAULT_BACKEND_API_URL;
+}
+
+function shortCommit(commit) {
+  return typeof commit === 'string' && commit.length > 7 ? commit.slice(0, 7) : commit || '—';
+}
+
+function getStatusTone(state) {
+  if (state === 'error') return 'error';
+  if (state === 'updated' || state === 'up-to-date') return 'success';
+  if (state === 'skipped' || state === 'unavailable') return 'warning';
+  return 'neutral';
 }
 
 export default function GeneralSettings({ onModelChange, onStreamOutputChange }) {
@@ -17,14 +35,30 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [streamOutput, setStreamOutput] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(DEFAULT_UPDATE_STATUS);
+  const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
 
   useEffect(() => {
-    window.electronAPI.getSettings().then(settings => {
+    let cancelled = false;
+
+    Promise.all([
+      window.electronAPI.getSettings(),
+      window.electronAPI.getUpdateStatus(),
+    ]).then(([settings, status]) => {
+      if (cancelled) {
+        return;
+      }
+
       setBackendApiUrl(resolveBackendApiUrl(settings));
       setOllamaApiUrl(settings.ollamaApiUrl || DEFAULT_OLLAMA_API_URL);
       setSelectedModel(settings.chatModel || '');
       setStreamOutput(settings.streamOutput || false);
+      setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -75,6 +109,28 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
     }
   };
 
+  const handleCheckForUpdates = async () => {
+    setIsCheckingForUpdates(true);
+    try {
+      const status = await window.electronAPI.checkForUpdates();
+      setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
+    } catch (error) {
+      setUpdateStatus({
+        state: 'error',
+        message: `Update check failed: ${error.message || String(error)}`,
+        checkedAt: new Date().toISOString(),
+        localCommit: null,
+        remoteCommit: null,
+      });
+    } finally {
+      setIsCheckingForUpdates(false);
+    }
+  };
+
+  const updateCheckedAtLabel = updateStatus.checkedAt
+    ? new Date(updateStatus.checkedAt).toLocaleString()
+    : null;
+
   return (
     <div className="settings-content-panel">
       <div className="setting-section">
@@ -120,6 +176,34 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange })
           />
           <span className="slider"></span>
         </label>
+      </div>
+      <div className="setting-section">
+        <h3>Updates</h3>
+        <div className="setting-control-row">
+          <button
+            type="button"
+            className="button"
+            onClick={handleCheckForUpdates}
+            disabled={isCheckingForUpdates}
+          >
+            {isCheckingForUpdates ? 'Checking...' : 'Check for Update'}
+          </button>
+        </div>
+        <p className="setting-description">
+          Compares the local Git commit with remote <code>master</code>, pulls changes when needed, and restarts Heimgeist automatically. The same check also runs on every startup.
+        </p>
+        {updateStatus.message && (
+          <p className={`setting-status ${getStatusTone(updateStatus.state)}`}>
+            {updateStatus.message}
+          </p>
+        )}
+        {(updateStatus.localCommit || updateStatus.remoteCommit || updateCheckedAtLabel) && (
+          <div className="setting-meta">
+            {updateStatus.localCommit && <div>Local: <code>{shortCommit(updateStatus.localCommit)}</code></div>}
+            {updateStatus.remoteCommit && <div>Remote: <code>{shortCommit(updateStatus.remoteCommit)}</code></div>}
+            {updateCheckedAtLabel && <div>Last checked: {updateCheckedAtLabel}</div>}
+          </div>
+        )}
       </div>
     </div>
   );

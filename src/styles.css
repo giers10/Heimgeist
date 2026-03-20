@@ -563,6 +563,35 @@ textarea.input {
   line-height: 1.5;
 }
 
+.setting-status {
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+.setting-status.success {
+  color: #8fd6a3;
+}
+
+.setting-status.warning {
+  color: #f1c97a;
+}
+
+.setting-status.error {
+  color: #ff9aa8;
+}
+
+.setting-status.neutral {
+  color: var(--text);
+}
+
+.setting-meta {
+  margin-top: 10px;
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.95em;
+}
+
 /* Markdown Styles */
 .msg h1, .msg h2, .msg h3, .msg h4 {
   margin: 10px 0;

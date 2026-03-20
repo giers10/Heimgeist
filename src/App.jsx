@@ -282,6 +282,11 @@ export default function App() {
     return expectBackendJson(response)
   }
 
+  async function prepareStartupModels() {
+    const response = await fetch(`${backendApiUrl}/startup/prepare-models`, { method: 'POST' })
+    return expectBackendJson(response)
+  }
+
   async function fetchLocalLibraryContext(slug, prompt, signal) {
     if (!slug) return { contextBlock: null, sources: [] }
 
@@ -781,23 +786,23 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           }
         }
 
-        if (status?.ollama_running && !status?.embedding_model_available && status?.can_manage_locally) {
-          const confirmed = window.confirm(
-            `The selected embedding model "${status.selected_embed_model}" is not installed in Ollama. Pull it now?`
-          )
-          if (cancelled) return
-          if (confirmed) {
-            actionStarted = true
-            setStartupTaskBusy(true)
+        const needsWhisper = !status?.whisper_model_available
+        const needsEmbedding = Boolean(status?.ollama_running && status?.can_manage_locally && !status?.embedding_model_available)
+
+        if (needsWhisper || needsEmbedding) {
+          actionStarted = true
+          setStartupTaskBusy(true)
+          if (needsWhisper && needsEmbedding) {
+            setStartupTaskMessage(
+              `Downloading Whisper ${status?.whisper_model || 'base'} and ${status.selected_embed_model}. This can take a while on first install.`
+            )
+          } else if (needsWhisper) {
+            setStartupTaskMessage(`Downloading Whisper ${status?.whisper_model || 'base'}. This can take a while on first install.`)
+          } else {
             setStartupTaskMessage(`Downloading ${status.selected_embed_model} from Ollama. This can take a while on first install.`)
-            const response = await fetch(`${backendApiUrl}/ollama/pull`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: status.selected_embed_model })
-            })
-            await expectBackendJson(response)
-            if (cancelled) return
           }
+          await prepareStartupModels()
+          if (cancelled) return
         }
       } catch (error) {
         if (!cancelled) {

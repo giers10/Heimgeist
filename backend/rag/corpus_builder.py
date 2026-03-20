@@ -69,6 +69,8 @@ import faulthandler, signal
 import multiprocessing as mp_context
 import time
 
+from backend.whisper_admin import ensure_whisper_model_downloaded, whisper_runtime_error as whisper_admin_runtime_error
+
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
@@ -1431,12 +1433,7 @@ def _load_torch_module():
         return None
 
 def whisper_runtime_error() -> Optional[str]:
-    if importlib.util.find_spec("whisper") is None:
-        return (
-            "Audio/video transcription requires the optional 'openai-whisper' package. "
-            "Install it in backend/.venv, for example: pip install -U openai-whisper"
-        )
-    return None
+    return whisper_admin_runtime_error()
 
 def _resolve_whisper_device(flag: str) -> Optional[str]:
     if flag and flag != "auto":
@@ -1494,6 +1491,8 @@ def process_media(path: Path, args) -> List[Record]:
     whisper_error = whisper_runtime_error()
     if whisper_error:
         raise RuntimeError(whisper_error)
+
+    ensure_whisper_model_downloaded(args.whisper_model)
 
     ffmpeg_bin = resolve_binary_path(args.ffmpeg, "HEIMGEIST_FFMPEG_PATH", "ffmpeg", "/usr/bin/ffmpeg")
     ffprobe_bin = resolve_binary_path(args.ffprobe, "HEIMGEIST_FFPROBE_PATH", "ffprobe", "/usr/bin/ffprobe")

@@ -156,6 +156,23 @@ function scheduleAppRestart() {
   }, 300)
 }
 
+function parseGitStatusPaths(statusOutput) {
+  return statusOutput
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => line.slice(3).trim())
+}
+
+function formatChangedPaths(paths) {
+  if (!Array.isArray(paths) || paths.length === 0) {
+    return ''
+  }
+
+  const preview = paths.slice(0, 3).join(', ')
+  return paths.length > 3 ? `${preview}, ...` : preview
+}
+
 async function performUpdateCheck(trigger = 'manual') {
   if (!fs.existsSync(path.join(REPO_ROOT, '.git'))) {
     return setUpdateStatus({
@@ -181,13 +198,14 @@ async function performUpdateCheck(trigger = 'manual') {
       runGitCommand(['rev-parse', 'HEAD']),
       runGitCommand(['branch', '--show-current']),
       runGitCommand(['ls-remote', UPDATE_REMOTE_URL, `refs/heads/${UPDATE_BRANCH}`]),
-      runGitCommand(['status', '--porcelain']),
+      runGitCommand(['status', '--porcelain', '--untracked-files=no']),
     ])
 
     const localCommit = localStdout.trim()
     const branch = branchStdout.trim() || null
     const remoteCommit = remoteStdout.trim().split(/\s+/)[0] || null
-    const worktreeDirty = Boolean(worktreeStdout.trim())
+    const changedPaths = parseGitStatusPaths(worktreeStdout)
+    const worktreeDirty = changedPaths.length > 0
 
     if (!localCommit) {
       throw new Error('Could not resolve the current local commit hash.')
@@ -220,13 +238,16 @@ async function performUpdateCheck(trigger = 'manual') {
     }
 
     if (worktreeDirty) {
+      const changedPathSummary = formatChangedPaths(changedPaths)
       return setUpdateStatus({
         state: 'skipped',
         trigger,
         branch: branch || UPDATE_BRANCH,
         localCommit,
         remoteCommit,
-        message: 'Update skipped: uncommitted local changes detected.',
+        message: changedPathSummary
+          ? `Update skipped: tracked local changes detected in ${changedPathSummary}.`
+          : 'Update skipped: tracked local changes detected.',
       })
     }
 

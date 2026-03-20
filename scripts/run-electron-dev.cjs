@@ -6,7 +6,7 @@ const projectRoot = path.resolve(__dirname, '..')
 const electronBinary = require('electron')
 const relaunchExitCode = 75
 const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173'
-const startupResources = [devServerUrl, 'http://127.0.0.1:8000/health']
+const startupResources = ['tcp:127.0.0.1:5173', 'tcp:127.0.0.1:8000']
 const env = {
   ...process.env,
   VITE_DEV_SERVER_URL: devServerUrl,

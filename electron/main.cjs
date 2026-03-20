@@ -15,6 +15,7 @@ const REPO_ROOT = path.resolve(__dirname, '..')
 const UPDATE_REMOTE_URL = 'https://giers10.uber.space/giers10/Heimgeist.git'
 const UPDATE_BRANCH = 'master'
 const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+const DEV_WRAPPER_RELAUNCH_CODE = Number(process.env.HEIMGEIST_DEV_RELAUNCH_CODE || 75)
 const settingsFilePath = process.env.HEIMGEIST_SETTINGS_FILE || path.join(app.getPath('userData'), 'settings.json')
 let appSettings = {}
 let lastUpdateCheckResult = null
@@ -145,6 +146,11 @@ async function runGitCommand(args, options = {}) {
 
 function scheduleAppRestart() {
   setTimeout(() => {
+    if (process.env.HEIMGEIST_DEV_WRAPPER === '1') {
+      app.exit(DEV_WRAPPER_RELAUNCH_CODE)
+      return
+    }
+
     app.relaunch()
     app.exit(0)
   }, 300)

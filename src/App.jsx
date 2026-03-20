@@ -2040,6 +2040,7 @@ async function createNewChat() {
                 onModelChange={setModel}
                 streamOutput={streamOutput}
                 onStreamOutputChange={setStreamOutput}
+                onLibrariesPurged={handleLibrariesPurged}
               />
             )}
             {activeSettingsSubmenu === 'Interface' && <InterfaceSettings />}

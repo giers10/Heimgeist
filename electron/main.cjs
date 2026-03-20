@@ -322,6 +322,7 @@ function checkForUpdates(trigger = 'manual') {
 }
 
 async function createMainWindow() {
+  console.log('Electron: creating main window')
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 720,
@@ -354,9 +355,11 @@ async function createMainWindow() {
   })
 
   if (is.dev && process.env.VITE_DEV_SERVER_URL) {
+    console.log(`Electron: loading renderer ${process.env.VITE_DEV_SERVER_URL}`)
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
+    console.log('Electron: loading bundled renderer')
     await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
 
@@ -413,6 +416,7 @@ async function createSettingsWindow() {
 }
 
 app.whenReady().then(async () => {
+  console.log('Electron: app ready')
   loadSettings()
   const startupUpdateResult = await checkForUpdates('startup')
   if (startupUpdateResult?.restartScheduled) {

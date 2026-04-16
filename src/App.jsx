@@ -573,8 +573,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   try {
     const selectedLibrary = getChatLibraryForSession(sessionId)
     const promptText = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
+    const hasPromptText = Boolean((promptText || '').trim())
 
-    if (selectedLibrary?.states?.is_indexed) {
+    if (hasPromptText && selectedLibrary?.states?.is_indexed) {
       try {
         const localContext = await fetchLocalLibraryContext(selectedLibrary.slug, promptText, requestController.signal)
         if (localContext.contextBlock) {
@@ -589,7 +590,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       }
     }
 
-    if (webSearchEnabled) {
+    if (hasPromptText && webSearchEnabled) {
       try {
         const historyForSearch = msgs
           .slice(Math.max(0, lastUserIdx - 7), lastUserIdx + 1)
@@ -625,7 +626,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
 
     citationSources = [...new Set(citationSources)]
-    if (contextBlocks.length > 0) {
+    if (hasPromptText && contextBlocks.length > 0) {
       enrichedPrompt = `${promptText}\n\n${contextBlocks.join('\n\n')}`
     } else {
       enrichedPrompt = null

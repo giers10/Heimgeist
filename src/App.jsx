@@ -2558,6 +2558,27 @@ async function createNewChat() {
                   removable
                   onRemove={removeComposerAttachment}
                 />
+                {(isRecordingAudio || isTranscribingAudio) && (
+                  <div
+                    className={
+                      'composer-audio-status' +
+                      (isRecordingAudio ? ' composer-audio-status--recording' : ' composer-audio-status--transcribing')
+                    }
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {isRecordingAudio ? (
+                      <span className="composer-audio-status__dot" aria-hidden="true"></span>
+                    ) : (
+                      <div className="spinner composer-audio-status__spinner" aria-hidden="true"></div>
+                    )}
+                    <span>
+                      {isRecordingAudio
+                        ? `Listening ${formatRecordingDuration(audioRecordingMs)}`
+                        : 'Transcribing audio…'}
+                    </span>
+                  </div>
+                )}
                 <div className="footer-content-wrapper">
                 <TextareaAutosize
                   ref={textareaRef}
@@ -2565,7 +2586,7 @@ async function createNewChat() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && !isRecordingAudio && !isTranscribingAudio) {
                       e.preventDefault();
                       sendMessage();
                     }
@@ -2658,6 +2679,43 @@ async function createNewChat() {
                       </svg>
                     </button>
                   )}
+                  {audioInputEnabled && (
+                    <button
+                      type="button"
+                      className={
+                        'audio-input-toggle' +
+                        (isRecordingAudio || isTranscribingAudio ? ' active' : '') +
+                        (isRecordingAudio ? ' recording' : '') +
+                        (isTranscribingAudio ? ' transcribing' : '')
+                      }
+                      onClick={toggleAudioRecording}
+                      title={
+                        isRecordingAudio
+                          ? 'Stop voice input'
+                          : (isTranscribingAudio ? 'Transcribing audio' : 'Start voice input')
+                      }
+                      aria-label={
+                        isRecordingAudio
+                          ? 'Stop voice input'
+                          : (isTranscribingAudio ? 'Transcribing audio' : 'Start voice input')
+                      }
+                      aria-pressed={isRecordingAudio}
+                      disabled={isTranscribingAudio || isSending}
+                    >
+                      {isTranscribingAudio ? (
+                        <div className="spinner composer-audio-icon-spinner" aria-hidden="true"></div>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                             aria-hidden="true">
+                          <path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/>
+                          <path d="M19 10a7 7 0 0 1-14 0"/>
+                          <line x1="12" y1="19" x2="12" y2="22"/>
+                          <line x1="8" y1="22" x2="16" y2="22"/>
+                        </svg>
+                      )}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={"websearch-toggle" + (webSearchEnabled ? " active" : "")}
@@ -2678,6 +2736,7 @@ async function createNewChat() {
                   onClick={isSending ? cancelActiveRequest : sendMessage}
                   title={isSending ? 'Cancel generation' : 'Send'}
                   aria-label={isSending ? 'Cancel generation' : 'Send'}
+                  disabled={!isSending && (isRecordingAudio || isTranscribingAudio)}
                 >
                   {isSending ? <div className="spinner"></div> : 'Send'}
                 </button>

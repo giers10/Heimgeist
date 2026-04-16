@@ -1,10 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import {
+  AUDIO_INPUT_DEVICE_ID_KEY,
+  AUDIO_INPUT_ENABLED_KEY,
+  ensureAudioInputPermission,
+  listAudioInputDevices,
+  supportsAudioInputCapture,
+} from './audioInput';
 
 const BACKEND_API_URL_KEY = 'backendApiUrl';
 const OLLAMA_API_URL_KEY = 'ollamaApiUrl';
 const EMBED_MODEL_KEY = 'embedModel';
 const MODEL_KEY = 'chatModel';
 const STREAM_KEY = 'streamOutput';
+const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
 const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434';
 const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest';
@@ -32,17 +40,30 @@ function getStatusTone(state) {
   return 'neutral';
 }
 
-export default function GeneralSettings({ onModelChange, onStreamOutputChange, onLibrariesPurged, onBackendApiUrlChange }) {
+export default function GeneralSettings({
+  onModelChange,
+  onStreamOutputChange,
+  onLibrariesPurged,
+  onBackendApiUrlChange,
+  onAudioInputEnabledChange,
+  onAudioInputDeviceChange,
+}) {
   const [backendApiUrl, setBackendApiUrl] = useState('');
   const [ollamaApiUrl, setOllamaApiUrl] = useState('');
   const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [streamOutput, setStreamOutput] = useState(false);
+  const [audioInputEnabled, setAudioInputEnabled] = useState(false);
+  const [audioInputDeviceId, setAudioInputDeviceId] = useState(DEFAULT_AUDIO_INPUT_DEVICE_ID);
+  const [audioInputDevices, setAudioInputDevices] = useState([]);
+  const [isRefreshingAudioDevices, setIsRefreshingAudioDevices] = useState(false);
+  const [audioInputStatus, setAudioInputStatus] = useState({ tone: 'neutral', message: '' });
   const [updateStatus, setUpdateStatus] = useState(DEFAULT_UPDATE_STATUS);
   const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
   const [isPurgingLibraries, setIsPurgingLibraries] = useState(false);
   const [libraryPurgeStatus, setLibraryPurgeStatus] = useState({ tone: 'neutral', message: '' });
+  const audioInputSupported = supportsAudioInputCapture();
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +81,12 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
       setEmbedModel(settings.embedModel || DEFAULT_EMBED_MODEL);
       setSelectedModel(settings.chatModel || '');
       setStreamOutput(settings.streamOutput || false);
+      setAudioInputEnabled(settings.audioInputEnabled === true);
+      setAudioInputDeviceId(
+        typeof settings.audioInputDeviceId === 'string'
+          ? settings.audioInputDeviceId
+          : DEFAULT_AUDIO_INPUT_DEVICE_ID
+      );
       setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
     });
 
@@ -75,7 +102,6 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
         .then(data => {
           const names = data.models?.map(m => m.name) || [];
           setModels(names);
-          // If no model is selected or the selected model is no longer available, select the first one
           if (!selectedModel || !names.includes(selectedModel)) {
             const defaultModel = names[0] || '';
             setSelectedModel(defaultModel);
@@ -87,10 +113,68 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
         })
         .catch(err => console.error('Failed to load models', err));
     }
-  }, [backendApiUrl, ollamaApiUrl, selectedModel, onModelChange]); // Depend on selectedModel to re-evaluate default selection
+  }, [backendApiUrl, ollamaApiUrl, selectedModel, onModelChange]);
 
-  const handleBackendUrlChange = (e) => {
-    const newUrl = e.target.value;
+  useEffect(() => {
+    if (!audioInputSupported) {
+      setAudioInputStatus({
+        tone: 'warning',
+        message: 'Microphone capture is not available in this environment.',
+      });
+      return () => {};
+    }
+
+    let cancelled = false;
+
+    const refreshDevices = async () => {
+      try {
+        const devices = await listAudioInputDevices();
+        if (cancelled) {
+          return;
+        }
+        setAudioInputDevices(devices);
+        if (devices.length === 0) {
+          setAudioInputStatus({
+            tone: 'warning',
+            message: 'No audio input devices found yet. Grant microphone access and refresh the list.',
+          });
+          return;
+        }
+        if (!devices.some(device => device.hasLabel)) {
+          setAudioInputStatus({
+            tone: 'neutral',
+            message: 'Device names appear after microphone access has been granted once.',
+          });
+          return;
+        }
+        setAudioInputStatus({ tone: 'neutral', message: '' });
+      } catch (error) {
+        if (!cancelled) {
+          setAudioInputStatus({
+            tone: 'error',
+            message: `Could not list audio devices: ${error.message || String(error)}`,
+          });
+        }
+      }
+    };
+
+    refreshDevices();
+
+    const mediaDevices = navigator.mediaDevices;
+    if (mediaDevices?.addEventListener) {
+      mediaDevices.addEventListener('devicechange', refreshDevices);
+    }
+
+    return () => {
+      cancelled = true;
+      if (mediaDevices?.removeEventListener) {
+        mediaDevices.removeEventListener('devicechange', refreshDevices);
+      }
+    };
+  }, [audioInputSupported]);
+
+  const handleBackendUrlChange = (event) => {
+    const newUrl = event.target.value;
     setBackendApiUrl(newUrl);
     window.electronAPI.setSetting(BACKEND_API_URL_KEY, newUrl);
     if (onBackendApiUrlChange) {
@@ -98,14 +182,14 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
     }
   };
 
-  const handleOllamaUrlChange = (e) => {
-    const newUrl = e.target.value;
+  const handleOllamaUrlChange = (event) => {
+    const newUrl = event.target.value;
     setOllamaApiUrl(newUrl);
     window.electronAPI.setSetting(OLLAMA_API_URL_KEY, newUrl);
   };
 
-  const handleModelChange = (e) => {
-    const newModel = e.target.value;
+  const handleModelChange = (event) => {
+    const newModel = event.target.value;
     setSelectedModel(newModel);
     window.electronAPI.setSetting(MODEL_KEY, newModel);
     if (onModelChange) {
@@ -125,6 +209,62 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
     window.electronAPI.setSetting(STREAM_KEY, newStreamValue);
     if (onStreamOutputChange) {
       onStreamOutputChange(newStreamValue);
+    }
+  };
+
+  const refreshAudioDevices = async ({ requestAccess = false } = {}) => {
+    if (!audioInputSupported) {
+      return;
+    }
+
+    setIsRefreshingAudioDevices(true);
+    try {
+      if (requestAccess) {
+        await ensureAudioInputPermission();
+      }
+      const devices = await listAudioInputDevices();
+      setAudioInputDevices(devices);
+      if (devices.length === 0) {
+        setAudioInputStatus({
+          tone: 'warning',
+          message: 'No audio input devices found yet. Check the OS microphone permission and refresh again.',
+        });
+      } else if (!devices.some(device => device.hasLabel)) {
+        setAudioInputStatus({
+          tone: 'neutral',
+          message: 'Microphone access was requested. Refresh again if the system permission dialog just closed.',
+        });
+      } else {
+        setAudioInputStatus({ tone: 'success', message: 'Audio input devices refreshed.' });
+      }
+    } catch (error) {
+      setAudioInputStatus({
+        tone: 'error',
+        message: `Microphone access failed: ${error.message || String(error)}`,
+      });
+    } finally {
+      setIsRefreshingAudioDevices(false);
+    }
+  };
+
+  const handleAudioInputToggle = () => {
+    const nextValue = !audioInputEnabled;
+    setAudioInputEnabled(nextValue);
+    window.electronAPI.setSetting(AUDIO_INPUT_ENABLED_KEY, nextValue);
+    if (onAudioInputEnabledChange) {
+      onAudioInputEnabledChange(nextValue);
+    }
+    if (nextValue) {
+      refreshAudioDevices();
+    }
+  };
+
+  const handleAudioInputDeviceChange = (event) => {
+    const nextDeviceId = event.target.value;
+    setAudioInputDeviceId(nextDeviceId);
+    window.electronAPI.setSetting(AUDIO_INPUT_DEVICE_ID_KEY, nextDeviceId);
+    if (onAudioInputDeviceChange) {
+      onAudioInputDeviceChange(nextDeviceId);
     }
   };
 
@@ -191,6 +331,23 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
   const updateCheckedAtLabel = updateStatus.checkedAt
     ? new Date(updateStatus.checkedAt).toLocaleString()
     : null;
+  const selectedAudioDeviceMissing = Boolean(
+    audioInputDeviceId &&
+    !audioInputDevices.some(device => device.deviceId === audioInputDeviceId)
+  );
+  const audioInputOptions = selectedAudioDeviceMissing
+    ? [
+        ...audioInputDevices,
+        {
+          deviceId: audioInputDeviceId,
+          label: 'Saved device (currently unavailable)',
+          hasLabel: true,
+        },
+      ]
+    : audioInputDevices;
+  const audioDeviceRefreshLabel = audioInputDevices.some(device => device.hasLabel)
+    ? 'Refresh devices'
+    : 'Allow microphone access';
 
   return (
     <div className="settings-content-panel">
@@ -237,6 +394,51 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
         <p className="setting-description">
           Heimgeist uses this model for web-search reranking and for building or rebuilding local database embeddings.
         </p>
+      </div>
+      <div className="setting-section">
+        <h3>Audio Input</h3>
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            checked={audioInputEnabled}
+            onChange={handleAudioInputToggle}
+            disabled={!audioInputSupported}
+          />
+          <span className="slider"></span>
+        </label>
+        <p className="setting-description">
+          Enables microphone transcription in the chat composer. Heimgeist records locally and sends the clip to the local Whisper runtime.
+        </p>
+        {audioInputEnabled && (
+          <>
+            <div className="setting-control-row">
+              <select
+                className="select"
+                value={audioInputDeviceId}
+                onChange={handleAudioInputDeviceChange}
+                disabled={!audioInputSupported}
+              >
+                <option value={DEFAULT_AUDIO_INPUT_DEVICE_ID}>System default microphone</option>
+                {audioInputOptions.map(device => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="button"
+                onClick={() => refreshAudioDevices({ requestAccess: true })}
+                disabled={!audioInputSupported || isRefreshingAudioDevices}
+              >
+                {isRefreshingAudioDevices ? 'Working…' : audioDeviceRefreshLabel}
+              </button>
+            </div>
+            {audioInputStatus.message && (
+              <p className={`setting-status ${audioInputStatus.tone}`}>{audioInputStatus.message}</p>
+            )}
+          </>
+        )}
       </div>
       <div className="setting-section">
         <h3>Chat Model</h3>

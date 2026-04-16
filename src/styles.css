@@ -465,6 +465,10 @@ textarea.input {
   to { opacity: 1; }
 }
 
+.main-content--drag-active {
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+
 .footer {
   display: flex; /* Use flexbox for centering content */
   justify-content: center; /* Center the content horizontally */

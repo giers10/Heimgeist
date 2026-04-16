@@ -2137,7 +2137,13 @@ async function createNewChat() {
         )}
         <div className="resizer" onMouseDown={startResizing}></div>
       </div>
-      <div className="main-content">
+      <div
+        className={`main-content${activeSidebarMode === 'chats' && isChatDragActive ? ' main-content--drag-active' : ''}`}
+        onDragEnter={handleChatDragEnter}
+        onDragOver={handleChatDragOver}
+        onDragLeave={handleChatDragLeave}
+        onDrop={handleChatDrop}
+      >
         {startupTaskMessage && (
           <div className="startup-task-banner" role="status" aria-live="polite">
             {startupTaskBusy && <div className="spinner startup-task-banner__spinner"></div>}
@@ -2155,7 +2161,12 @@ async function createNewChat() {
               )}
             </div>
 
-            <div key={activeSessionId} className="chat" ref={chatRef} onClick={handleChatFrameClick}>
+            <div
+              key={activeSessionId}
+              className={`chat${isChatDragActive ? ' chat--drag-active' : ''}`}
+              ref={chatRef}
+              onClick={handleChatFrameClick}
+            >
               {messages.map((m, i) => {
                 const isEditingThis = m.role === 'user' && editingMessageIndex === i;
                 return (

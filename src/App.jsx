@@ -1133,6 +1133,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       setColorScheme(settings.colorScheme || 'Default');
       setModel(settings.chatModel || ''); // Load the selected model, with a fallback
       setStreamOutput(settings.streamOutput || false);
+      setAudioInputEnabled(settings.audioInputEnabled === true);
+      setAudioInputDeviceId(typeof settings.audioInputDeviceId === 'string' ? settings.audioInputDeviceId : '');
       setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
       applyColorScheme(settings.colorScheme || 'Default'); // Apply initial scheme
     }).finally(() => {
@@ -1191,6 +1193,39 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     imageDragDepthRef.current = 0
     setIsChatDragActive(false)
   }, [selectedModelSupportsVision, activeSidebarMode])
+
+  useEffect(() => {
+    if (audioInputEnabled || !isRecordingAudio) {
+      return
+    }
+    stopAudioRecording({ shouldTranscribe: false })
+  }, [audioInputEnabled, isRecordingAudio])
+
+  useEffect(() => {
+    if (activeSidebarMode === 'chats' || !isRecordingAudio) {
+      return
+    }
+    stopAudioRecording()
+  }, [activeSidebarMode, isRecordingAudio])
+
+  useEffect(() => {
+    return () => {
+      audioTranscriptionAbortRef.current?.abort()
+      clearAudioTimers()
+      const recorder = audioRecorderRef.current
+      if (recorder) {
+        recorder.ondataavailable = null
+        recorder.onstop = null
+        recorder.onerror = null
+        try {
+          if (recorder.state !== 'inactive') {
+            recorder.stop()
+          }
+        } catch {}
+      }
+      stopMediaStream(audioStreamRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!settingsLoaded || loading || !backendApiUrl || startupOllamaCheckRanRef.current) return

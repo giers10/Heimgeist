@@ -26,6 +26,8 @@ const DEFAULT_UI_SCALE = 1
 const MIN_UI_SCALE = 0.7
 const MAX_UI_SCALE = 1.3
 const DEFAULT_OPEN_DEVTOOLS_ON_STARTUP = false
+const DEFAULT_AUDIO_INPUT_ENABLED = false
+const DEFAULT_AUDIO_INPUT_DEVICE_ID = ''
 
 const defaultSettings = {
   backendApiUrl: DEFAULT_BACKEND_API_URL,
@@ -34,6 +36,8 @@ const defaultSettings = {
   colorScheme: 'Default',
   uiScale: DEFAULT_UI_SCALE,
   openDevToolsOnStartup: DEFAULT_OPEN_DEVTOOLS_ON_STARTUP,
+  audioInputEnabled: DEFAULT_AUDIO_INPUT_ENABLED,
+  audioInputDeviceId: DEFAULT_AUDIO_INPUT_DEVICE_ID,
   chatModel: 'llama3',
 }
 
@@ -86,6 +90,8 @@ function migrateSettings(rawSettings) {
   nextSettings.ollamaApiUrl = String(nextSettings.ollamaApiUrl || '').trim()
   nextSettings.embedModel = normalizeEmbedModel(nextSettings.embedModel)
   nextSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(nextSettings.openDevToolsOnStartup)
+  nextSettings.audioInputEnabled = normalizeBooleanSetting(nextSettings.audioInputEnabled)
+  nextSettings.audioInputDeviceId = String(nextSettings.audioInputDeviceId || '').trim()
 
   return { nextSettings, migrated }
 }
@@ -99,7 +105,7 @@ function normalizeUiScale(value) {
   return Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, Math.round(numericValue * 100) / 100))
 }
 
-function normalizeOpenDevToolsOnStartup(value) {
+function normalizeBooleanSetting(value) {
   if (typeof value === 'string') {
     const trimmed = value.trim().toLowerCase()
     if (trimmed === 'true' || trimmed === '1' || trimmed === 'yes' || trimmed === 'on') {
@@ -112,6 +118,10 @@ function normalizeOpenDevToolsOnStartup(value) {
   }
 
   return value === true
+}
+
+function normalizeOpenDevToolsOnStartup(value) {
+  return normalizeBooleanSetting(value)
 }
 
 function applyUiScaleToWindow(window) {
@@ -539,6 +549,10 @@ ipcMain.handle('set-setting', (event, key, value) => {
     appSettings[key] = normalizeEmbedModel(value)
   } else if (key === 'openDevToolsOnStartup') {
     appSettings[key] = normalizeOpenDevToolsOnStartup(value)
+  } else if (key === 'audioInputEnabled') {
+    appSettings[key] = normalizeBooleanSetting(value)
+  } else if (key === 'audioInputDeviceId') {
+    appSettings[key] = String(value || '').trim()
   } else {
     appSettings[key] = value
   }
@@ -556,6 +570,8 @@ ipcMain.handle('update-settings', (event, settings) => {
   appSettings.uiScale = normalizeUiScale(appSettings.uiScale)
   appSettings.embedModel = normalizeEmbedModel(appSettings.embedModel)
   appSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(appSettings.openDevToolsOnStartup)
+  appSettings.audioInputEnabled = normalizeBooleanSetting(appSettings.audioInputEnabled)
+  appSettings.audioInputDeviceId = String(appSettings.audioInputDeviceId || '').trim()
   saveSettings()
   if (Object.prototype.hasOwnProperty.call(settings, 'uiScale')) {
     applyUiScaleToAllWindows()

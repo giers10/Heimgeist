@@ -2,10 +2,16 @@ from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
+class ImageAttachment(BaseModel):
+    name: str
+    mime_type: Optional[str] = None
+    data_url: str
+
 class Message(BaseModel):
     role: str
     content: str
     sources: Optional[List[str]] = None
+    attachments: Optional[List[ImageAttachment]] = None
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -14,6 +20,7 @@ class ChatRequest(BaseModel):
     enriched_message: Optional[str] = None
     stream: Optional[bool] = False
     sources: Optional[List[str]] = None
+    attachments: Optional[List[ImageAttachment]] = None
 
 class ChatResponse(BaseModel):
     reply: str

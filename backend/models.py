@@ -22,6 +22,8 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     # JSON-encoded list of citation URLs; null/empty => no chips
     sources_json = Column(Text, nullable=True, default='[]')
+    # JSON-encoded list of inline image attachments for user messages.
+    attachments_json = Column(Text, nullable=True, default='[]')
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("ChatSession", back_populates="messages")

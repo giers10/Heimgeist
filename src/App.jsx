@@ -2275,7 +2275,23 @@ async function createNewChat() {
             )}
 
             <div className="footer">
-              <div className="footer-content-wrapper">
+              <div className={`footer-inner${isChatDragActive ? ' footer-inner--drag-active' : ''}`}>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="composer-image-input"
+                  onChange={handleComposerImageSelection}
+                  tabIndex={-1}
+                />
+                <ImageAttachmentStrip
+                  attachments={composerAttachments}
+                  className="composer-attachment-strip"
+                  removable
+                  onRemove={removeComposerAttachment}
+                />
+                <div className="footer-content-wrapper">
                 <TextareaAutosize
                   ref={textareaRef}
                   className="input"
@@ -2358,6 +2374,23 @@ async function createNewChat() {
                     </div>
                   )}
                 </div>
+                  {selectedModelSupportsVision && (
+                    <button
+                      type="button"
+                      className={"image-attach-toggle" + (composerAttachments.length > 0 ? " active" : "")}
+                      onClick={openImagePicker}
+                      title="Attach images"
+                      aria-label="Attach images"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                           aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <path d="M21 15l-5-5L5 21"/>
+                      </svg>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={"websearch-toggle" + (webSearchEnabled ? " active" : "")}
@@ -2381,6 +2414,7 @@ async function createNewChat() {
                 >
                   {isSending ? <div className="spinner"></div> : 'Send'}
                 </button>
+                </div>
               </div>
             </div>
           </>
@@ -2414,6 +2448,7 @@ async function createNewChat() {
             {activeSettingsSubmenu === 'General' && (
               <GeneralSettings
                 onModelChange={setModel}
+                onBackendApiUrlChange={setBackendApiUrl}
                 streamOutput={streamOutput}
                 onStreamOutputChange={setStreamOutput}
                 onLibrariesPurged={handleLibrariesPurged}

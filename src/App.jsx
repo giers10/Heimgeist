@@ -1457,9 +1457,52 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     }
   };
 
+  const handleChatDragEnter = (event) => {
+    if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
+    event.preventDefault()
+    imageDragDepthRef.current += 1
+    if (selectedModelSupportsVision && eventHasImageFiles(event)) {
+      setIsChatDragActive(true)
+    }
+  }
+
+  const handleChatDragOver = (event) => {
+    if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = selectedModelSupportsVision ? 'copy' : 'none'
+    if (selectedModelSupportsVision && eventHasImageFiles(event) && !isChatDragActive) {
+      setIsChatDragActive(true)
+    }
+  }
+
+  const handleChatDragLeave = (event) => {
+    if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
+    imageDragDepthRef.current = Math.max(0, imageDragDepthRef.current - 1)
+    if (imageDragDepthRef.current === 0) {
+      setIsChatDragActive(false)
+    }
+  }
+
+  const handleChatDrop = async (event) => {
+    if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
+    event.preventDefault()
+    imageDragDepthRef.current = 0
+    setIsChatDragActive(false)
+    if (!selectedModelSupportsVision) {
+      return
+    }
+    await appendComposerImageFiles(event.dataTransfer?.files)
+    textareaRef.current?.focus()
+  }
+
 
 async function sendMessage() {
-  if (isSending || !input.trim() || !model) return
+  const trimmedInput = input.trim()
+  if (isSending || (!trimmedInput && composerAttachments.length === 0) || !model) return
+  if (composerAttachments.length > 0 && !selectedModelSupportsVision) {
+    window.alert('The selected model does not support image inputs.')
+    return
+  }
 
   let targetSessionId = activeSessionId
   let isNewChat = false
@@ -1473,7 +1516,13 @@ async function sendMessage() {
     isNewChat = currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0
   }
 
-  const userMsg = { role: 'user', content: input.trim(), id: `msg-${Date.now()}-${Math.random()}` }
+  const outgoingAttachments = composerAttachments.map(({ id, ...attachment }) => ({ ...attachment }))
+  const userMsg = {
+    role: 'user',
+    content: trimmedInput,
+    attachments: outgoingAttachments,
+    id: `msg-${Date.now()}-${Math.random()}`
+  }
   justSentMessage.current = true
   lastSentSessionRef.current = targetSessionId
   setUserScrolledUp(targetSessionId, false)
@@ -1491,25 +1540,26 @@ async function sendMessage() {
       )
     )
     setInput('')
+    setComposerAttachments([])
   })
   requestAnimationFrame(() => scrollToBottom('auto', targetSessionId))
 
   const requestController = beginCancelableRequest(targetSessionId)
   try {
     let historyForSearch = []
-    try {
+    if (userMsg.content) try {
       const existing = (chatSessions.find(s => s.session_id === targetSessionId)?.messages) || []
       const lastFew = existing.slice(-8).map(m => ({ role: m.role, content: m.content || '' }))
       historyForSearch = [...lastFew, { role: 'user', content: userMsg.content }]
     } catch {}
 
-    let enrichedPrompt = userMsg.content
+    let enrichedPrompt = userMsg.content || null
     let citationSources = []
     const contextBlocks = []
 
     const selectedLibrary = getChatLibraryForSession(targetSessionId)
 
-    if (selectedLibrary?.states?.is_indexed) {
+    if (userMsg.content && selectedLibrary?.states?.is_indexed) {
       try {
         const localContext = await fetchLocalLibraryContext(selectedLibrary.slug, userMsg.content, requestController.signal)
         if (localContext.contextBlock) {
@@ -1524,7 +1574,7 @@ async function sendMessage() {
       }
     }
 
-    if (webSearchEnabled) {
+    if (userMsg.content && webSearchEnabled) {
       try {
         const resp = await fetch(`${backendApiUrl}/websearch`, {
           method: 'POST',
@@ -1553,7 +1603,7 @@ async function sendMessage() {
     }
 
     citationSources = [...new Set(citationSources)]
-    if (contextBlocks.length > 0) {
+    if (userMsg.content && contextBlocks.length > 0) {
       enrichedPrompt = `${userMsg.content}\n\n${contextBlocks.join('\n\n')}`
     }
 
@@ -1578,9 +1628,10 @@ async function sendMessage() {
             session_id: targetSessionId,
             model,
             message: userMsg.content,
-            enriched_message: contextBlocks.length > 0 ? enrichedPrompt : null,
+            enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
             stream: true,
-            sources: citationSources || []
+            sources: citationSources || [],
+            attachments: outgoingAttachments,
           })
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -1641,9 +1692,10 @@ async function sendMessage() {
           session_id: targetSessionId,
           model,
           message: userMsg.content,
-          enriched_message: contextBlocks.length > 0 ? enrichedPrompt : null,
+          enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
           stream: false,
-          sources: citationSources || []
+          sources: citationSources || [],
+          attachments: outgoingAttachments,
         })
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -1688,7 +1740,7 @@ async function sendMessage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: targetSessionId,
-          message: userMsg.content,
+          message: userMsg.content || (outgoingAttachments.length > 0 ? 'Image attachment' : userMsg.content),
           model
         })
       })

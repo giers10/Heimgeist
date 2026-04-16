@@ -307,6 +307,10 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 .select { min-width: 220px; }
 .button { cursor: pointer; }
 .button:hover { border-color: var(--accent); }
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .button.ghost { background: transparent; }
 .button.danger { border-color: #8f3d49; color: #ffb8c2; }
 .button.danger:hover { border-color: #d86a79; }
@@ -519,6 +523,40 @@ textarea.input {
 
 .composer-attachment-strip {
   min-height: 0;
+}
+
+.composer-audio-status {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.composer-audio-status--recording {
+  color: #ffb3af;
+  border-color: color-mix(in srgb, #ff5f56 35%, var(--border));
+}
+
+.composer-audio-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5f56;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+.composer-audio-status__spinner {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  border-width: 2px;
 }
 
 .image-attachment-card {
@@ -1136,7 +1174,8 @@ input:checked + .slider:before {
 */
 .websearch-toggle,
 .db-picker-toggle,
-.image-attach-toggle {
+.image-attach-toggle,
+.audio-input-toggle {
   background: transparent;
   border: 0;
   padding: 0;                 /* icon-only */
@@ -1156,7 +1195,8 @@ input:checked + .slider:before {
 
 .websearch-toggle svg,
 .db-picker-toggle svg,
-.image-attach-toggle svg {
+.image-attach-toggle svg,
+.audio-input-toggle svg {
   width: 20px;
   height: 20px;
   pointer-events: none;
@@ -1165,8 +1205,24 @@ input:checked + .slider:before {
 /* Active state = accent color */
 .websearch-toggle.active,
 .db-picker-toggle.active,
-.image-attach-toggle.active {
+.image-attach-toggle.active,
+.audio-input-toggle.active {
   color: var(--accent);
+}
+
+.audio-input-toggle.recording {
+  color: #ff5f56;
+}
+
+.audio-input-toggle:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.composer-audio-icon-spinner {
+  width: 18px;
+  height: 18px;
+  margin: 0;
 }
 
 /*
@@ -1180,6 +1236,8 @@ input:checked + .slider:before {
 .websearch-toggle:focus-visible,
 .image-attach-toggle:focus,
 .image-attach-toggle:focus-visible,
+.audio-input-toggle:focus,
+.audio-input-toggle:focus-visible,
 .db-picker-toggle:focus,
 .db-picker-toggle:focus-visible {
   outline: none;
@@ -1238,6 +1296,21 @@ input:checked + .slider:before {
   flex-shrink: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+@keyframes mic-pulse {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.65;
+    transform: scale(0.9);
+  }
 }
 
 .db-picker-empty {

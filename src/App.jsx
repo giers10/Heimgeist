@@ -135,12 +135,52 @@ function AssistantMessageContent({ content, streamOutput, sources }) {
   );
 }
 
+function ImageAttachmentStrip({ attachments, className = '', removable = false, onRemove }) {
+  if (!Array.isArray(attachments) || attachments.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={`image-attachment-strip ${className}`.trim()}>
+      {attachments.map((attachment, index) => {
+        const src = attachment?.data_url;
+        if (!src) return null;
+
+        const key = attachment.id || `${attachment.name || 'image'}-${index}-${src.length}`;
+        return (
+          <div key={key} className="image-attachment-card">
+            {removable && (
+              <button
+                type="button"
+                className="image-attachment-remove"
+                onClick={() => onRemove?.(attachment.id)}
+                aria-label={`Remove ${attachment.name || 'image'}`}
+                title="Remove image"
+              >
+                ×
+              </button>
+            )}
+            <img
+              className="image-attachment-thumb"
+              src={src}
+              alt={attachment.name || `Attachment ${index + 1}`}
+              loading="lazy"
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const API_URL_KEY = 'backendApiUrl';
 const COLOR_SCHEME_KEY = 'colorScheme';
 const WEBSEARCH_URL_KEY = 'websearch.searxUrl';
 const WEBSEARCH_ENGINES_KEY = 'websearch.engines';
 const CHAT_LIBRARY_MAP_KEY = 'chat.libraryBySession';
 const DEFAULT_SEARX_URL = 'http://127.0.0.1:8888';
+const MAX_IMAGE_ATTACHMENTS = 6;
+const MAX_IMAGE_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 // Initial API value will be set by useEffect after settings are loaded
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
@@ -156,6 +196,37 @@ function migrateLegacySearxUrl(value) {
   if (!trimmed) return DEFAULT_SEARX_URL;
   if (trimmed === 'http://localhost:8888') return DEFAULT_SEARX_URL;
   return trimmed;
+}
+
+function hasFilePayload(event) {
+  const types = Array.from(event?.dataTransfer?.types || []);
+  return types.includes('Files');
+}
+
+function isImageFile(file) {
+  if (!file) return false;
+  if (typeof file.type === 'string' && file.type.toLowerCase().startsWith('image/')) {
+    return true;
+  }
+  return /\.(png|jpe?g|gif|bmp|webp|tiff?|heic|avif)$/i.test(file.name || '');
+}
+
+function eventHasImageFiles(event) {
+  const items = Array.from(event?.dataTransfer?.items || []);
+  if (items.length > 0) {
+    return items.some(item => item.kind === 'file' && isImageFile(item.getAsFile?.()));
+  }
+  const files = Array.from(event?.dataTransfer?.files || []);
+  return files.some(isImageFile);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error(`Failed to read ${file?.name || 'image'}`));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function App() {
@@ -183,10 +254,15 @@ export default function App() {
 
   // Use currentSessionId for the actual chat operations
   const [model, setModel] = useState('')
+  const [selectedModelSupportsVision, setSelectedModelSupportsVision] = useState(false)
   const [input, setInput] = useState('')
+  const [composerAttachments, setComposerAttachments] = useState([])
+  const [isChatDragActive, setIsChatDragActive] = useState(false)
   const chatRef = useRef(null)
   const textareaRef = useRef(null); // Ref for the textarea
   const dbPickerRef = useRef(null)
+  const imageInputRef = useRef(null)
+  const imageDragDepthRef = useRef(0)
   const [backendApiUrl, setBackendApiUrl] = useState(API); // State for Heimgeist backend URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);

@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -18,6 +19,7 @@ from .ollama_client import (
     show_model as ollama_show_model,
     supports_vision as ollama_supports_vision,
 )
+from .whisper_admin import DEFAULT_WHISPER_MODEL, transcribe_audio_bytes
 from .websearch import enrich_prompt
 
 # Create tables + ensure migration

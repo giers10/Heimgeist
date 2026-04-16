@@ -2196,37 +2196,43 @@ async function createNewChat() {
                     ) : (
                       <div className="user-message-wrapper">
                         {isEditingThis ? (
-                          <div className="msg-content msg-content--user editing">
-                            <div className="user-edit-shadow" aria-hidden="true">
-                              {editText}
-                            </div>
+                          <>
+                            <ImageAttachmentStrip attachments={m.attachments} className="message-attachment-strip" />
+                            <div className="msg-content msg-content--user editing">
+                              <div className="user-edit-shadow" aria-hidden="true">
+                                {editText}
+                              </div>
 
-                            <TextareaAutosize
-                              className="edit-message-input edit-overlay"
-                              value={editText}
-                              onChange={(e) => setEditText(e.target.value)}
-                              onBlur={cancelEditMessage}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') { e.preventDefault(); cancelEditMessage(); }
-                                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEditMessage(i); }
-                              }}
-                              autoFocus
-                              minRows={1}
-                            />
-                          </div>
+                              <TextareaAutosize
+                                className="edit-message-input edit-overlay"
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                onBlur={cancelEditMessage}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') { e.preventDefault(); cancelEditMessage(); }
+                                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEditMessage(i); }
+                                }}
+                                autoFocus
+                                minRows={1}
+                              />
+                            </div>
+                          </>
                         ) : (
                           (() => {
                             const raw = m.content || '';
+                            const attachments = Array.isArray(m.attachments) ? m.attachments : [];
                             const lines = raw.split(/\r\n|\r|\n/);
                             const needsCollapse = lines.length > 30;
                             const key = collapseKeyFor(m, i, activeSessionId);
                             const isCollapsed = needsCollapse ? (collapsedUserMsgs[key] ?? true) : false;
                             const displayText = isCollapsed ? lines.slice(0, 30).join('\n') + '\n…' : raw;
+                            const hasText = Boolean(raw.trim());
 
                             return (
                               <>
-                                <div className="msg-content msg-content--user">{displayText}</div>
-                                {needsCollapse && (
+                                <ImageAttachmentStrip attachments={attachments} className="message-attachment-strip" />
+                                {hasText && <div className="msg-content msg-content--user">{displayText}</div>}
+                                {hasText && needsCollapse && (
                                   <button
                                     className="user-msg-expand"
                                     onClick={() => toggleUserMsgCollapse(key)}

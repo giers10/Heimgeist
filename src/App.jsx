@@ -362,6 +362,14 @@ export default function App() {
     throw new Error(detail || `HTTP ${response.status}`)
   }
 
+  async function fetchModelCapabilities(modelName, signal) {
+    const response = await fetch(
+      `${backendApiUrl}/models/capabilities?name=${encodeURIComponent(modelName)}`,
+      { signal }
+    )
+    return expectBackendJson(response)
+  }
+
   async function fetchStartupOllamaStatus() {
     const response = await fetch(`${backendApiUrl}/ollama/startup-status`)
     return expectBackendJson(response)
@@ -388,6 +396,76 @@ export default function App() {
     return {
       contextBlock: typeof data?.context_block === 'string' && data.context_block.trim() ? data.context_block.trim() : null,
       sources: Array.isArray(data?.sources) ? data.sources : [],
+    }
+  }
+
+  async function appendComposerImageFiles(fileList) {
+    const incoming = Array.from(fileList || []).filter(isImageFile)
+    if (!incoming.length) {
+      return
+    }
+    if (!selectedModelSupportsVision) {
+      return
+    }
+
+    const remainingSlots = Math.max(0, MAX_IMAGE_ATTACHMENTS - composerAttachments.length)
+    if (remainingSlots <= 0) {
+      window.alert(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images per message.`)
+      return
+    }
+
+    const candidates = incoming.slice(0, remainingSlots)
+    const oversized = candidates.filter(file => Number(file.size) > MAX_IMAGE_ATTACHMENT_BYTES)
+    const acceptedFiles = candidates.filter(file => Number(file.size) <= MAX_IMAGE_ATTACHMENT_BYTES)
+
+    if (oversized.length > 0) {
+      window.alert(`Images must be ${Math.round(MAX_IMAGE_ATTACHMENT_BYTES / (1024 * 1024))} MB or smaller.`)
+    }
+
+    if (!acceptedFiles.length) {
+      return
+    }
+
+    try {
+      const nextAttachments = await Promise.all(
+        acceptedFiles.map(async (file, index) => ({
+          id: `attachment-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
+          name: file.name || 'image',
+          mime_type: file.type || 'image/*',
+          data_url: await readFileAsDataUrl(file),
+        }))
+      )
+
+      setComposerAttachments(prev => [...prev, ...nextAttachments])
+
+      if (incoming.length > remainingSlots) {
+        window.alert(`Only the first ${MAX_IMAGE_ATTACHMENTS} images can be attached.`)
+      }
+    } catch (error) {
+      console.error('Failed to load image attachments', error)
+      window.alert(`Image import failed: ${getErrorText(error)}`)
+    }
+  }
+
+  function removeComposerAttachment(attachmentId) {
+    setComposerAttachments(prev => prev.filter(attachment => attachment.id !== attachmentId))
+  }
+
+  function openImagePicker() {
+    if (!selectedModelSupportsVision) {
+      return
+    }
+    imageInputRef.current?.click()
+  }
+
+  async function handleComposerImageSelection(event) {
+    const files = event.target?.files
+    try {
+      await appendComposerImageFiles(files)
+    } finally {
+      if (event.target) {
+        event.target.value = ''
+      }
     }
   }
 

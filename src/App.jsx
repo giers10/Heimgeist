@@ -924,6 +924,42 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [activeSidebarMode]);
 
   useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+
+    if (!backendApiUrl || !model) {
+      setSelectedModelSupportsVision(false)
+      return () => {
+        controller.abort()
+      }
+    }
+
+    ;(async () => {
+      try {
+        const data = await fetchModelCapabilities(model, controller.signal)
+        if (!cancelled) {
+          setSelectedModelSupportsVision(Boolean(data?.supports_vision))
+        }
+      } catch (error) {
+        if (!cancelled && !isAbortError(error)) {
+          console.warn('Failed to load model capabilities', error)
+          setSelectedModelSupportsVision(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [backendApiUrl, model])
+
+  useEffect(() => {
+    imageDragDepthRef.current = 0
+    setIsChatDragActive(false)
+  }, [selectedModelSupportsVision, activeSidebarMode])
+
+  useEffect(() => {
     if (!settingsLoaded || loading || !backendApiUrl || startupOllamaCheckRanRef.current) return
     startupOllamaCheckRanRef.current = true
 

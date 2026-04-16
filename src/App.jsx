@@ -12,6 +12,12 @@ import {
   loadStoredWebsearchEngines,
   normalizeWebsearchEngines,
 } from './websearchEngines'
+import {
+  getAudioInputConstraints,
+  getPreferredAudioRecorderMimeType,
+  stopMediaStream,
+  supportsAudioInputCapture,
+} from './audioInput'
 
 function sanitizeGeneratedChatTitle(title) {
   return (title || '')
@@ -181,6 +187,8 @@ const CHAT_LIBRARY_MAP_KEY = 'chat.libraryBySession';
 const DEFAULT_SEARX_URL = 'http://127.0.0.1:8888';
 const MAX_IMAGE_ATTACHMENTS = 6;
 const MAX_IMAGE_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const MAX_AUDIO_RECORDING_MS = 5 * 60 * 1000;
+const AUDIO_RECORDING_TICK_MS = 200;
 
 // Initial API value will be set by useEffect after settings are loaded
 let API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
@@ -227,6 +235,28 @@ function readFileAsDataUrl(file) {
     reader.onload = () => resolve(String(reader.result || ''));
     reader.readAsDataURL(file);
   });
+}
+
+function appendTranscriptToComposer(currentInput, transcript) {
+  const nextTranscript = String(transcript || '').trim()
+  if (!nextTranscript) {
+    return currentInput || ''
+  }
+
+  const existing = String(currentInput || '')
+  if (!existing.trim()) {
+    return nextTranscript
+  }
+
+  const separator = /[\s\n]$/.test(existing) ? '' : '\n'
+  return `${existing}${separator}${nextTranscript}`
+}
+
+function formatRecordingDuration(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 export default function App() {

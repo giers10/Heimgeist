@@ -2777,6 +2777,8 @@ async function createNewChat() {
                 onBackendApiUrlChange={setBackendApiUrl}
                 streamOutput={streamOutput}
                 onStreamOutputChange={setStreamOutput}
+                onAudioInputEnabledChange={setAudioInputEnabled}
+                onAudioInputDeviceChange={setAudioInputDeviceId}
                 onLibrariesPurged={handleLibrariesPurged}
               />
             )}

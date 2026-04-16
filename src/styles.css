@@ -368,6 +368,11 @@ textarea.input {
   position: relative;
 }
 
+.message-attachment-strip {
+  margin-bottom: 10px;
+  justify-content: flex-end;
+}
+
 /* Expand link inside the user bubble */
 .msg.user .user-msg-expand {
   margin-top: 8px;
@@ -469,11 +474,26 @@ textarea.input {
   align-items: flex-end; /* Align items to the bottom */
 }
 
+.footer-inner {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+
+.footer-inner--drag-active {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
 .footer-content-wrapper {
   display: flex; /* Arrange textarea and button side-by-side */
   gap: 8px; /* Space between textarea and button */
   width: 100%; /* Take full width of its parent (footer) */
-  max-width: 1000px; /* Max width for the content */
   align-items: flex-end; /* Align items to the bottom */
 }
 
@@ -481,6 +501,60 @@ textarea.input {
   position: relative;
   display: inline-flex;
   align-items: center;
+}
+
+.composer-image-input {
+  display: none;
+}
+
+.image-attachment-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.composer-attachment-strip {
+  min-height: 0;
+}
+
+.image-attachment-card {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  flex: 0 0 auto;
+}
+
+.image-attachment-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.image-attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  background: rgba(0, 0, 0, 0.7);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.image-attachment-remove:hover {
+  background: rgba(0, 0, 0, 0.85);
 }
 
 /* Settings Page Styles (removed nested sidebar styles) */
@@ -1057,7 +1131,8 @@ input:checked + .slider:before {
 .websearch-toggle.active { outline: 2px solid var(--accent); }
 */
 .websearch-toggle,
-.db-picker-toggle {
+.db-picker-toggle,
+.image-attach-toggle {
   background: transparent;
   border: 0;
   padding: 0;                 /* icon-only */
@@ -1076,7 +1151,8 @@ input:checked + .slider:before {
 }
 
 .websearch-toggle svg,
-.db-picker-toggle svg {
+.db-picker-toggle svg,
+.image-attach-toggle svg {
   width: 20px;
   height: 20px;
   pointer-events: none;
@@ -1084,7 +1160,8 @@ input:checked + .slider:before {
 
 /* Active state = accent color */
 .websearch-toggle.active,
-.db-picker-toggle.active {
+.db-picker-toggle.active,
+.image-attach-toggle.active {
   color: var(--accent);
 }
 
@@ -1097,10 +1174,17 @@ input:checked + .slider:before {
 /* Keep focus minimal (no glow) but still visible if you want a tiny underline instead of glow: */
 .websearch-toggle:focus, 
 .websearch-toggle:focus-visible,
+.image-attach-toggle:focus,
+.image-attach-toggle:focus-visible,
 .db-picker-toggle:focus,
 .db-picker-toggle:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+.chat--drag-active {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -10px;
 }
 
 .db-picker-menu {

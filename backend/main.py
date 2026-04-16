@@ -137,6 +137,40 @@ def get_db():
 def health():
     return {"ok": True}
 
+
+@app.post("/audio/transcribe", response_model=schemas.AudioTranscriptionResponse)
+async def transcribe_audio_route(req: schemas.AudioTranscriptionRequest):
+    mime_type = str(req.mime_type or "").split(";", 1)[0].strip().lower()
+    if not mime_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="An audio mime type is required.")
+
+    payload = re.sub(r"\s+", "", str(req.audio_base64 or ""))
+    if not payload:
+        raise HTTPException(status_code=400, detail="Audio payload is required.")
+
+    try:
+        audio_bytes = base64.b64decode(payload, validate=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid base64 audio payload.") from exc
+
+    try:
+        result = await asyncio.to_thread(
+            transcribe_audio_bytes,
+            audio_bytes,
+            mime_type,
+            req.model or DEFAULT_WHISPER_MODEL,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Audio transcription failed: {exc}") from exc
+
+    return {
+        "text": str(result.get("text") or "").strip(),
+        "language": str(result.get("language") or "").strip() or None,
+        "model": str(result.get("model") or req.model or DEFAULT_WHISPER_MODEL),
+    }
+
 @app.get("/models")
 async def get_models():
     try:

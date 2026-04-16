@@ -502,6 +502,194 @@ export default function App() {
     imageInputRef.current?.click()
   }
 
+  function clearAudioTimers() {
+    if (audioTickTimerRef.current) {
+      window.clearInterval(audioTickTimerRef.current)
+      audioTickTimerRef.current = null
+    }
+    if (audioAutoStopTimerRef.current) {
+      window.clearTimeout(audioAutoStopTimerRef.current)
+      audioAutoStopTimerRef.current = null
+    }
+  }
+
+  function cleanupAudioRecorder(stream = audioStreamRef.current) {
+    clearAudioTimers()
+    stopMediaStream(stream)
+    if (audioStreamRef.current === stream) {
+      audioStreamRef.current = null
+    }
+    audioRecorderRef.current = null
+  }
+
+  async function transcribeRecordedAudio(blob, mimeType) {
+    if (!backendApiUrl) {
+      throw new Error('The Heimgeist backend is not configured.')
+    }
+
+    const controller = new AbortController()
+    audioTranscriptionAbortRef.current = controller
+    setIsTranscribingAudio(true)
+
+    try {
+      const dataUrl = await readFileAsDataUrl(blob)
+      const match = /^data:([^;]+);base64,([\s\S]+)$/i.exec(dataUrl)
+      if (!match) {
+        throw new Error('Recorded audio could not be encoded for upload.')
+      }
+
+      const response = await fetch(`${backendApiUrl}/audio/transcribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          mime_type: mimeType || match[1] || 'audio/webm',
+          audio_base64: match[2],
+        }),
+      })
+      const data = await expectBackendJson(response)
+      const transcript = String(data?.text || '').trim()
+
+      if (!transcript) {
+        window.alert('No speech was detected. Try again and speak closer to the selected microphone.')
+        return
+      }
+
+      setInput(prev => appendTranscriptToComposer(prev, transcript))
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    } catch (error) {
+      if (isAbortError(error)) {
+        return
+      }
+      throw error
+    } finally {
+      if (audioTranscriptionAbortRef.current === controller) {
+        audioTranscriptionAbortRef.current = null
+      }
+      setIsTranscribingAudio(false)
+    }
+  }
+
+  async function stopAudioRecording(options = {}) {
+    const { shouldTranscribe = true } = options
+    const recorder = audioRecorderRef.current
+    const stopPromise = audioStopPromiseRef.current
+    const mimeType = audioRecorderMimeTypeRef.current || recorder?.mimeType || 'audio/webm'
+
+    if (!recorder || !stopPromise) {
+      return
+    }
+
+    setIsRecordingAudio(false)
+    clearAudioTimers()
+
+    try {
+      if (recorder.state !== 'inactive') {
+        recorder.stop()
+      }
+
+      const blob = await stopPromise
+      if (!shouldTranscribe) {
+        return
+      }
+      if (!blob || blob.size <= 0) {
+        throw new Error('Recorded audio was empty.')
+      }
+      await transcribeRecordedAudio(blob, mimeType)
+    } catch (error) {
+      if (shouldTranscribe) {
+        console.error('Failed to stop microphone recording', error)
+        window.alert(`Microphone transcription failed: ${getErrorText(error)}`)
+      }
+    } finally {
+      audioStopPromiseRef.current = null
+      audioChunksRef.current = []
+      audioRecorderMimeTypeRef.current = ''
+      audioStartedAtRef.current = 0
+      setAudioRecordingMs(0)
+    }
+  }
+
+  async function startAudioRecording() {
+    if (!audioInputEnabled || isRecordingAudio || isTranscribingAudio || isSending) {
+      return
+    }
+    if (!supportsAudioInputCapture()) {
+      window.alert('Microphone capture is not available in this environment.')
+      return
+    }
+
+    let stream = null
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(getAudioInputConstraints(audioInputDeviceId))
+    } catch (error) {
+      console.error('Failed to access microphone', error)
+      window.alert(`Microphone access failed: ${getErrorText(error)}`)
+      return
+    }
+
+    const preferredMimeType = getPreferredAudioRecorderMimeType()
+    let recorder = null
+    try {
+      recorder = preferredMimeType
+        ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+        : new MediaRecorder(stream)
+    } catch (error) {
+      cleanupAudioRecorder(stream)
+      console.error('Failed to create audio recorder', error)
+      window.alert(`Microphone recording is not available: ${getErrorText(error)}`)
+      return
+    }
+
+    audioStreamRef.current = stream
+    audioRecorderRef.current = recorder
+    audioChunksRef.current = []
+    audioRecorderMimeTypeRef.current = recorder.mimeType || preferredMimeType || 'audio/webm'
+    audioStartedAtRef.current = Date.now()
+    setAudioRecordingMs(0)
+    setIsRecordingAudio(true)
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        audioChunksRef.current.push(event.data)
+      }
+    }
+
+    audioStopPromiseRef.current = new Promise((resolve, reject) => {
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || audioRecorderMimeTypeRef.current || 'audio/webm',
+        })
+        cleanupAudioRecorder(stream)
+        resolve(blob)
+      }
+      recorder.onerror = (event) => {
+        cleanupAudioRecorder(stream)
+        reject(event?.error || new Error('Audio recording failed.'))
+      }
+    })
+
+    audioTickTimerRef.current = window.setInterval(() => {
+      setAudioRecordingMs(Date.now() - audioStartedAtRef.current)
+    }, AUDIO_RECORDING_TICK_MS)
+    audioAutoStopTimerRef.current = window.setTimeout(() => {
+      stopAudioRecording()
+    }, MAX_AUDIO_RECORDING_MS)
+
+    recorder.start()
+  }
+
+  async function toggleAudioRecording() {
+    if (isTranscribingAudio) {
+      return
+    }
+    if (isRecordingAudio) {
+      await stopAudioRecording()
+      return
+    }
+    await startAudioRecording()
+  }
+
   async function handleComposerImageSelection(event) {
     const files = event.target?.files
     try {

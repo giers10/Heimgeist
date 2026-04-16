@@ -78,3 +78,15 @@ class WebSearchResponse(BaseModel):
 
 class OllamaPullRequest(BaseModel):
     model: Optional[str] = None
+
+
+class AudioTranscriptionRequest(BaseModel):
+    mime_type: str
+    audio_base64: str
+    model: Optional[str] = None
+
+
+class AudioTranscriptionResponse(BaseModel):
+    text: str
+    language: Optional[str] = None
+    model: str

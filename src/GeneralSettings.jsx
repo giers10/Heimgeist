@@ -32,7 +32,7 @@ function getStatusTone(state) {
   return 'neutral';
 }
 
-export default function GeneralSettings({ onModelChange, onStreamOutputChange, onLibrariesPurged }) {
+export default function GeneralSettings({ onModelChange, onStreamOutputChange, onLibrariesPurged, onBackendApiUrlChange }) {
   const [backendApiUrl, setBackendApiUrl] = useState('');
   const [ollamaApiUrl, setOllamaApiUrl] = useState('');
   const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
@@ -80,16 +80,22 @@ export default function GeneralSettings({ onModelChange, onStreamOutputChange, o
             const defaultModel = names[0] || '';
             setSelectedModel(defaultModel);
             window.electronAPI.setSetting(MODEL_KEY, defaultModel);
+            if (onModelChange) {
+              onModelChange(defaultModel);
+            }
           }
         })
         .catch(err => console.error('Failed to load models', err));
     }
-  }, [backendApiUrl, ollamaApiUrl, selectedModel]); // Depend on selectedModel to re-evaluate default selection
+  }, [backendApiUrl, ollamaApiUrl, selectedModel, onModelChange]); // Depend on selectedModel to re-evaluate default selection
 
   const handleBackendUrlChange = (e) => {
     const newUrl = e.target.value;
     setBackendApiUrl(newUrl);
     window.electronAPI.setSetting(BACKEND_API_URL_KEY, newUrl);
+    if (onBackendApiUrlChange) {
+      onBackendApiUrlChange(newUrl);
+    }
   };
 
   const handleOllamaUrlChange = (e) => {

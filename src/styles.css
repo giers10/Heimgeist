@@ -1393,7 +1393,7 @@ input:checked + .slider:before {
 */
 .websearch-toggle,
 .db-picker-toggle,
-.image-attach-toggle,
+.attachment-toggle,
 .audio-input-toggle {
   background: transparent;
   border: 0;
@@ -1414,7 +1414,7 @@ input:checked + .slider:before {
 
 .websearch-toggle svg,
 .db-picker-toggle svg,
-.image-attach-toggle svg,
+.attachment-toggle svg,
 .audio-input-toggle svg {
   width: 20px;
   height: 20px;
@@ -1424,7 +1424,7 @@ input:checked + .slider:before {
 /* Active state = accent color */
 .websearch-toggle.active,
 .db-picker-toggle.active,
-.image-attach-toggle.active,
+.attachment-toggle.active,
 .audio-input-toggle.active {
   color: var(--accent);
 }
@@ -1453,8 +1453,8 @@ input:checked + .slider:before {
 /* Keep focus minimal (no glow) but still visible if you want a tiny underline instead of glow: */
 .websearch-toggle:focus, 
 .websearch-toggle:focus-visible,
-.image-attach-toggle:focus,
-.image-attach-toggle:focus-visible,
+.attachment-toggle:focus,
+.attachment-toggle:focus-visible,
 .audio-input-toggle:focus,
 .audio-input-toggle:focus-visible,
 .db-picker-toggle:focus,

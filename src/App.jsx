@@ -2515,15 +2515,21 @@ async function sendMessage() {
           signal: requestController.signal,
           body: JSON.stringify({
             session_id: targetSessionId,
-            model: requestModel,
+            model,
             message: userMsg.content,
             enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
             stream: true,
             sources: citationSources || [],
             attachments: outgoingAttachments,
+            vision_model: visionModel || null,
+            transcription_model: transcriptionModel || null,
           })
         })
-        if (!res.ok) throw new Error(await readBackendErrorText(res))
+        if (!res.ok) {
+          const error = new Error(await readBackendErrorText(res))
+          error.status = res.status
+          throw error
+        }
 
         const reader = res.body?.getReader()
         if (!reader) throw new Error('Missing response body')
@@ -2579,15 +2585,21 @@ async function sendMessage() {
         signal: requestController.signal,
         body: JSON.stringify({
           session_id: targetSessionId,
-          model: requestModel,
+          model,
           message: userMsg.content,
           enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
           stream: false,
           sources: citationSources || [],
           attachments: outgoingAttachments,
+          vision_model: visionModel || null,
+          transcription_model: transcriptionModel || null,
         })
       })
-      if (!res.ok) throw new Error(await readBackendErrorText(res))
+      if (!res.ok) {
+        const error = new Error(await readBackendErrorText(res))
+        error.status = res.status
+        throw error
+      }
 
       const data = await res.json()
       const assistantMsgId = `msg-${Date.now()}`

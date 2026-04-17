@@ -7,7 +7,7 @@ import json
 import traceback
 import hashlib
 
-from .app_settings import get_embed_model_preference, get_ollama_api_url
+from .app_settings import get_ollama_api_url, get_rerank_model_preference
 from .ollama_client import chat as ollama_chat
 
 # Configure your local SearXNG instance URL (no trailing slash)
@@ -267,7 +267,7 @@ async def rerank(
     embed_model: Optional[str] = None,
 ) -> List[Tuple[str, str, float]]:
     """
-    Embedding-based reranker (bge-m3 via Ollama) using cosine similarity.
+    Embedding-based reranker via Ollama using cosine similarity.
 
     Robustness upgrades:
     - Try embed_model; if needed fallback to the ':latest' or untagged alias.
@@ -278,7 +278,7 @@ async def rerank(
     """
     import time
     t0 = time.perf_counter()
-    embed_model = (embed_model or get_embed_model_preference()).strip()
+    embed_model = (embed_model or get_rerank_model_preference()).strip()
     ollama_url = get_ollama_api_url().rstrip("/")
 
     # --- optional fast cosine via NumPy ---------------------------------------

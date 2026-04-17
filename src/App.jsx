@@ -2757,13 +2757,61 @@ async function createNewChat() {
         )}
         {activeSidebarMode === 'chats' && (
           <>
-            <div className="header">
-              <strong>Chat - {chatSessions.find(s => s.session_id === activeSessionId)?.name || 'New Chat'}</strong>
-              {chatLibrary && (
-                <span className="header-subtle">
-                  {`DB: ${chatLibrary.name}${chatLibraryStatusSuffix}`}
-                </span>
-              )}
+            <div className="header header--chat">
+              <div className="header-main">
+                <strong className="header-title">
+                  Chat - {activeChatSession?.name || 'New Chat'}
+                </strong>
+                {chatLibrary && (
+                  <span className="header-subtle">
+                    {`DB: ${chatLibrary.name}${chatLibraryStatusSuffix}`}
+                  </span>
+                )}
+              </div>
+              <div className="header-actions">
+                <div className="model-picker" ref={chatModelPickerRef}>
+                  <button
+                    type="button"
+                    className="model-picker-toggle"
+                    onClick={() => setIsChatModelPickerOpen(prev => !prev)}
+                    aria-haspopup="menu"
+                    aria-expanded={isChatModelPickerOpen}
+                    title={model ? `Current chat model: ${model}` : 'Select chat model'}
+                    disabled={!model && chatModelPickerOptions.length === 0}
+                  >
+                    <span className="model-picker-label">
+                      {model || (isLoadingModelCatalog ? 'Loading models…' : 'Select model')}
+                    </span>
+                    <span className="model-picker-caret" aria-hidden="true">
+                      {isChatModelPickerOpen ? '▴' : '▾'}
+                    </span>
+                  </button>
+                  {isChatModelPickerOpen && (
+                    <div className="model-picker-menu" role="menu">
+                      {chatModelPickerOptions.length === 0 ? (
+                        <div className="model-picker-empty">
+                          {isLoadingModelCatalog ? 'Loading models…' : 'No chat models available.'}
+                        </div>
+                      ) : (
+                        chatModelPickerOptions.map(option => {
+                          const selected = option.value === model
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`model-picker-option${selected ? ' selected' : ''}`}
+                              onClick={() => handleChatModelSelect(option.value)}
+                            >
+                              <span className="model-picker-option-label">{option.label}</span>
+                              {selected && <span className="model-picker-status">Selected</span>}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div

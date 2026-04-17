@@ -1254,9 +1254,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   const conversationNeedsVision = msgs
     .slice(0, lastUserIdx + 1)
     .some(messageHasImageAttachments)
-  const requestModel = conversationNeedsVision ? (visionModel || model) : model
-  if (conversationNeedsVision && !selectedVisionModelSupportsVision) {
-    window.alert('The selected vision model does not support image inputs.')
+  if (conversationNeedsVision && !canAttachImages) {
+    window.alert(imageAttachmentUnavailableReason)
     return
   }
 
@@ -1345,10 +1344,12 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           signal: requestController.signal,
           body: JSON.stringify({
             index,
-            model: requestModel,
+            model,
             stream: true,
             enriched_message: enrichedPrompt,
-            sources: citationSources || []
+            sources: citationSources || [],
+            vision_model: visionModel || null,
+            transcription_model: transcriptionModel || null,
           })
         })
         if (!res.ok) throw new Error(await readBackendErrorText(res))
@@ -1399,10 +1400,12 @@ async function regenerateFromIndex(index, overrideUserText = null) {
         signal: requestController.signal,
         body: JSON.stringify({
           index,
-          model: requestModel,
+          model,
           stream: false,
           enriched_message: enrichedPrompt,
-          sources: citationSources || []
+          sources: citationSources || [],
+          vision_model: visionModel || null,
+          transcription_model: transcriptionModel || null,
         })
       })
       if (!res.ok) throw new Error(await readBackendErrorText(res))

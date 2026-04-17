@@ -263,6 +263,7 @@ export default function App() {
   const [chatSessions, setChatSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [activeSidebarMode, setActiveSidebarMode] = useState('chats') // 'chats', 'dbs', 'settings'
+  const activeSidebarModeRef = useRef(activeSidebarMode)
   const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('General'); // 'General', 'Interface'
   const [editingSessionId, setEditingSessionId] = useState(null); // ID of the session being edited
   const [editingLibrarySlug, setEditingLibrarySlug] = useState(null)
@@ -1017,6 +1018,10 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   // Collapse state per user message: { [msgKey]: boolean } — true means "collapsed"
   const [collapsedUserMsgs, setCollapsedUserMsgs] = useState({});
 
+  useEffect(() => {
+    activeSidebarModeRef.current = activeSidebarMode
+  }, [activeSidebarMode])
+
   // Compute a stable key for collapse map (prefer id, else session:index)
   const collapseKeyFor = (m, i, sessionId) => (m?.id ? m.id : `${sessionId}:${i}`);
 
@@ -1114,9 +1119,11 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   React.useEffect(() => {
     window.addEventListener('mousemove', resizeSidebar);
     window.addEventListener('mouseup', stopResizing);
+    window.addEventListener('blur', stopResizing);
     return () => {
       window.removeEventListener('mousemove', resizeSidebar);
       window.removeEventListener('mouseup', stopResizing);
+      window.removeEventListener('blur', stopResizing);
     };
   }, [resizeSidebar, stopResizing]);
 
@@ -1126,6 +1133,10 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     } else {
       document.body.classList.remove('no-select');
     }
+
+    return () => {
+      document.body.classList.remove('no-select');
+    };
   }, [isResizing]);
 
   React.useEffect(() => {
@@ -1153,9 +1164,11 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, []);
 
 
-  // Load settings on startup
   useEffect(() => {
+    let cancelled = false
+
     window.electronAPI.getSettings().then(settings => {
+      if (cancelled) return
       setBackendApiUrl(resolveBackendApiUrl(settings));
       setColorScheme(settings.colorScheme || 'Default');
       setModel(settings.chatModel || ''); // Load the selected model, with a fallback
@@ -1166,11 +1179,19 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
       applyColorScheme(settings.colorScheme || 'Default'); // Apply initial scheme
     }).finally(() => {
-      setSettingsLoaded(true);
+      if (!cancelled) {
+        setSettingsLoaded(true);
+      }
     });
 
+    return () => {
+      cancelled = true
+    };
+  }, []);
+
+  useEffect(() => {
     const handleFocus = () => {
-      if (activeSidebarMode === 'chats') {
+      if (activeSidebarModeRef.current === 'chats') {
         textareaRef.current?.focus();
       }
     };
@@ -1178,13 +1199,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     window.electronAPI.onWindowFocus(handleFocus);
 
     return () => {
-      // Clean up the listener when the component unmounts
-      // This part is tricky with the current setup, as `onWindowFocus` uses `ipcRenderer.on`
-      // which doesn't return a cleanup function. A more robust implementation
-      // would involve `ipcRenderer.removeListener`. For now, we'll assume this is okay
-      // for the lifetime of the app.
+      window.electronAPI.offWindowFocus(handleFocus);
     };
-  }, [activeSidebarMode]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false

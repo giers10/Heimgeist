@@ -1382,6 +1382,47 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+
+    if (!backendApiUrl) {
+      setAvailableChatModels([])
+      setAvailableVisionModels([])
+      setIsLoadingModelCatalog(false)
+      return () => {
+        controller.abort()
+      }
+    }
+
+    setIsLoadingModelCatalog(true)
+
+    ;(async () => {
+      try {
+        const response = await fetch(`${backendApiUrl}/models`, { signal: controller.signal })
+        const data = await expectBackendJson(response)
+        if (cancelled) {
+          return
+        }
+        setAvailableChatModels(Array.isArray(data?.chat_models) ? data.chat_models.filter(Boolean) : [])
+        setAvailableVisionModels(Array.isArray(data?.vision_models) ? data.vision_models.filter(Boolean) : [])
+      } catch (error) {
+        if (!cancelled && !isAbortError(error)) {
+          console.warn('Failed to load chat model catalog', error)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingModelCatalog(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [backendApiUrl])
+
+  useEffect(() => {
     const handleFocus = () => {
       if (activeSidebarModeRef.current === 'chats') {
         textareaRef.current?.focus();

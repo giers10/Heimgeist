@@ -2347,7 +2347,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
     event.preventDefault()
     imageDragDepthRef.current += 1
-    if (selectedVisionModelSupportsVision && eventHasImageFiles(event)) {
+    if (eventHasImageFiles(event) || Array.from(event?.dataTransfer?.files || []).some(isSupportedChatFile)) {
       setIsChatDragActive(true)
     }
   }
@@ -2355,8 +2355,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   const handleChatDragOver = (event) => {
     if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
     event.preventDefault()
-    event.dataTransfer.dropEffect = selectedVisionModelSupportsVision ? 'copy' : 'none'
-    if (selectedVisionModelSupportsVision && eventHasImageFiles(event) && !isChatDragActive) {
+    event.dataTransfer.dropEffect = 'copy'
+    if (!isChatDragActive) {
       setIsChatDragActive(true)
     }
   }
@@ -2374,10 +2374,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     event.preventDefault()
     imageDragDepthRef.current = 0
     setIsChatDragActive(false)
-    if (!selectedVisionModelSupportsVision) {
-      return
-    }
-    await appendComposerImageFiles(event.dataTransfer?.files)
+    await appendDroppedChatFiles(event.dataTransfer?.files)
     textareaRef.current?.focus()
   }
 

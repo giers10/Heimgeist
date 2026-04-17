@@ -92,6 +92,7 @@ export default function GeneralSettings({
   const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
   const [isPurgingLibraries, setIsPurgingLibraries] = useState(false);
   const [libraryPurgeStatus, setLibraryPurgeStatus] = useState({ tone: 'neutral', message: '' });
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
   const audioInputSupported = supportsAudioInputCapture();
 
   useEffect(() => {
@@ -125,6 +126,7 @@ export default function GeneralSettings({
           : DEFAULT_AUDIO_INPUT_LANGUAGE
       );
       setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
+      setSettingsHydrated(true);
     });
 
     return () => {
@@ -148,6 +150,9 @@ export default function GeneralSettings({
   }, [backendApiUrl, ollamaApiUrl]);
 
   useEffect(() => {
+    if (!settingsHydrated) {
+      return;
+    }
     if (chatModels.length === 0) {
       return;
     }
@@ -162,9 +167,12 @@ export default function GeneralSettings({
     if (onModelChange) {
       onModelChange(nextModel);
     }
-  }, [chatModels, selectedModel, onModelChange]);
+  }, [chatModels, selectedModel, onModelChange, settingsHydrated]);
 
   useEffect(() => {
+    if (!settingsHydrated) {
+      return;
+    }
     if (visionModels.length === 0) {
       return;
     }
@@ -179,9 +187,12 @@ export default function GeneralSettings({
     if (onVisionModelChange) {
       onVisionModelChange(nextModel);
     }
-  }, [visionModels, visionModel, onVisionModelChange]);
+  }, [visionModels, visionModel, onVisionModelChange, settingsHydrated]);
 
   useEffect(() => {
+    if (!settingsHydrated) {
+      return;
+    }
     if (embedModel) {
       return;
     }
@@ -189,9 +200,12 @@ export default function GeneralSettings({
     const nextModel = embeddingModels[0] || DEFAULT_EMBED_MODEL;
     setEmbedModel(nextModel);
     window.electronAPI.setSetting(EMBED_MODEL_KEY, nextModel);
-  }, [embeddingModels, embedModel]);
+  }, [embeddingModels, embedModel, settingsHydrated]);
 
   useEffect(() => {
+    if (!settingsHydrated) {
+      return;
+    }
     if (rerankModel) {
       return;
     }
@@ -199,9 +213,12 @@ export default function GeneralSettings({
     const nextModel = embedModel || rerankingModels[0] || DEFAULT_EMBED_MODEL;
     setRerankModel(nextModel);
     window.electronAPI.setSetting(RERANK_MODEL_KEY, nextModel);
-  }, [rerankingModels, rerankModel, embedModel]);
+  }, [rerankingModels, rerankModel, embedModel, settingsHydrated]);
 
   useEffect(() => {
+    if (!settingsHydrated) {
+      return;
+    }
     if (transcriptionModel) {
       return;
     }
@@ -212,7 +229,7 @@ export default function GeneralSettings({
     if (onTranscriptionModelChange) {
       onTranscriptionModelChange(nextModel);
     }
-  }, [whisperModels, transcriptionModel, onTranscriptionModelChange]);
+  }, [whisperModels, transcriptionModel, onTranscriptionModelChange, settingsHydrated]);
 
   useEffect(() => {
     if (!audioInputSupported) {

@@ -157,6 +157,32 @@ def _normalize_chat_attachments(items: Any, *, include_text: bool = False) -> Li
     return cleaned
 
 
+def _normalize_chat_attachment_or_raise(item: Any, *, include_text: bool = False) -> dict:
+    kind = str(_attachment_field(item, "kind") or "").strip().lower()
+    data_url = str(_attachment_field(item, "data_url") or "").strip()
+    source_path = str(_attachment_field(item, "source_path") or "").strip()
+    name_hint = _attachment_field(item, "name") or (Path(source_path).name if source_path else None) or "attachment"
+    label = _normalize_attachment_name(name_hint, "attachment")
+
+    if kind == "image" or (not kind and data_url):
+        normalized = _normalize_image_attachment(item)
+        if normalized:
+            return normalized
+        raise HTTPException(status_code=400, detail=f"{label}: invalid image attachment.")
+
+    normalized = _normalize_file_attachment(item, include_text=include_text)
+    if normalized:
+        return normalized
+
+    if source_path:
+        extension = Path(source_path).suffix.lower()
+        if extension in _CHAT_IMAGE_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"{label}: use Add Image(s) for image attachments.")
+        raise HTTPException(status_code=400, detail=f"{label}: unsupported file type for chat attachment.")
+
+    raise HTTPException(status_code=400, detail=f"{label}: local file path is required for non-image attachments.")
+
+
 def _load_message_attachments(raw_value: Any, *, include_text: bool = False) -> List[dict]:
     if isinstance(raw_value, str):
         try:
@@ -418,7 +444,10 @@ async def _prepare_chat_message_attachments(
     transcription_model: Optional[str],
     persist_file_text: bool,
 ) -> tuple[List[dict], List[str], str]:
-    prepared = _normalize_chat_attachments(attachments, include_text=True)
+    prepared = [
+        _normalize_chat_attachment_or_raise(item, include_text=True)
+        for item in (attachments or [])
+    ]
     if not prepared:
         return [], [], ""
 

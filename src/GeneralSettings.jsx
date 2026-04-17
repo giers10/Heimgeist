@@ -98,14 +98,11 @@ export default function GeneralSettings({
       }
 
       setBackendApiUrl(resolveBackendApiUrl(settings));
-      setOllamaApiUrl(settings.ollamaApiUrl || DEFAULT_OLLAMA_API_URL);
       setEmbedModel(settings.embedModel || DEFAULT_EMBED_MODEL);
       setRerankModel(settings.rerankModel || settings.embedModel || DEFAULT_EMBED_MODEL);
       setSelectedModel(settings.chatModel || '');
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || DEFAULT_TRANSCRIPTION_MODEL);
-      setStreamOutput(settings.streamOutput || false);
-      setAudioInputEnabled(settings.audioInputEnabled === true);
       setAudioInputDeviceId(
         typeof settings.audioInputDeviceId === 'string'
           ? settings.audioInputDeviceId
@@ -129,6 +126,10 @@ export default function GeneralSettings({
   }, []);
 
   useEffect(() => {
+    if (panel !== 'AI Models') {
+      setIsLoadingModelCatalog(false);
+      return () => {};
+    }
     if (!backendApiUrl) {
       setIsLoadingModelCatalog(false);
       return () => {};
@@ -163,9 +164,12 @@ export default function GeneralSettings({
     return () => {
       cancelled = true;
     };
-  }, [backendApiUrl, ollamaApiUrl]);
+  }, [backendApiUrl, panel]);
 
   useEffect(() => {
+    if (panel !== 'AI Models') {
+      return;
+    }
     if (!settingsHydrated) {
       return;
     }
@@ -183,9 +187,12 @@ export default function GeneralSettings({
     if (onModelChange) {
       onModelChange(nextModel);
     }
-  }, [chatModels, selectedModel, onModelChange, settingsHydrated]);
+  }, [chatModels, selectedModel, onModelChange, panel, settingsHydrated]);
 
   useEffect(() => {
+    if (panel !== 'AI Models') {
+      return;
+    }
     if (!settingsHydrated) {
       return;
     }
@@ -203,9 +210,12 @@ export default function GeneralSettings({
     if (onVisionModelChange) {
       onVisionModelChange(nextModel);
     }
-  }, [visionModels, visionModel, onVisionModelChange, settingsHydrated]);
+  }, [visionModels, visionModel, onVisionModelChange, panel, settingsHydrated]);
 
   useEffect(() => {
+    if (panel !== 'AI Models') {
+      return;
+    }
     if (!settingsHydrated) {
       return;
     }
@@ -216,9 +226,12 @@ export default function GeneralSettings({
     const nextModel = embeddingModels[0] || DEFAULT_EMBED_MODEL;
     setEmbedModel(nextModel);
     window.electronAPI.setSetting(EMBED_MODEL_KEY, nextModel);
-  }, [embeddingModels, embedModel, settingsHydrated]);
+  }, [embeddingModels, embedModel, panel, settingsHydrated]);
 
   useEffect(() => {
+    if (panel !== 'AI Models') {
+      return;
+    }
     if (!settingsHydrated) {
       return;
     }
@@ -229,9 +242,12 @@ export default function GeneralSettings({
     const nextModel = embedModel || rerankingModels[0] || DEFAULT_EMBED_MODEL;
     setRerankModel(nextModel);
     window.electronAPI.setSetting(RERANK_MODEL_KEY, nextModel);
-  }, [rerankingModels, rerankModel, embedModel, settingsHydrated]);
+  }, [rerankingModels, rerankModel, embedModel, panel, settingsHydrated]);
 
   useEffect(() => {
+    if (panel !== 'AI Models') {
+      return;
+    }
     if (!settingsHydrated) {
       return;
     }
@@ -245,9 +261,12 @@ export default function GeneralSettings({
     if (onTranscriptionModelChange) {
       onTranscriptionModelChange(nextModel);
     }
-  }, [whisperModels, transcriptionModel, onTranscriptionModelChange, settingsHydrated]);
+  }, [whisperModels, transcriptionModel, onTranscriptionModelChange, panel, settingsHydrated]);
 
   useEffect(() => {
+    if (panel !== 'Microphone') {
+      return () => {};
+    }
     if (!audioInputSupported) {
       setAudioInputStatus({
         tone: 'warning',
@@ -303,7 +322,7 @@ export default function GeneralSettings({
         mediaDevices.removeEventListener('devicechange', refreshDevices);
       }
     };
-  }, [audioInputSupported]);
+  }, [audioInputSupported, panel]);
 
   const handleBackendUrlChange = (event) => {
     const newUrl = event.target.value;

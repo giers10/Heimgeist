@@ -1901,7 +1901,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
     event.preventDefault()
     imageDragDepthRef.current += 1
-    if (selectedModelSupportsVision && eventHasImageFiles(event)) {
+    if (selectedVisionModelSupportsVision && eventHasImageFiles(event)) {
       setIsChatDragActive(true)
     }
   }
@@ -1909,8 +1909,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   const handleChatDragOver = (event) => {
     if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
     event.preventDefault()
-    event.dataTransfer.dropEffect = selectedModelSupportsVision ? 'copy' : 'none'
-    if (selectedModelSupportsVision && eventHasImageFiles(event) && !isChatDragActive) {
+    event.dataTransfer.dropEffect = selectedVisionModelSupportsVision ? 'copy' : 'none'
+    if (selectedVisionModelSupportsVision && eventHasImageFiles(event) && !isChatDragActive) {
       setIsChatDragActive(true)
     }
   }
@@ -1928,7 +1928,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     event.preventDefault()
     imageDragDepthRef.current = 0
     setIsChatDragActive(false)
-    if (!selectedModelSupportsVision) {
+    if (!selectedVisionModelSupportsVision) {
       return
     }
     await appendComposerImageFiles(event.dataTransfer?.files)
@@ -1939,8 +1939,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 async function sendMessage() {
   const trimmedInput = input.trim()
   if (isSending || (!trimmedInput && composerAttachments.length === 0) || !model) return
-  if (composerAttachments.length > 0 && !selectedModelSupportsVision) {
-    window.alert('The selected model does not support image inputs.')
+  if (composerAttachments.length > 0 && !selectedVisionModelSupportsVision) {
+    window.alert('The selected vision model does not support image inputs.')
     return
   }
 
@@ -1957,6 +1957,7 @@ async function sendMessage() {
   }
 
   const outgoingAttachments = composerAttachments.map(({ id, ...attachment }) => ({ ...attachment }))
+  const requestModel = resolveChatRequestModel(outgoingAttachments)
   const userMsg = {
     role: 'user',
     content: trimmedInput,
@@ -2066,7 +2067,7 @@ async function sendMessage() {
           signal: requestController.signal,
           body: JSON.stringify({
             session_id: targetSessionId,
-            model,
+            model: requestModel,
             message: userMsg.content,
             enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
             stream: true,
@@ -2130,7 +2131,7 @@ async function sendMessage() {
         signal: requestController.signal,
         body: JSON.stringify({
           session_id: targetSessionId,
-          model,
+          model: requestModel,
           message: userMsg.content,
           enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
           stream: false,

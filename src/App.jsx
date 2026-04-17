@@ -2835,7 +2835,7 @@ async function createNewChat() {
                     </div>
                   )}
                 </div>
-                  {selectedModelSupportsVision && (
+                  {selectedVisionModelSupportsVision && (
                     <button
                       type="button"
                       className={"image-attach-toggle" + (composerAttachments.length > 0 ? " active" : "")}

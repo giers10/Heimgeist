@@ -27,25 +27,64 @@ function sanitizeGeneratedChatTitle(title) {
     .trim()
 }
 
-function explainSingleLineOllama502(text) {
+function appendOllamaErrorHint(text, marker, block) {
+  if (text.includes(marker)) {
+    return text
+  }
+  return `${text}\n\n${block}`
+}
+
+function enrichOllamaErrorText(text) {
   const raw = String(text || '')
   const trimmed = raw.trim()
-  if (!trimmed || /[\r\n]/.test(trimmed)) {
+  if (!trimmed) {
     return raw
   }
 
   const lower = trimmed.toLowerCase()
-  const isSingleLine502Error = (
-    lower.includes('error') &&
-    lower.includes('http') &&
-    lower.includes('502')
-  )
-
-  if (!isSingleLine502Error) {
-    return raw
+  if (lower.includes('unknown model architecture')) {
+    return appendOllamaErrorHint(
+      raw,
+      '[ERROR - Unsupported Model]',
+      '[ERROR - Unsupported Model]\nThis Ollama version does not support the model.\nUpdate Ollama.'
+    )
   }
-
-  return `${trimmed}\n\nOllama returned HTTP 502. This usually means Ollama stopped responding or crashed while handling the request.\n\nIf other models still work, try updating Ollama. Newer models may require a newer Ollama release.`
+  if (lower.includes('out of memory')) {
+    return appendOllamaErrorHint(
+      raw,
+      '[ERROR - Out of Memory]',
+      '[ERROR - Out of Memory]\nThe model is too large for available memory.\nUse a smaller or quantized model.'
+    )
+  }
+  if (lower.includes('502')) {
+    return appendOllamaErrorHint(
+      raw,
+      '[ERROR 502 - Bad Gateway]',
+      '[ERROR 502 - Bad Gateway]\nOllama did not return a valid response.\nTry restarting or updating Ollama.'
+    )
+  }
+  if (lower.includes('500')) {
+    return appendOllamaErrorHint(
+      raw,
+      '[ERROR 500 - Internal Server Error]',
+      "[ERROR 500 - Internal Server Error]\nOllama crashed while processing the request.\nCheck 'ollama logs' and memory usage."
+    )
+  }
+  if (lower.includes('404')) {
+    return appendOllamaErrorHint(
+      raw,
+      '[ERROR 404 - Not Found]',
+      "[ERROR 404 - Not Found]\nThe model or endpoint was not found.\nCheck the model name or run 'ollama pull <model>'."
+    )
+  }
+  if (lower.includes('400')) {
+    return appendOllamaErrorHint(
+      raw,
+      '[ERROR 400 - Bad Request]',
+      '[ERROR 400 - Bad Request]\nThe request sent to Ollama was invalid.\nCheck parameters or payload format.'
+    )
+  }
+  return raw
 }
 
 // Extract <think> or <thinking> block (first occurrence) and return { think, answer }
@@ -87,7 +126,7 @@ function splitThinkBlocks(text) {
 
 // Renders assistant message with a collapsible "Thoughts" block (if present)
 function AssistantMessageContent({ content, streamOutput, sources }) {
-  const displayContent = explainSingleLineOllama502(content || '');
+  const displayContent = enrichOllamaErrorText(content || '');
   const { think, answer } = splitThinkBlocks(displayContent);
   const [open, setOpen] = React.useState(false);
   const showThinkButton = !!think;
@@ -421,6 +460,23 @@ export default function App() {
   function getErrorText(error) {
     if (error instanceof Error && error.message) return error.message
     return String(error)
+  }
+
+  async function readBackendErrorText(response) {
+    const bodyText = await response.text().catch(() => '')
+    if (bodyText) {
+      try {
+        const data = JSON.parse(bodyText)
+        if (typeof data?.detail === 'string' && data.detail.trim()) {
+          return data.detail.trim()
+        }
+        if (typeof data?.message === 'string' && data.message.trim()) {
+          return data.message.trim()
+        }
+      } catch {}
+      return bodyText.trim()
+    }
+    return `HTTP ${response.status}`
   }
 
   async function expectBackendJson(response) {
@@ -938,7 +994,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
             sources: citationSources || []
           })
         })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) throw new Error(await readBackendErrorText(res))
 
         const reader = res.body?.getReader()
         if (!reader) throw new Error('Missing response body')
@@ -992,7 +1048,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           sources: citationSources || []
         })
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) throw new Error(await readBackendErrorText(res))
 
       const data = await res.json()
       const assistantMsgId = `msg-${Date.now()}`
@@ -1980,7 +2036,7 @@ async function sendMessage() {
             attachments: outgoingAttachments,
           })
         })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) throw new Error(await readBackendErrorText(res))
 
         const reader = res.body?.getReader()
         if (!reader) throw new Error('Missing response body')
@@ -2044,7 +2100,7 @@ async function sendMessage() {
           attachments: outgoingAttachments,
         })
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) throw new Error(await readBackendErrorText(res))
 
       const data = await res.json()
       const assistantMsgId = `msg-${Date.now()}`

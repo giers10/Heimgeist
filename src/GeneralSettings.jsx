@@ -296,10 +296,34 @@ export default function GeneralSettings({
     }
   };
 
-  const handleEmbedModelToggle = () => {
-    const nextModel = embedModel === BGE_EMBED_MODEL ? DEFAULT_EMBED_MODEL : BGE_EMBED_MODEL;
+  const handleVisionModelChange = (event) => {
+    const newModel = event.target.value;
+    setVisionModel(newModel);
+    window.electronAPI.setSetting(VISION_MODEL_KEY, newModel);
+    if (onVisionModelChange) {
+      onVisionModelChange(newModel);
+    }
+  };
+
+  const handleEmbedModelChange = (event) => {
+    const nextModel = event.target.value;
     setEmbedModel(nextModel);
     window.electronAPI.setSetting(EMBED_MODEL_KEY, nextModel);
+  };
+
+  const handleRerankModelChange = (event) => {
+    const nextModel = event.target.value;
+    setRerankModel(nextModel);
+    window.electronAPI.setSetting(RERANK_MODEL_KEY, nextModel);
+  };
+
+  const handleTranscriptionModelChange = (event) => {
+    const nextModel = event.target.value;
+    setTranscriptionModel(nextModel);
+    window.electronAPI.setSetting(TRANSCRIPTION_MODEL_KEY, nextModel);
+    if (onTranscriptionModelChange) {
+      onTranscriptionModelChange(nextModel);
+    }
   };
 
   const handleStreamToggle = () => {

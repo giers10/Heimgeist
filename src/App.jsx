@@ -570,7 +570,7 @@ export default function App() {
     if (!incoming.length) {
       return
     }
-    if (!selectedModelSupportsVision) {
+    if (!selectedVisionModelSupportsVision) {
       return
     }
 
@@ -618,7 +618,7 @@ export default function App() {
   }
 
   function openImagePicker() {
-    if (!selectedModelSupportsVision) {
+    if (!selectedVisionModelSupportsVision) {
       return
     }
     imageInputRef.current?.click()

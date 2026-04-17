@@ -1841,6 +1841,23 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     setIsDbPickerOpen(false)
   }, [activeSessionId, activeSidebarMode])
 
+  useEffect(() => {
+    if (!isChatModelPickerOpen) return
+
+    const onPointerDown = (event) => {
+      if (!chatModelPickerRef.current?.contains(event.target)) {
+        setIsChatModelPickerOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [isChatModelPickerOpen])
+
+  useEffect(() => {
+    setIsChatModelPickerOpen(false)
+  }, [activeSessionId, activeSidebarMode])
+
   // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)
   useEffect(() => {
     const leavingSessionId = activeSessionId;

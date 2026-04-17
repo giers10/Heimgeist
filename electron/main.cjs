@@ -12,6 +12,8 @@ const execFileAsync = promisify(execFile)
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000'
 const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434'
 const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest'
+const DEFAULT_RERANK_MODEL = DEFAULT_EMBED_MODEL
+const DEFAULT_TRANSCRIPTION_MODEL = 'base'
 const BGE_EMBED_MODEL = 'bge-m3:latest'
 const REPO_ROOT = path.resolve(__dirname, '..')
 const UPDATE_REMOTE_URL = 'https://giers10.uber.space/giers10/Heimgeist.git'
@@ -33,22 +35,46 @@ const DEFAULT_AUDIO_INPUT_LANGUAGE = ''
 const defaultSettings = {
   backendApiUrl: DEFAULT_BACKEND_API_URL,
   ollamaApiUrl: DEFAULT_OLLAMA_API_URL,
+  chatModel: 'llama3',
+  visionModel: '',
   embedModel: DEFAULT_EMBED_MODEL,
+  rerankModel: DEFAULT_RERANK_MODEL,
+  transcriptionModel: DEFAULT_TRANSCRIPTION_MODEL,
   colorScheme: 'Default',
   uiScale: DEFAULT_UI_SCALE,
   openDevToolsOnStartup: DEFAULT_OPEN_DEVTOOLS_ON_STARTUP,
   audioInputEnabled: DEFAULT_AUDIO_INPUT_ENABLED,
   audioInputDeviceId: DEFAULT_AUDIO_INPUT_DEVICE_ID,
   audioInputLanguage: DEFAULT_AUDIO_INPUT_LANGUAGE,
-  chatModel: 'llama3',
 }
 
 function normalizeEmbedModel(value) {
-  const trimmed = String(value || '').trim().toLowerCase()
-  if (trimmed === 'bge' || trimmed === 'bge-m3' || trimmed === BGE_EMBED_MODEL) {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) {
+    return DEFAULT_EMBED_MODEL
+  }
+
+  const lowered = trimmed.toLowerCase()
+  if (lowered === 'bge' || lowered === 'bge-m3' || lowered === BGE_EMBED_MODEL) {
     return BGE_EMBED_MODEL
   }
-  return DEFAULT_EMBED_MODEL
+  if (lowered === 'nomic' || lowered === 'nomic-embed-text' || lowered === DEFAULT_EMBED_MODEL) {
+    return DEFAULT_EMBED_MODEL
+  }
+  return trimmed
+}
+
+function normalizeRerankModel(value) {
+  return normalizeEmbedModel(value)
+}
+
+function normalizeModelName(value, fallback = '') {
+  const trimmed = String(value || '').trim()
+  return trimmed || fallback
+}
+
+function normalizeTranscriptionModel(value) {
+  return normalizeModelName(value, DEFAULT_TRANSCRIPTION_MODEL)
 }
 
 function looksLikeOllamaUrl(value) {
@@ -88,9 +114,28 @@ function migrateSettings(rawSettings) {
     migrated = true
   }
 
+  if (!Object.prototype.hasOwnProperty.call(source, 'rerankModel')) {
+    nextSettings.rerankModel = nextSettings.embedModel
+    migrated = true
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(source, 'visionModel')) {
+    nextSettings.visionModel = nextSettings.chatModel || ''
+    migrated = true
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(source, 'transcriptionModel')) {
+    nextSettings.transcriptionModel = DEFAULT_TRANSCRIPTION_MODEL
+    migrated = true
+  }
+
   nextSettings.backendApiUrl = String(nextSettings.backendApiUrl || '').trim()
   nextSettings.ollamaApiUrl = String(nextSettings.ollamaApiUrl || '').trim()
+  nextSettings.chatModel = normalizeModelName(nextSettings.chatModel)
+  nextSettings.visionModel = normalizeModelName(nextSettings.visionModel)
   nextSettings.embedModel = normalizeEmbedModel(nextSettings.embedModel)
+  nextSettings.rerankModel = normalizeRerankModel(nextSettings.rerankModel)
+  nextSettings.transcriptionModel = normalizeTranscriptionModel(nextSettings.transcriptionModel)
   nextSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(nextSettings.openDevToolsOnStartup)
   nextSettings.audioInputEnabled = normalizeBooleanSetting(nextSettings.audioInputEnabled)
   nextSettings.audioInputDeviceId = String(nextSettings.audioInputDeviceId || '').trim()
@@ -550,6 +595,12 @@ ipcMain.handle('set-setting', (event, key, value) => {
     appSettings[key] = normalizeUiScale(value)
   } else if (key === 'embedModel') {
     appSettings[key] = normalizeEmbedModel(value)
+  } else if (key === 'rerankModel') {
+    appSettings[key] = normalizeRerankModel(value)
+  } else if (key === 'chatModel' || key === 'visionModel') {
+    appSettings[key] = normalizeModelName(value)
+  } else if (key === 'transcriptionModel') {
+    appSettings[key] = normalizeTranscriptionModel(value)
   } else if (key === 'openDevToolsOnStartup') {
     appSettings[key] = normalizeOpenDevToolsOnStartup(value)
   } else if (key === 'audioInputEnabled') {
@@ -573,7 +624,11 @@ ipcMain.handle('set-setting', (event, key, value) => {
 ipcMain.handle('update-settings', (event, settings) => {
   appSettings = { ...appSettings, ...settings }
   appSettings.uiScale = normalizeUiScale(appSettings.uiScale)
+  appSettings.chatModel = normalizeModelName(appSettings.chatModel)
+  appSettings.visionModel = normalizeModelName(appSettings.visionModel)
   appSettings.embedModel = normalizeEmbedModel(appSettings.embedModel)
+  appSettings.rerankModel = normalizeRerankModel(appSettings.rerankModel)
+  appSettings.transcriptionModel = normalizeTranscriptionModel(appSettings.transcriptionModel)
   appSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(appSettings.openDevToolsOnStartup)
   appSettings.audioInputEnabled = normalizeBooleanSetting(appSettings.audioInputEnabled)
   appSettings.audioInputDeviceId = String(appSettings.audioInputDeviceId || '').trim()

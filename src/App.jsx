@@ -42,6 +42,20 @@ function enrichOllamaErrorText(text) {
   }
 
   const lower = trimmed.toLowerCase()
+  const looksLikeOllamaError = (
+    lower.startsWith('error:') ||
+    lower.startsWith('ollama error:') ||
+    lower.includes("client error '") ||
+    lower.includes("server error '") ||
+    (lower.includes('http') && lower.includes('error')) ||
+    lower.includes('unknown model architecture') ||
+    lower.includes('out of memory')
+  )
+
+  if (!looksLikeOllamaError) {
+    return raw
+  }
+
   if (lower.includes('unknown model architecture')) {
     return appendOllamaErrorHint(
       raw,

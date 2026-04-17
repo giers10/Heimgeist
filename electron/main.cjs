@@ -26,7 +26,7 @@ const DEFAULT_UI_SCALE = 1
 const MIN_UI_SCALE = 0.7
 const MAX_UI_SCALE = 1.3
 const DEFAULT_OPEN_DEVTOOLS_ON_STARTUP = false
-const DEFAULT_AUDIO_INPUT_ENABLED = false
+const DEFAULT_AUDIO_INPUT_ENABLED = true
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = ''
 
 const defaultSettings = {

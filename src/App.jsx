@@ -533,18 +533,27 @@ export default function App() {
 
     try {
       const dataUrl = await readFileAsDataUrl(blob)
-      const match = /^data:([^;]+);base64,([\s\S]+)$/i.exec(dataUrl)
-      if (!match) {
+      const commaIndex = dataUrl.indexOf(',')
+      if (commaIndex <= 5) {
         throw new Error('Recorded audio could not be encoded for upload.')
       }
+      const header = dataUrl.slice(0, commaIndex)
+      const payload = dataUrl.slice(commaIndex + 1)
+      if (!/^data:[^,]+;base64$/i.test(header) || !payload) {
+        throw new Error('Recorded audio could not be encoded for upload.')
+      }
+      const detectedMimeType = header
+        .slice(5)
+        .replace(/;base64$/i, '')
+        .trim()
 
       const response = await fetch(`${backendApiUrl}/audio/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          mime_type: mimeType || match[1] || 'audio/webm',
-          audio_base64: match[2],
+          mime_type: mimeType || detectedMimeType || 'audio/webm',
+          audio_base64: payload,
         }),
       })
       const data = await expectBackendJson(response)

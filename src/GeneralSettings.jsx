@@ -264,7 +264,7 @@ export default function GeneralSettings({
   }, [whisperModels, transcriptionModel, onTranscriptionModelChange, panel, settingsHydrated]);
 
   useEffect(() => {
-    if (panel !== 'Microphone') {
+    if (panel !== 'General') {
       return () => {};
     }
     if (!audioInputSupported) {
@@ -588,7 +588,7 @@ export default function GeneralSettings({
     );
   }
 
-  if (panel === 'Microphone') {
+  if (panel === 'General') {
     return (
       <div className="settings-content-panel">
         <div className="setting-section">

@@ -676,6 +676,7 @@ export default function App() {
         body: JSON.stringify({
           mime_type: mimeType || detectedMimeType || 'audio/webm',
           audio_base64: payload,
+          model: transcriptionModel || null,
           language: audioInputLanguage || null,
         }),
       })

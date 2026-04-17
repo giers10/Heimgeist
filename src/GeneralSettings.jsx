@@ -12,14 +12,17 @@ import {
 const BACKEND_API_URL_KEY = 'backendApiUrl';
 const OLLAMA_API_URL_KEY = 'ollamaApiUrl';
 const EMBED_MODEL_KEY = 'embedModel';
+const RERANK_MODEL_KEY = 'rerankModel';
 const MODEL_KEY = 'chatModel';
+const VISION_MODEL_KEY = 'visionModel';
+const TRANSCRIPTION_MODEL_KEY = 'transcriptionModel';
 const STREAM_KEY = 'streamOutput';
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
 const DEFAULT_AUDIO_INPUT_LANGUAGE = '';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
 const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434';
 const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest';
-const BGE_EMBED_MODEL = 'bge-m3:latest';
+const DEFAULT_TRANSCRIPTION_MODEL = 'base';
 const DEFAULT_UPDATE_STATUS = {
   state: 'idle',
   message: '',
@@ -30,6 +33,18 @@ const DEFAULT_UPDATE_STATUS = {
 
 function resolveBackendApiUrl(settings) {
   return settings.backendApiUrl || settings.ollamaApiUrl || DEFAULT_BACKEND_API_URL;
+}
+
+function buildSelectOptions(values, currentValue, missingLabel) {
+  const uniqueValues = [...new Set((Array.isArray(values) ? values : []).filter(Boolean))];
+  const options = uniqueValues.map(value => ({ value, label: value }));
+  if (currentValue && !uniqueValues.includes(currentValue)) {
+    options.unshift({
+      value: currentValue,
+      label: `${currentValue} (${missingLabel})`,
+    });
+  }
+  return options;
 }
 
 function shortCommit(commit) {
@@ -45,6 +60,8 @@ function getStatusTone(state) {
 
 export default function GeneralSettings({
   onModelChange,
+  onVisionModelChange,
+  onTranscriptionModelChange,
   onStreamOutputChange,
   onLibrariesPurged,
   onBackendApiUrlChange,
@@ -55,8 +72,15 @@ export default function GeneralSettings({
   const [backendApiUrl, setBackendApiUrl] = useState('');
   const [ollamaApiUrl, setOllamaApiUrl] = useState('');
   const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
-  const [models, setModels] = useState([]);
+  const [rerankModel, setRerankModel] = useState(DEFAULT_EMBED_MODEL);
+  const [chatModels, setChatModels] = useState([]);
+  const [embeddingModels, setEmbeddingModels] = useState([]);
+  const [visionModels, setVisionModels] = useState([]);
+  const [rerankingModels, setRerankingModels] = useState([]);
+  const [whisperModels, setWhisperModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [visionModel, setVisionModel] = useState('');
+  const [transcriptionModel, setTranscriptionModel] = useState(DEFAULT_TRANSCRIPTION_MODEL);
   const [streamOutput, setStreamOutput] = useState(false);
   const [audioInputEnabled, setAudioInputEnabled] = useState(false);
   const [audioInputDeviceId, setAudioInputDeviceId] = useState(DEFAULT_AUDIO_INPUT_DEVICE_ID);
@@ -84,7 +108,10 @@ export default function GeneralSettings({
       setBackendApiUrl(resolveBackendApiUrl(settings));
       setOllamaApiUrl(settings.ollamaApiUrl || DEFAULT_OLLAMA_API_URL);
       setEmbedModel(settings.embedModel || DEFAULT_EMBED_MODEL);
+      setRerankModel(settings.rerankModel || settings.embedModel || DEFAULT_EMBED_MODEL);
       setSelectedModel(settings.chatModel || '');
+      setVisionModel(settings.visionModel || settings.chatModel || '');
+      setTranscriptionModel(settings.transcriptionModel || DEFAULT_TRANSCRIPTION_MODEL);
       setStreamOutput(settings.streamOutput || false);
       setAudioInputEnabled(settings.audioInputEnabled === true);
       setAudioInputDeviceId(
@@ -110,20 +137,82 @@ export default function GeneralSettings({
       fetch(backendApiUrl + '/models')
         .then(r => r.json())
         .then(data => {
-          const names = data.models?.map(m => m.name) || [];
-          setModels(names);
-          if (!selectedModel || !names.includes(selectedModel)) {
-            const defaultModel = names[0] || '';
-            setSelectedModel(defaultModel);
-            window.electronAPI.setSetting(MODEL_KEY, defaultModel);
-            if (onModelChange) {
-              onModelChange(defaultModel);
-            }
-          }
+          setChatModels(Array.isArray(data.chat_models) ? data.chat_models : []);
+          setEmbeddingModels(Array.isArray(data.embedding_models) ? data.embedding_models : []);
+          setVisionModels(Array.isArray(data.vision_models) ? data.vision_models : []);
+          setRerankingModels(Array.isArray(data.reranking_models) ? data.reranking_models : []);
+          setWhisperModels(Array.isArray(data.whisper_models) ? data.whisper_models.map(model => model.name).filter(Boolean) : []);
         })
         .catch(err => console.error('Failed to load models', err));
     }
-  }, [backendApiUrl, ollamaApiUrl, selectedModel, onModelChange]);
+  }, [backendApiUrl, ollamaApiUrl]);
+
+  useEffect(() => {
+    if (chatModels.length === 0) {
+      return;
+    }
+
+    const nextModel = chatModels.includes(selectedModel) ? selectedModel : chatModels[0];
+    if (nextModel === selectedModel) {
+      return;
+    }
+
+    setSelectedModel(nextModel);
+    window.electronAPI.setSetting(MODEL_KEY, nextModel);
+    if (onModelChange) {
+      onModelChange(nextModel);
+    }
+  }, [chatModels, selectedModel, onModelChange]);
+
+  useEffect(() => {
+    if (visionModels.length === 0) {
+      return;
+    }
+
+    const nextModel = visionModels.includes(visionModel) ? visionModel : visionModels[0];
+    if (nextModel === visionModel) {
+      return;
+    }
+
+    setVisionModel(nextModel);
+    window.electronAPI.setSetting(VISION_MODEL_KEY, nextModel);
+    if (onVisionModelChange) {
+      onVisionModelChange(nextModel);
+    }
+  }, [visionModels, visionModel, onVisionModelChange]);
+
+  useEffect(() => {
+    if (embedModel) {
+      return;
+    }
+
+    const nextModel = embeddingModels[0] || DEFAULT_EMBED_MODEL;
+    setEmbedModel(nextModel);
+    window.electronAPI.setSetting(EMBED_MODEL_KEY, nextModel);
+  }, [embeddingModels, embedModel]);
+
+  useEffect(() => {
+    if (rerankModel) {
+      return;
+    }
+
+    const nextModel = embedModel || rerankingModels[0] || DEFAULT_EMBED_MODEL;
+    setRerankModel(nextModel);
+    window.electronAPI.setSetting(RERANK_MODEL_KEY, nextModel);
+  }, [rerankingModels, rerankModel, embedModel]);
+
+  useEffect(() => {
+    if (transcriptionModel) {
+      return;
+    }
+
+    const nextModel = whisperModels[0] || DEFAULT_TRANSCRIPTION_MODEL;
+    setTranscriptionModel(nextModel);
+    window.electronAPI.setSetting(TRANSCRIPTION_MODEL_KEY, nextModel);
+    if (onTranscriptionModelChange) {
+      onTranscriptionModelChange(nextModel);
+    }
+  }, [whisperModels, transcriptionModel, onTranscriptionModelChange]);
 
   useEffect(() => {
     if (!audioInputSupported) {

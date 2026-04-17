@@ -930,6 +930,15 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     )
   )
 
+  const conversationNeedsVision = msgs
+    .slice(0, lastUserIdx + 1)
+    .some(messageHasImageAttachments)
+  const requestModel = conversationNeedsVision ? (visionModel || model) : model
+  if (conversationNeedsVision && !selectedVisionModelSupportsVision) {
+    window.alert('The selected vision model does not support image inputs.')
+    return
+  }
+
   const requestController = beginCancelableRequest(sessionId)
 
   let enrichedPrompt = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
@@ -1015,7 +1024,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           signal: requestController.signal,
           body: JSON.stringify({
             index,
-            model,
+            model: requestModel,
             stream: true,
             enriched_message: enrichedPrompt,
             sources: citationSources || []
@@ -1069,7 +1078,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
         signal: requestController.signal,
         body: JSON.stringify({
           index,
-          model,
+          model: requestModel,
           stream: false,
           enriched_message: enrichedPrompt,
           sources: citationSources || []

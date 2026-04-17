@@ -2675,6 +2675,8 @@ async function sendMessage() {
       )
       setInput(composerSnapshot)
       setComposerAttachments(attachmentSnapshot)
+      window.alert(getErrorText(error))
+      return
     }
     const errorMsg = { role: 'assistant', content: 'Error: ' + getErrorText(error), id: `msg-${Date.now()}-${Math.random()}` }
     setChatSessions(prevSessions =>

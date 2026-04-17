@@ -31,6 +31,8 @@ const DEFAULT_OPEN_DEVTOOLS_ON_STARTUP = false
 const DEFAULT_AUDIO_INPUT_ENABLED = true
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = ''
 const DEFAULT_AUDIO_INPUT_LANGUAGE = ''
+const CHANGELOG_PAGE_SIZE = 50
+const CHANGELOG_MESSAGE_MAX_LENGTH = 500
 
 const defaultSettings = {
   backendApiUrl: DEFAULT_BACKEND_API_URL,
@@ -264,6 +266,68 @@ async function runGitCommand(args, options = {}) {
     maxBuffer: 1024 * 1024,
     timeout: options.timeout ?? 15000,
   })
+}
+
+function normalizeChangelogPage(value) {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1
+  }
+
+  return parsed
+}
+
+function truncateChangelogMessage(message) {
+  const normalized = String(message || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!normalized) {
+    return 'No commit message.'
+  }
+
+  if (normalized.length <= CHANGELOG_MESSAGE_MAX_LENGTH) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, CHANGELOG_MESSAGE_MAX_LENGTH - 3).trimEnd()}...`
+}
+
+function parseChangelogOutput(output) {
+  return String(output || '')
+    .split('\u0000\u0000')
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [hash = '', committedAt = '', ...messageParts] = record.split('\u0000')
+      return {
+        hash: hash.trim(),
+        committedAt: committedAt.trim(),
+        message: truncateChangelogMessage(messageParts.join('\u0000')),
+      }
+    })
+    .filter((entry) => entry.hash && entry.message)
+}
+
+async function getChangelogPage(page = 1) {
+  const normalizedPage = normalizeChangelogPage(page)
+  const pageSize = CHANGELOG_PAGE_SIZE
+  const skip = (normalizedPage - 1) * pageSize
+  const { stdout } = await runGitCommand([
+    'log',
+    `--max-count=${pageSize + 1}`,
+    `--skip=${skip}`,
+    '--format=%H%x00%cI%x00%B%x00%x00',
+  ], { timeout: 30000 })
+
+  const entries = parseChangelogOutput(stdout)
+
+  return {
+    page: normalizedPage,
+    pageSize,
+    hasMore: entries.length > pageSize,
+    entries: entries.slice(0, pageSize),
+  }
 }
 
 function scheduleAppRestart() {
@@ -589,6 +653,7 @@ app.whenReady().then(async () => {
 ipcMain.handle('get-settings', () => appSettings)
 ipcMain.handle('get-update-status', () => lastUpdateCheckResult)
 ipcMain.handle('check-for-updates', () => checkForUpdates('manual'))
+ipcMain.handle('get-changelog-page', (event, page) => getChangelogPage(page))
 
 ipcMain.handle('set-setting', (event, key, value) => {
   if (key === 'uiScale') {

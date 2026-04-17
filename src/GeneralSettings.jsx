@@ -53,6 +53,19 @@ function getStatusTone(state) {
   return 'neutral';
 }
 
+function formatCommitTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toLocaleString();
+}
+
 export default function GeneralSettings({
   panel,
   onModelChange,
@@ -80,6 +93,12 @@ export default function GeneralSettings({
   const [audioInputStatus, setAudioInputStatus] = useState({ tone: 'neutral', message: '' });
   const [updateStatus, setUpdateStatus] = useState(DEFAULT_UPDATE_STATUS);
   const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  const [changelogEntries, setChangelogEntries] = useState([]);
+  const [changelogPage, setChangelogPage] = useState(1);
+  const [changelogHasMore, setChangelogHasMore] = useState(false);
+  const [isLoadingChangelog, setIsLoadingChangelog] = useState(false);
+  const [changelogError, setChangelogError] = useState('');
   const [isPurgingLibraries, setIsPurgingLibraries] = useState(false);
   const [libraryPurgeStatus, setLibraryPurgeStatus] = useState({ tone: 'neutral', message: '' });
   const [settingsHydrated, setSettingsHydrated] = useState(false);
@@ -434,6 +453,46 @@ export default function GeneralSettings({
     }
   };
 
+  const loadChangelogPage = async (page) => {
+    setIsLoadingChangelog(true);
+    setChangelogError('');
+
+    try {
+      const result = await window.electronAPI.getChangelogPage(page);
+      setChangelogEntries(Array.isArray(result?.entries) ? result.entries : []);
+      setChangelogPage(Number.isInteger(result?.page) ? result.page : page);
+      setChangelogHasMore(Boolean(result?.hasMore));
+    } catch (error) {
+      setChangelogError(`Changelog load failed: ${error.message || String(error)}`);
+    } finally {
+      setIsLoadingChangelog(false);
+    }
+  };
+
+  const handleToggleChangelog = async () => {
+    if (isChangelogOpen) {
+      setIsChangelogOpen(false);
+      return;
+    }
+
+    setIsChangelogOpen(true);
+    if (changelogEntries.length === 0 && !isLoadingChangelog) {
+      await loadChangelogPage(1);
+    }
+  };
+
+  const handleChangelogPageChange = async (nextPage) => {
+    if (isLoadingChangelog || nextPage < 1) {
+      return;
+    }
+
+    if (nextPage > changelogPage && !changelogHasMore) {
+      return;
+    }
+
+    await loadChangelogPage(nextPage);
+  };
+
   const handlePurgeLibraries = async () => {
     const confirmed = window.confirm(
       'Delete all Heimgeist databases, staged files, and indexes from local storage? Chat history will be kept.'
@@ -670,6 +729,66 @@ export default function GeneralSettings({
               {updateStatus.localCommit && <div>Local: <code>{shortCommit(updateStatus.localCommit)}</code></div>}
               {updateStatus.remoteCommit && <div>Remote: <code>{shortCommit(updateStatus.remoteCommit)}</code></div>}
               {updateCheckedAtLabel && <div>Last checked: {updateCheckedAtLabel}</div>}
+            </div>
+          )}
+          <div className="setting-control-row changelog-toggle-row">
+            <button
+              type="button"
+              className="button ghost"
+              onClick={handleToggleChangelog}
+              disabled={isLoadingChangelog && !isChangelogOpen}
+            >
+              {isChangelogOpen ? 'v Hide Changelog' : '> Show Changelog'}
+            </button>
+          </div>
+          {isChangelogOpen && (
+            <div className="changelog-panel">
+              {changelogError && (
+                <p className="setting-status error">{changelogError}</p>
+              )}
+              {!changelogError && isLoadingChangelog && (
+                <p className="setting-status neutral">Loading changelog...</p>
+              )}
+              {!changelogError && !isLoadingChangelog && changelogEntries.length === 0 && (
+                <p className="setting-description">No commits found.</p>
+              )}
+              {!changelogError && changelogEntries.length > 0 && (
+                <>
+                  <ul className="changelog-list">
+                    {changelogEntries.map((entry) => {
+                      const committedAtLabel = formatCommitTimestamp(entry.committedAt);
+                      return (
+                        <li key={entry.hash} className="changelog-item">
+                          <div className="changelog-message">{entry.message}</div>
+                          <div className="changelog-item-meta">
+                            <code>{shortCommit(entry.hash)}</code>
+                            {committedAtLabel && <span>{committedAtLabel}</span>}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="setting-control-row changelog-pagination">
+                    <button
+                      type="button"
+                      className="button ghost"
+                      onClick={() => handleChangelogPageChange(changelogPage - 1)}
+                      disabled={isLoadingChangelog || changelogPage <= 1}
+                    >
+                      Previous
+                    </button>
+                    <span className="changelog-page-label">Page {changelogPage}</span>
+                    <button
+                      type="button"
+                      className="button ghost"
+                      onClick={() => handleChangelogPageChange(changelogPage + 1)}
+                      disabled={isLoadingChangelog || !changelogHasMore}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

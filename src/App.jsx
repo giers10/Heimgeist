@@ -638,7 +638,7 @@ export default function App() {
   }
 
   async function startAudioRecording() {
-    if (!audioInputEnabled || isRecordingAudio || isTranscribingAudio || isSending) {
+    if (!audioInputEnabled || !audioInputRuntimeReady || isRecordingAudio || isTranscribingAudio || isSending) {
       return
     }
     if (!supportsAudioInputCapture()) {
@@ -1230,6 +1230,13 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [audioInputEnabled, isRecordingAudio])
 
   useEffect(() => {
+    if (audioInputRuntimeReady || !isRecordingAudio) {
+      return
+    }
+    stopAudioRecording({ shouldTranscribe: false })
+  }, [audioInputRuntimeReady, isRecordingAudio])
+
+  useEffect(() => {
     if (activeSidebarMode === 'chats' || !isRecordingAudio) {
       return
     }
@@ -1265,6 +1272,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       try {
         let status = await fetchStartupOllamaStatus()
         if (cancelled) return
+        syncAudioInputRuntimeFromStartupStatus(status)
 
         if (!status?.ollama_running && status?.can_manage_locally) {
           const confirmed = window.confirm(
@@ -1296,12 +1304,15 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           } else {
             setStartupTaskMessage(`Downloading ${status.selected_embed_model} from Ollama. This can take a while on first install.`)
           }
-          await prepareStartupModels()
+          const prepared = await prepareStartupModels()
           if (cancelled) return
+          syncAudioInputRuntimeFromStartupStatus(prepared?.ollama || status)
         }
       } catch (error) {
         if (!cancelled) {
           console.warn('startup Ollama check failed', error)
+          setAudioInputRuntimeReady(false)
+          setAudioInputRuntimeMessage(`Whisper availability could not be verified: ${getErrorText(error)}`)
           if (actionStarted) {
             window.alert(`Startup action failed: ${getErrorText(error)}`)
           }
@@ -2718,17 +2729,21 @@ async function createNewChat() {
                       }
                       onClick={toggleAudioRecording}
                       title={
-                        isRecordingAudio
+                        !audioInputRuntimeReady
+                          ? (audioInputRuntimeMessage || 'Whisper is not available for audio input.')
+                          : isRecordingAudio
                           ? 'Stop voice input'
                           : (isTranscribingAudio ? 'Transcribing audio' : 'Start voice input')
                       }
                       aria-label={
-                        isRecordingAudio
+                        !audioInputRuntimeReady
+                          ? (audioInputRuntimeMessage || 'Whisper is not available for audio input.')
+                          : isRecordingAudio
                           ? 'Stop voice input'
                           : (isTranscribingAudio ? 'Transcribing audio' : 'Start voice input')
                       }
                       aria-pressed={isRecordingAudio}
-                      disabled={isTranscribingAudio || isSending}
+                      disabled={!audioInputRuntimeReady || isTranscribingAudio || isSending}
                     >
                       {isTranscribingAudio ? (
                         <div className="spinner composer-audio-icon-spinner" aria-hidden="true"></div>

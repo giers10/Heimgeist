@@ -2385,8 +2385,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 async function sendMessage() {
   const trimmedInput = input.trim()
   if (isSending || (!trimmedInput && composerAttachments.length === 0) || !model) return
-  if (composerAttachments.length > 0 && !selectedVisionModelSupportsVision) {
-    window.alert('The selected vision model does not support image inputs.')
+  if (composerAttachments.some(attachmentIsImage) && !canAttachImages) {
+    window.alert(imageAttachmentUnavailableReason)
     return
   }
 
@@ -2403,13 +2403,15 @@ async function sendMessage() {
   }
 
   const outgoingAttachments = composerAttachments.map(({ id, ...attachment }) => ({ ...attachment }))
-  const requestModel = resolveChatRequestModel(outgoingAttachments)
+  const composerSnapshot = input
+  const attachmentSnapshot = composerAttachments.map(attachment => ({ ...attachment }))
   const userMsg = {
     role: 'user',
     content: trimmedInput,
     attachments: outgoingAttachments,
     id: `msg-${Date.now()}-${Math.random()}`
   }
+  setIsAttachmentMenuOpen(false)
   justSentMessage.current = true
   lastSentSessionRef.current = targetSessionId
   setUserScrolledUp(targetSessionId, false)

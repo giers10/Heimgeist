@@ -339,7 +339,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [activeSidebarMode, setActiveSidebarMode] = useState('chats') // 'chats', 'dbs', 'settings'
   const activeSidebarModeRef = useRef(activeSidebarMode)
-  const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('General'); // 'General', 'Interface'
+  const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('AI Models');
   const [editingSessionId, setEditingSessionId] = useState(null); // ID of the session being edited
   const [editingLibrarySlug, setEditingLibrarySlug] = useState(null)
   const [libraries, setLibraries] = useState([])
@@ -371,7 +371,7 @@ export default function App() {
   const dbPickerRef = useRef(null)
   const imageInputRef = useRef(null)
   const imageDragDepthRef = useRef(0)
-  const [audioInputEnabled, setAudioInputEnabled] = useState(false)
+  const [audioInputEnabled, setAudioInputEnabled] = useState(true)
   const [audioInputDeviceId, setAudioInputDeviceId] = useState('')
   const [audioInputLanguage, setAudioInputLanguage] = useState('')
   const [audioInputRuntimeReady, setAudioInputRuntimeReady] = useState(true)
@@ -1289,7 +1289,10 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || 'base');
       setStreamOutput(settings.streamOutput || false);
-      setAudioInputEnabled(settings.audioInputEnabled === true);
+      setAudioInputEnabled(true);
+      if (settings.audioInputEnabled !== true) {
+        window.electronAPI.setSetting('audioInputEnabled', true)
+      }
       setAudioInputDeviceId(typeof settings.audioInputDeviceId === 'string' ? settings.audioInputDeviceId : '');
       setAudioInputLanguage(typeof settings.audioInputLanguage === 'string' ? settings.audioInputLanguage : '');
       setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
@@ -2501,10 +2504,10 @@ async function createNewChat() {
           {activeSidebarMode === 'settings' && (
             <div className="settings-list">
               <div
-                className={`settings-item ${activeSettingsSubmenu === 'General' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('General')}
+                className={`settings-item ${activeSettingsSubmenu === 'AI Models' ? 'active' : ''}`}
+                onClick={() => setActiveSettingsSubmenu('AI Models')}
               >
-                General
+                AI Models
               </div>
               <div
                 className={`settings-item ${activeSettingsSubmenu === 'Interface' ? 'active' : ''}`}
@@ -2513,10 +2516,28 @@ async function createNewChat() {
                 Interface
               </div>
               <div
-                className={`settings-item ${activeSettingsSubmenu === 'Websearch' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('Websearch')}
+                className={`settings-item ${activeSettingsSubmenu === 'Microphone' ? 'active' : ''}`}
+                onClick={() => setActiveSettingsSubmenu('Microphone')}
               >
-                Websearch
+                Microphone
+              </div>
+              <div
+                className={`settings-item ${activeSettingsSubmenu === 'Backend' ? 'active' : ''}`}
+                onClick={() => setActiveSettingsSubmenu('Backend')}
+              >
+                Backend
+              </div>
+              <div
+                className={`settings-item ${activeSettingsSubmenu === 'Updates' ? 'active' : ''}`}
+                onClick={() => setActiveSettingsSubmenu('Updates')}
+              >
+                Updates
+              </div>
+              <div
+                className={`settings-item ${activeSettingsSubmenu === 'Advanced' ? 'active' : ''}`}
+                onClick={() => setActiveSettingsSubmenu('Advanced')}
+              >
+                Advanced
               </div>
             </div>
           )}
@@ -2948,28 +2969,42 @@ async function createNewChat() {
             <div className="header">
               <strong>{activeSettingsSubmenu} Settings</strong>
             </div>
-            {activeSettingsSubmenu === 'General' && (
+            {activeSettingsSubmenu === 'AI Models' && (
               <GeneralSettings
+                panel="AI Models"
                 onModelChange={setModel}
                 onVisionModelChange={setVisionModel}
                 onTranscriptionModelChange={setTranscriptionModel}
-                onBackendApiUrlChange={setBackendApiUrl}
-                streamOutput={streamOutput}
-                onStreamOutputChange={setStreamOutput}
-                onAudioInputEnabledChange={setAudioInputEnabled}
-                onAudioInputDeviceChange={setAudioInputDeviceId}
-                onAudioInputLanguageChange={setAudioInputLanguage}
                 onLibrariesPurged={handleLibrariesPurged}
               />
             )}
-            {activeSettingsSubmenu === 'Interface' && <InterfaceSettings />}
-            {activeSettingsSubmenu === 'Websearch' && (
+            {activeSettingsSubmenu === 'Interface' && (
+              <InterfaceSettings
+                streamOutput={streamOutput}
+                onStreamOutputChange={setStreamOutput}
+              />
+            )}
+            {activeSettingsSubmenu === 'Microphone' && (
+              <GeneralSettings
+                panel="Microphone"
+                onAudioInputDeviceChange={setAudioInputDeviceId}
+                onAudioInputLanguageChange={setAudioInputLanguage}
+              />
+            )}
+            {activeSettingsSubmenu === 'Backend' && (
               <WebsearchSettings
+                onBackendApiUrlChange={setBackendApiUrl}
                 searxUrl={searxUrl}
                 setSearxUrl={setSearxUrl}
                 engines={searxEngines}
                 setEngines={(next) => setSearxEngines(normalizeWebsearchEngines(next))}
               />
+            )}
+            {activeSettingsSubmenu === 'Updates' && (
+              <GeneralSettings panel="Updates" />
+            )}
+            {activeSettingsSubmenu === 'Advanced' && (
+              <GeneralSettings panel="Advanced" onLibrariesPurged={handleLibrariesPurged} />
             )}
           </>
         )}

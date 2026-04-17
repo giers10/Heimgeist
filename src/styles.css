@@ -642,7 +642,7 @@ textarea.input {
   display: none;
 }
 
-.image-attachment-strip {
+.attachment-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -704,7 +704,7 @@ textarea.input {
   display: block;
 }
 
-.image-attachment-remove {
+.attachment-remove {
   position: absolute;
   top: 4px;
   right: 4px;
@@ -722,8 +722,55 @@ textarea.input {
   line-height: 1;
 }
 
-.image-attachment-remove:hover {
+.attachment-remove:hover {
   background: rgba(0, 0, 0, 0.85);
+}
+
+.attachment-remove--file {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--border);
+}
+
+.attachment-remove--file:hover {
+  background: var(--hover-bg);
+}
+
+.file-attachment-card {
+  position: relative;
+  min-width: 148px;
+  max-width: min(260px, 100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--input-bg) 88%, transparent);
+}
+
+.file-attachment-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.file-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text);
 }
 
 /* Settings Page Styles (removed nested sidebar styles) */

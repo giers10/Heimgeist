@@ -1517,6 +1517,56 @@ input:checked + .slider:before {
   font-size: 12px;
 }
 
+.attachment-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  min-width: 240px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 14px 32px rgba(0,0,0,.35);
+  z-index: 20;
+}
+
+.attachment-menu-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.attachment-menu-option:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+
+.attachment-menu-option:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.attachment-menu-status {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.attachment-menu-hint {
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 @keyframes mic-pulse {
   0% {
     opacity: 0.65;

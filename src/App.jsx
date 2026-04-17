@@ -2951,6 +2951,8 @@ async function createNewChat() {
             {activeSettingsSubmenu === 'General' && (
               <GeneralSettings
                 onModelChange={setModel}
+                onVisionModelChange={setVisionModel}
+                onTranscriptionModelChange={setTranscriptionModel}
                 onBackendApiUrlChange={setBackendApiUrl}
                 streamOutput={streamOutput}
                 onStreamOutputChange={setStreamOutput}

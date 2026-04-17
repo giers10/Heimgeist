@@ -11,11 +11,17 @@ APP_NAME = "Heimgeist"
 DEFAULT_BACKEND_API_URL = "http://127.0.0.1:8000"
 DEFAULT_OLLAMA_API_URL = "http://127.0.0.1:11434"
 DEFAULT_EMBED_MODEL = "nomic-embed-text:latest"
+DEFAULT_RERANK_MODEL = DEFAULT_EMBED_MODEL
+DEFAULT_TRANSCRIPTION_MODEL = "base"
 BGE_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "backendApiUrl": DEFAULT_BACKEND_API_URL,
     "ollamaApiUrl": DEFAULT_OLLAMA_API_URL,
+    "chatModel": "llama3",
+    "visionModel": "",
     "embedModel": DEFAULT_EMBED_MODEL,
+    "rerankModel": DEFAULT_RERANK_MODEL,
+    "transcriptionModel": DEFAULT_TRANSCRIPTION_MODEL,
 }
 
 
@@ -63,10 +69,31 @@ def normalize_embed_model(value: Any) -> str:
     if not isinstance(value, str):
         return DEFAULT_EMBED_MODEL
 
-    trimmed = value.strip().lower()
-    if trimmed in {"bge", "bge-m3", BGE_EMBED_MODEL}:
+    trimmed = value.strip()
+    if not trimmed:
+        return DEFAULT_EMBED_MODEL
+
+    lowered = trimmed.lower()
+    if lowered in {"bge", "bge-m3", BGE_EMBED_MODEL}:
         return BGE_EMBED_MODEL
-    return DEFAULT_EMBED_MODEL
+    if lowered in {"nomic", "nomic-embed-text", DEFAULT_EMBED_MODEL}:
+        return DEFAULT_EMBED_MODEL
+    return trimmed
+
+
+def normalize_rerank_model(value: Any) -> str:
+    return normalize_embed_model(value)
+
+
+def normalize_model_name(value: Any, fallback: str = "") -> str:
+    if not isinstance(value, str):
+        return fallback
+    trimmed = value.strip()
+    return trimmed or fallback
+
+
+def normalize_transcription_model(value: Any) -> str:
+    return normalize_model_name(value, DEFAULT_TRANSCRIPTION_MODEL)
 
 
 def load_app_settings() -> Dict[str, Any]:
@@ -92,7 +119,15 @@ def load_app_settings() -> Dict[str, Any]:
     else:
         settings["backendApiUrl"] = _normalize_url(settings.get("backendApiUrl"), DEFAULT_BACKEND_API_URL)
         settings["ollamaApiUrl"] = _normalize_url(settings.get("ollamaApiUrl"), DEFAULT_OLLAMA_API_URL)
+    if "rerankModel" not in raw:
+        settings["rerankModel"] = settings.get("embedModel")
+    if "visionModel" not in raw:
+        settings["visionModel"] = settings.get("chatModel", "")
     settings["embedModel"] = normalize_embed_model(settings.get("embedModel"))
+    settings["rerankModel"] = normalize_rerank_model(settings.get("rerankModel"))
+    settings["chatModel"] = normalize_model_name(settings.get("chatModel"))
+    settings["visionModel"] = normalize_model_name(settings.get("visionModel"))
+    settings["transcriptionModel"] = normalize_transcription_model(settings.get("transcriptionModel"))
 
     return settings
 
@@ -105,3 +140,13 @@ def get_ollama_api_url() -> str:
 def get_embed_model_preference() -> str:
     settings = load_app_settings()
     return normalize_embed_model(settings.get("embedModel"))
+
+
+def get_rerank_model_preference() -> str:
+    settings = load_app_settings()
+    return normalize_rerank_model(settings.get("rerankModel"))
+
+
+def get_transcription_model_preference() -> str:
+    settings = load_app_settings()
+    return normalize_transcription_model(settings.get("transcriptionModel"))

@@ -13,13 +13,13 @@ from .database import Base, engine, SessionLocal, ensure_sources_column
 from .local_rag import router as local_rag_router
 from .ollama_admin import inspect_ollama_startup, prepare_startup_models, pull_local_model, start_local_ollama
 from .ollama_client import (
-    list_models as ollama_list,
+    list_model_catalog as ollama_list_model_catalog,
     chat as ollama_chat,
     chat_stream as ollama_chat_stream,
     show_model as ollama_show_model,
     supports_vision as ollama_supports_vision,
 )
-from .whisper_admin import DEFAULT_WHISPER_MODEL, transcribe_audio_bytes
+from .whisper_admin import DEFAULT_WHISPER_MODEL, list_whisper_models, transcribe_audio_bytes
 from .websearch import enrich_prompt
 
 # Create tables + ensure migration
@@ -175,8 +175,15 @@ async def transcribe_audio_route(req: schemas.AudioTranscriptionRequest):
 @app.get("/models")
 async def get_models():
     try:
-        data = await ollama_list()
-        return {"models": [{"name": n} for n in data.get("models", [])]}
+        ollama_data, whisper_data = await asyncio.gather(
+            ollama_list_model_catalog(),
+            asyncio.to_thread(list_whisper_models),
+        )
+        return {
+            **ollama_data,
+            "whisper_models": whisper_data.get("models", []),
+            "whisper_error": whisper_data.get("error", ""),
+        }
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ollama not available: {e}")
 

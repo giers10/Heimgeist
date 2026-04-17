@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  getChangelogPage: (page) => ipcRenderer.invoke('get-changelog-page', page),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
   updateSettings: (settings) => ipcRenderer.invoke('update-settings', settings),
   pickPaths: () => ipcRenderer.invoke('pick-paths'),

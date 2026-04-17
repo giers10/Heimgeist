@@ -1,4 +1,3 @@
-import asyncio
 import httpx
 import json
 import re
@@ -147,7 +146,7 @@ async def list_models() -> Dict[str, Any]:
         return {"models": models}
 
 
-async def list_model_catalog(*, refresh: bool = False) -> Dict[str, Any]:
+async def list_model_catalog() -> Dict[str, Any]:
     ollama_url = get_ollama_api_url()
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(f"{ollama_url}/api/tags")
@@ -158,7 +157,7 @@ async def list_model_catalog(*, refresh: bool = False) -> Dict[str, Any]:
     models = [
         _build_model_catalog_entry(
             item or {},
-            show_model(str((item or {}).get("name") or "").strip(), refresh=refresh) if False else _get_cached_model_details(str((item or {}).get("name") or "").strip()),
+            _get_cached_model_details(str((item or {}).get("name") or "").strip()),
         )
         for item in raw_models
         if str((item or {}).get("name") or "").strip()

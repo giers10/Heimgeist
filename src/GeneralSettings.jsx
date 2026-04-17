@@ -35,13 +35,13 @@ function resolveBackendApiUrl(settings) {
   return settings.backendApiUrl || settings.ollamaApiUrl || DEFAULT_BACKEND_API_URL;
 }
 
-function buildSelectOptions(values, currentValue, missingLabel) {
+function buildSelectOptions(values, currentValue, missingLabel, showMissingLabel = true) {
   const uniqueValues = [...new Set((Array.isArray(values) ? values : []).filter(Boolean))];
   const options = uniqueValues.map(value => ({ value, label: value }));
   if (currentValue && !uniqueValues.includes(currentValue)) {
     options.unshift({
       value: currentValue,
-      label: `${currentValue} (${missingLabel})`,
+      label: showMissingLabel ? `${currentValue} (${missingLabel})` : currentValue,
     });
   }
   return options;
@@ -93,6 +93,7 @@ export default function GeneralSettings({
   const [isPurgingLibraries, setIsPurgingLibraries] = useState(false);
   const [libraryPurgeStatus, setLibraryPurgeStatus] = useState({ tone: 'neutral', message: '' });
   const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [isLoadingModelCatalog, setIsLoadingModelCatalog] = useState(false);
   const audioInputSupported = supportsAudioInputCapture();
 
   useEffect(() => {
@@ -138,18 +139,40 @@ export default function GeneralSettings({
   }, []);
 
   useEffect(() => {
-    if (backendApiUrl) {
-      fetch(backendApiUrl + '/models')
-        .then(r => r.json())
-        .then(data => {
-          setChatModels(Array.isArray(data.chat_models) ? data.chat_models : []);
-          setEmbeddingModels(Array.isArray(data.embedding_models) ? data.embedding_models : []);
-          setVisionModels(Array.isArray(data.vision_models) ? data.vision_models : []);
-          setRerankingModels(Array.isArray(data.reranking_models) ? data.reranking_models : []);
-          setWhisperModels(Array.isArray(data.whisper_models) ? data.whisper_models.map(model => model.name).filter(Boolean) : []);
-        })
-        .catch(err => console.error('Failed to load models', err));
+    if (!backendApiUrl) {
+      setIsLoadingModelCatalog(false);
+      return () => {};
     }
+
+    let cancelled = false;
+    setIsLoadingModelCatalog(true);
+
+    fetch(backendApiUrl + '/models')
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) {
+          return;
+        }
+        setChatModels(Array.isArray(data.chat_models) ? data.chat_models : []);
+        setEmbeddingModels(Array.isArray(data.embedding_models) ? data.embedding_models : []);
+        setVisionModels(Array.isArray(data.vision_models) ? data.vision_models : []);
+        setRerankingModels(Array.isArray(data.reranking_models) ? data.reranking_models : []);
+        setWhisperModels(Array.isArray(data.whisper_models) ? data.whisper_models.map(model => model.name).filter(Boolean) : []);
+      })
+      .catch(err => {
+        if (!cancelled) {
+          console.error('Failed to load models', err);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingModelCatalog(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [backendApiUrl, ollamaApiUrl]);
 
   useEffect(() => {
@@ -500,11 +523,12 @@ export default function GeneralSettings({
   const audioDeviceRefreshLabel = audioInputDevices.some(device => device.hasLabel)
     ? 'Refresh devices'
     : 'Allow microphone access';
-  const chatModelOptions = buildSelectOptions(chatModels, selectedModel, 'saved model unavailable');
-  const visionModelOptions = buildSelectOptions(visionModels, visionModel, 'saved model unavailable');
-  const embeddingModelOptions = buildSelectOptions(embeddingModels, embedModel, 'saved model unavailable');
-  const rerankingModelOptions = buildSelectOptions(rerankingModels, rerankModel, 'saved model unavailable');
-  const transcriptionModelOptions = buildSelectOptions(whisperModels, transcriptionModel, 'saved model unavailable');
+  const showMissingModelLabel = !isLoadingModelCatalog;
+  const chatModelOptions = buildSelectOptions(chatModels, selectedModel, 'saved model unavailable', showMissingModelLabel);
+  const visionModelOptions = buildSelectOptions(visionModels, visionModel, 'saved model unavailable', showMissingModelLabel);
+  const embeddingModelOptions = buildSelectOptions(embeddingModels, embedModel, 'saved model unavailable', showMissingModelLabel);
+  const rerankingModelOptions = buildSelectOptions(rerankingModels, rerankModel, 'saved model unavailable', showMissingModelLabel);
+  const transcriptionModelOptions = buildSelectOptions(whisperModels, transcriptionModel, 'saved model unavailable', showMissingModelLabel);
 
   return (
     <div className="settings-content-panel">
@@ -537,7 +561,7 @@ export default function GeneralSettings({
           value={embedModel}
           onChange={handleEmbedModelChange}
         >
-          {embeddingModelOptions.length === 0 && <option value="">— No embedding models available —</option>}
+          {embeddingModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No embedding models available —'}</option>}
           {embeddingModelOptions.map(model => (
             <option key={model.value} value={model.value}>{model.label}</option>
           ))}
@@ -553,7 +577,7 @@ export default function GeneralSettings({
           value={rerankModel}
           onChange={handleRerankModelChange}
         >
-          {rerankingModelOptions.length === 0 && <option value="">— No reranking models available —</option>}
+          {rerankingModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No reranking models available —'}</option>}
           {rerankingModelOptions.map(model => (
             <option key={model.value} value={model.value}>{model.label}</option>
           ))}
@@ -585,7 +609,7 @@ export default function GeneralSettings({
                 onChange={handleTranscriptionModelChange}
                 disabled={!audioInputSupported}
               >
-                {transcriptionModelOptions.length === 0 && <option value="">— No Whisper models available —</option>}
+                {transcriptionModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No Whisper models available —'}</option>}
                 {transcriptionModelOptions.map(model => (
                   <option key={model.value} value={model.value}>
                     {model.label}
@@ -645,7 +669,7 @@ export default function GeneralSettings({
           value={selectedModel}
           onChange={handleModelChange}
         >
-          {chatModelOptions.length === 0 && <option value="">— No chat models available —</option>}
+          {chatModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No chat models available —'}</option>}
           {chatModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
         </select>
         <p className="setting-description">
@@ -659,7 +683,7 @@ export default function GeneralSettings({
           value={visionModel}
           onChange={handleVisionModelChange}
         >
-          {visionModelOptions.length === 0 && <option value="">— No vision models available —</option>}
+          {visionModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No vision models available —'}</option>}
           {visionModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
         </select>
         <p className="setting-description">

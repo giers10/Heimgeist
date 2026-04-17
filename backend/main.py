@@ -771,8 +771,10 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         persist_file_text=True,
     )
 
+    session_pk = session.id
+
     user_row = models.ChatMessage(
-        session_pk=session.id,
+        session_pk=session_pk,
         role='user',
         content=req.message,
         attachments_json=json.dumps(user_attachments or []),
@@ -799,7 +801,7 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
             try:
                 db_sess = SessionLocal()
                 db_sess.add(models.ChatMessage(
-                    session_pk=session.id,
+                    session_pk=session_pk,
                     role='assistant',
                     content=full_reply,
                     sources_json=json.dumps(sources or []),
@@ -817,7 +819,7 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
 
         as_row = models.ChatMessage(
-            session_pk=session.id, role='assistant', content=reply,
+            session_pk=session_pk, role='assistant', content=reply,
             sources_json=json.dumps(sources or [])
         )
         db.add(as_row)

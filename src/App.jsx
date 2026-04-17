@@ -344,6 +344,20 @@ function formatRecordingDuration(milliseconds) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
+function buildModelPickerOptions(values, currentValue, missingLabel) {
+  const uniqueValues = [...new Set((Array.isArray(values) ? values : []).filter(Boolean))]
+  const options = uniqueValues.map(value => ({ value, label: value }))
+
+  if (currentValue && !uniqueValues.includes(currentValue)) {
+    options.unshift({
+      value: currentValue,
+      label: `${currentValue} (${missingLabel})`,
+    })
+  }
+
+  return options
+}
+
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
@@ -367,6 +381,10 @@ export default function App() {
   const [newLibraryName, setNewLibraryName] = useState('')
   const [libraryCreateError, setLibraryCreateError] = useState('')
   const [isDbPickerOpen, setIsDbPickerOpen] = useState(false)
+  const [isChatModelPickerOpen, setIsChatModelPickerOpen] = useState(false)
+  const [availableChatModels, setAvailableChatModels] = useState([])
+  const [availableVisionModels, setAvailableVisionModels] = useState([])
+  const [isLoadingModelCatalog, setIsLoadingModelCatalog] = useState(false)
 
   // Use currentSessionId for the actual chat operations
   const [model, setModel] = useState('')
@@ -379,6 +397,7 @@ export default function App() {
   const chatRef = useRef(null)
   const textareaRef = useRef(null); // Ref for the textarea
   const dbPickerRef = useRef(null)
+  const chatModelPickerRef = useRef(null)
   const imageInputRef = useRef(null)
   const imageDragDepthRef = useRef(0)
   const [audioInputEnabled, setAudioInputEnabled] = useState(true)

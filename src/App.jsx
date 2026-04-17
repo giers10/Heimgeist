@@ -524,15 +524,18 @@ export default function App() {
   const [model, setModel] = useState('')
   const [visionModel, setVisionModel] = useState('')
   const [transcriptionModel, setTranscriptionModel] = useState('base')
+  const [selectedChatModelSupportsVision, setSelectedChatModelSupportsVision] = useState(false)
   const [selectedVisionModelSupportsVision, setSelectedVisionModelSupportsVision] = useState(false)
   const [input, setInput] = useState('')
   const [composerAttachments, setComposerAttachments] = useState([])
+  const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
   const [isChatDragActive, setIsChatDragActive] = useState(false)
   const chatRef = useRef(null)
   const textareaRef = useRef(null); // Ref for the textarea
   const modelRef = useRef(model)
   const dbPickerRef = useRef(null)
   const chatModelPickerRef = useRef(null)
+  const attachmentMenuRef = useRef(null)
   const imageInputRef = useRef(null)
   const imageDragDepthRef = useRef(0)
   const [audioInputEnabled, setAudioInputEnabled] = useState(true)
@@ -579,6 +582,8 @@ export default function App() {
   const [unreadSessions, setUnreadSessions] = useState([]); // Track unread messages
   const [scrollPositions, setScrollPositions] = useState({}); // Store scroll positions for each session
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const canAttachImages = selectedChatModelSupportsVision || selectedVisionModelSupportsVision
+  const imageAttachmentUnavailableReason = 'Image attachments require a vision-capable chat model or configured vision model.'
   const startupOllamaCheckRanRef = useRef(false);
   // Editing state for user messages
   const [editingMessageIndex, setEditingMessageIndex] = useState(null);

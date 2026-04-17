@@ -2,16 +2,21 @@ from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
-class ImageAttachment(BaseModel):
+class ChatAttachment(BaseModel):
+    kind: Optional[str] = None
     name: str
     mime_type: Optional[str] = None
-    data_url: str
+    data_url: Optional[str] = None
+    source_path: Optional[str] = None
+    size: Optional[int] = None
+    record_type: Optional[str] = None
+    text: Optional[str] = None
 
 class Message(BaseModel):
     role: str
     content: str
     sources: Optional[List[str]] = None
-    attachments: Optional[List[ImageAttachment]] = None
+    attachments: Optional[List[ChatAttachment]] = None
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -20,7 +25,9 @@ class ChatRequest(BaseModel):
     enriched_message: Optional[str] = None
     stream: Optional[bool] = False
     sources: Optional[List[str]] = None
-    attachments: Optional[List[ImageAttachment]] = None
+    attachments: Optional[List[ChatAttachment]] = None
+    vision_model: Optional[str] = None
+    transcription_model: Optional[str] = None
 
 class ChatResponse(BaseModel):
     reply: str
@@ -59,6 +66,8 @@ class RegenerateRequest(BaseModel):
     enriched_message: Optional[str] = None
     stream: bool = True
     sources: Optional[List[str]] = None
+    vision_model: Optional[str] = None
+    transcription_model: Optional[str] = None
 
 # Request payload for the web search enrichment endpoint.
 class WebSearchRequest(BaseModel):

@@ -493,6 +493,64 @@ def _row_to_history_message(row: models.ChatMessage) -> dict:
         payload["attachments"] = [_attachment_history_payload(attachment) for attachment in attachments]
     return payload
 
+
+async def _build_ollama_user_message(
+    message: str,
+    attachments: List[dict],
+    *,
+    enriched_message: Optional[str],
+    request_model_supports_vision: bool,
+    vision_model: Optional[str],
+    transcription_model: Optional[str],
+    persist_file_text: bool,
+) -> tuple[dict, List[dict]]:
+    prepared_attachments, ollama_images, attachment_block = await _prepare_chat_message_attachments(
+        attachments,
+        request_model_supports_vision=request_model_supports_vision,
+        vision_model=vision_model,
+        transcription_model=transcription_model,
+        persist_file_text=persist_file_text,
+    )
+
+    payload = {
+        "role": "user",
+        "content": _compose_user_message_content(message, enriched_message, attachment_block),
+    }
+    if ollama_images:
+        payload["images"] = ollama_images
+    return payload, prepared_attachments
+
+
+async def _build_ollama_messages_from_rows(
+    rows: List[models.ChatMessage],
+    *,
+    request_model_supports_vision: bool,
+    vision_model: Optional[str],
+    transcription_model: Optional[str],
+    override_user_row_index: Optional[int] = None,
+    override_user_content: Optional[str] = None,
+) -> List[dict]:
+    conversation: List[dict] = []
+    for row_index, row in enumerate(rows):
+        if row.role != "user":
+            conversation.append({"role": row.role, "content": row.content})
+            continue
+
+        attachments = _load_message_attachments(getattr(row, "attachments_json", None), include_text=True)
+        enriched_message = override_user_content if override_user_row_index == row_index else None
+        message_payload, _prepared = await _build_ollama_user_message(
+            row.content,
+            attachments,
+            enriched_message=enriched_message,
+            request_model_supports_vision=request_model_supports_vision,
+            vision_model=vision_model,
+            transcription_model=transcription_model,
+            persist_file_text=False,
+        )
+        conversation.append(message_payload)
+
+    return conversation
+
 def get_db():
     db = SessionLocal()
     try:
@@ -659,8 +717,31 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(session)
 
-    # Store the BASE user prompt
-    user_attachments = _normalize_image_attachments(req.attachments)
+    request_model_supports_vision = await _model_supports_vision(req.model)
+    prior_rows = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.session_pk == session.id)
+        .order_by(models.ChatMessage.created_at.asc())
+        .all()
+    )
+    history_rows = prior_rows[-19:]
+    history_messages = await _build_ollama_messages_from_rows(
+        history_rows,
+        request_model_supports_vision=request_model_supports_vision,
+        vision_model=req.vision_model,
+        transcription_model=req.transcription_model,
+    )
+
+    current_user_message, user_attachments = await _build_ollama_user_message(
+        req.message,
+        req.attachments or [],
+        enriched_message=req.enriched_message,
+        request_model_supports_vision=request_model_supports_vision,
+        vision_model=req.vision_model,
+        transcription_model=req.transcription_model,
+        persist_file_text=True,
+    )
+
     user_row = models.ChatMessage(
         session_pk=session.id,
         role='user',
@@ -669,23 +750,7 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
     )
     db.add(user_row)
     db.commit()
-
-    # Build minimal context (last 20)
-    last_msgs = (
-        db.query(models.ChatMessage)
-        .filter(models.ChatMessage.session_pk == session.id)
-        .order_by(models.ChatMessage.created_at.asc())
-        .all()[-20:]
-    )
-    messages = [_row_to_ollama_message(m) for m in last_msgs]
-
-    # Patch last user with enriched_message only for LLM call
-    if req.enriched_message:
-        for i in range(len(messages) - 1, -1, -1):
-            if messages[i].get("role") == "user":
-                messages = messages.copy()
-                messages[i] = {**messages[i], "content": req.enriched_message}
-                break
+    messages = [*history_messages, current_user_message]
 
     # Sources to persist with the assistant reply
     sources = req.sources or []
@@ -701,12 +766,19 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
                 yield f"Ollama error: {e}"
 
             # Persist assistant reply (include sources_json)
-            as_row = models.ChatMessage(
-                session_pk=session.id, role='assistant', content=full_reply,
-                sources_json=json.dumps(sources or [])
-            )
-            db.add(as_row)
-            db.commit()
+            db_sess = None
+            try:
+                db_sess = SessionLocal()
+                db_sess.add(models.ChatMessage(
+                    session_pk=session.id,
+                    role='assistant',
+                    content=full_reply,
+                    sources_json=json.dumps(sources or []),
+                ))
+                db_sess.commit()
+            finally:
+                if db_sess is not None:
+                    db_sess.close()
 
         return StreamingResponse(stream_generator(), media_type="text/plain")
     else:
@@ -828,20 +900,21 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
             last_user_idx = i
             break
 
-    # prune after that user
+    request_model_supports_vision = await _model_supports_vision(model)
+    conversation = await _build_ollama_messages_from_rows(
+        msgs[: last_user_idx + 1],
+        request_model_supports_vision=request_model_supports_vision,
+        vision_model=req.vision_model,
+        transcription_model=req.transcription_model,
+        override_user_row_index=last_user_idx,
+        override_user_content=req.enriched_message,
+    )
+
+    # prune after that user only after conversation building succeeds
     if last_user_idx < len(msgs) - 1:
         for m in msgs[last_user_idx + 1:]:
             db.delete(m)
         db.commit()
-
-    conversation = [_row_to_ollama_message(m) for m in msgs[: last_user_idx + 1]]
-
-    if req.enriched_message:
-        for j in range(len(conversation) - 1, -1, -1):
-            if conversation[j].get("role") == "user":
-                conversation = conversation.copy()
-                conversation[j] = {**conversation[j], "content": req.enriched_message}
-                break
 
     session_pk = session.id
 

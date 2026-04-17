@@ -3178,7 +3178,7 @@ async function createNewChat() {
                       <div className="user-message-wrapper">
                         {isEditingThis ? (
                           <>
-                            <ImageAttachmentStrip attachments={m.attachments} className="message-attachment-strip" />
+                            <AttachmentStrip attachments={m.attachments} className="message-attachment-strip" />
                             <div className="msg-content msg-content--user editing">
                               <div className="user-edit-shadow" aria-hidden="true">
                                 {editText}
@@ -3211,7 +3211,7 @@ async function createNewChat() {
 
                             return (
                               <>
-                                <ImageAttachmentStrip attachments={attachments} className="message-attachment-strip" />
+                                <AttachmentStrip attachments={attachments} className="message-attachment-strip" />
                                 {hasText && <div className="msg-content msg-content--user">{displayText}</div>}
                                 {hasText && needsCollapse && (
                                   <button
@@ -3266,7 +3266,7 @@ async function createNewChat() {
                   onChange={handleComposerImageSelection}
                   tabIndex={-1}
                 />
-                <ImageAttachmentStrip
+                <AttachmentStrip
                   attachments={composerAttachments}
                   className="composer-attachment-strip"
                   removable

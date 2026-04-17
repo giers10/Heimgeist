@@ -556,6 +556,50 @@ export default function App() {
     return expectBackendJson(response)
   }
 
+  async function syncVisionModelFromChatModel(nextModel, options = {}) {
+    const { allowCapabilityLookup = true } = options
+    if (!nextModel) {
+      return false
+    }
+
+    if (availableVisionModels.includes(nextModel)) {
+      setVisionModel(nextModel)
+      window.electronAPI.setSetting('visionModel', nextModel)
+      return true
+    }
+
+    if (!allowCapabilityLookup || !backendApiUrl) {
+      return false
+    }
+
+    try {
+      const data = await fetchModelCapabilities(nextModel)
+      if (!data?.supports_vision) {
+        return false
+      }
+      setVisionModel(nextModel)
+      window.electronAPI.setSetting('visionModel', nextModel)
+      return true
+    } catch (error) {
+      if (!isAbortError(error)) {
+        console.warn('Failed to check chat model vision capabilities', error)
+      }
+      return false
+    }
+  }
+
+  async function handleChatModelSelect(nextModel) {
+    if (!nextModel || nextModel === model) {
+      setIsChatModelPickerOpen(false)
+      return
+    }
+
+    setIsChatModelPickerOpen(false)
+    setModel(nextModel)
+    window.electronAPI.setSetting('chatModel', nextModel)
+    await syncVisionModelFromChatModel(nextModel)
+  }
+
   async function prepareStartupModels() {
     const response = await fetch(`${backendApiUrl}/startup/prepare-models`, { method: 'POST' })
     return expectBackendJson(response)

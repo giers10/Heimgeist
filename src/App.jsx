@@ -296,6 +296,8 @@ export default function App() {
   const [audioInputEnabled, setAudioInputEnabled] = useState(false)
   const [audioInputDeviceId, setAudioInputDeviceId] = useState('')
   const [audioInputLanguage, setAudioInputLanguage] = useState('')
+  const [audioInputRuntimeReady, setAudioInputRuntimeReady] = useState(true)
+  const [audioInputRuntimeMessage, setAudioInputRuntimeMessage] = useState('')
   const [isRecordingAudio, setIsRecordingAudio] = useState(false)
   const [isTranscribingAudio, setIsTranscribingAudio] = useState(false)
   const [audioRecordingMs, setAudioRecordingMs] = useState(0)

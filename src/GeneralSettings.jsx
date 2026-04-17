@@ -126,7 +126,10 @@ export default function GeneralSettings({
           : DEFAULT_AUDIO_INPUT_LANGUAGE
       );
       setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
-      setSettingsHydrated(true);
+    }).finally(() => {
+      if (!cancelled) {
+        setSettingsHydrated(true);
+      }
     });
 
     return () => {

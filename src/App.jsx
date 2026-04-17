@@ -19,12 +19,22 @@ import {
   supportsAudioInputCapture,
 } from './audioInput'
 
-function sanitizeGeneratedChatTitle(title) {
-  return (title || '')
+function sanitizeChatTitle(title) {
+  let cleanedTitle = String(title || '')
     .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
-    .replace(/[*#]/g, '')
-    .replace(/\s+/g, ' ')
     .trim()
+
+  let previousTitle = null
+  while (cleanedTitle && cleanedTitle !== previousTitle) {
+    previousTitle = cleanedTitle
+    cleanedTitle = cleanedTitle
+      .replace(/^\s*#+\s*/, '')
+      .replace(/^\s*\*{1,2}\s*/, '')
+      .replace(/\s*\*{1,2}\s*$/, '')
+      .trim()
+  }
+
+  return cleanedTitle.replace(/\s+/g, ' ').trim()
 }
 
 function appendOllamaErrorHint(text, marker, block) {
@@ -1569,7 +1579,11 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     fetch(`${backendApiUrl}/sessions`)
       .then(r => r.json())
       .then(data => {
-        const sessionsWithMessages = data.sessions.map(s => ({ ...s, messages: [] }));
+        const sessionsWithMessages = data.sessions.map(s => ({
+          ...s,
+          name: sanitizeChatTitle(s.name),
+          messages: [],
+        }));
         setChatSessions(sessionsWithMessages);
         if (sessionsWithMessages.length > 0) {
           setActiveSessionId(sessionsWithMessages[0].session_id);
@@ -2190,7 +2204,7 @@ async function sendMessage() {
       })
       .then(r => r.json())
       .then(data => {
-        const sanitizedTitle = sanitizeGeneratedChatTitle(data.title)
+        const sanitizedTitle = sanitizeChatTitle(data.title)
         setChatSessions(prevSessions =>
           prevSessions.map(session =>
             session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session
@@ -2232,7 +2246,7 @@ async function createNewChat() {
       body: JSON.stringify({ session_id: newSessionId })
     });
     const newSession = await res.json();
-    const sessionWithMessages = { ...newSession, messages: [] };
+    const sessionWithMessages = { ...newSession, name: sanitizeChatTitle(newSession.name), messages: [] };
     setChatSessions(prevSessions => [sessionWithMessages, ...prevSessions]);
     setActiveSessionId(newSession.session_id);
     textareaRef.current?.focus();
@@ -2281,15 +2295,16 @@ async function createNewChat() {
   }
 
   function handleRename(sessionId, newName) {
+    const sanitizedName = sanitizeChatTitle(newName)
     fetch(`${backendApiUrl}/sessions/${sessionId}/rename`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: newName })
+      body: JSON.stringify({ title: sanitizedName })
     })
     .then(() => {
       setChatSessions(prevSessions =>
         prevSessions.map(session =>
-          session.session_id === sessionId ? { ...session, name: newName } : session
+          session.session_id === sessionId ? { ...session, name: sanitizedName } : session
         )
       );
       setEditingSessionId(null);

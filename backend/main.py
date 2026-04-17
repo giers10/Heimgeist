@@ -29,10 +29,19 @@ ensure_sources_column(engine)
 app = FastAPI(title="LLM Desktop Backend", version="0.1.0" )
 
 
-def sanitize_generated_chat_title(title: str) -> str:
+def sanitize_chat_title(title: str) -> str:
     cleaned_title = html.unescape(title or "")
     cleaned_title = re.sub(r'<think(?:ing)?>.*?</think(?:ing)?>', '', cleaned_title, flags=re.DOTALL | re.IGNORECASE)
-    cleaned_title = re.sub(r'[*#]', '', cleaned_title)
+    cleaned_title = cleaned_title.strip()
+
+    previous_title = None
+    while cleaned_title and cleaned_title != previous_title:
+        previous_title = cleaned_title
+        cleaned_title = re.sub(r'^\s*#+\s*', '', cleaned_title)
+        cleaned_title = re.sub(r'^\s*\*{1,2}\s*', '', cleaned_title)
+        cleaned_title = re.sub(r'\s*\*{1,2}\s*$', '', cleaned_title)
+        cleaned_title = cleaned_title.strip()
+
     cleaned_title = re.sub(r'\s+', ' ', cleaned_title)
     return cleaned_title.strip()
 
@@ -248,7 +257,17 @@ async def startup_prepare_models_route():
 @app.get("/sessions", response_model=schemas.SessionsResponse)
 def get_sessions(db: Session = Depends(get_db)):
     sessions = db.query(models.ChatSession).order_by(models.ChatSession.created_at.desc()).all()
-    return {"sessions": sessions}
+    return {
+        "sessions": [
+            {
+                "id": session.id,
+                "session_id": session.session_id,
+                "name": sanitize_chat_title(session.name),
+                "created_at": session.created_at,
+            }
+            for session in sessions
+        ]
+    }
 
 @app.post("/sessions", response_model=schemas.ChatSession)
 def create_session(req: schemas.CreateSessionRequest, db: Session = Depends(get_db)):
@@ -361,7 +380,7 @@ async def generate_title(req: schemas.GenerateTitleRequest, db: Session = Depend
 
     print(f"Original title from LLM: {title}") # Debugging line to see the raw title
 
-    cleaned_title = sanitize_generated_chat_title(title)
+    cleaned_title = sanitize_chat_title(title)
 
     print(f"Cleaned title before saving: {cleaned_title}") # Debugging line to see the cleaned title
 
@@ -389,7 +408,7 @@ def rename_session(session_id: str, req: schemas.GenerateTitleResponse, db: Sess
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    session.name = req.title
+    session.name = sanitize_chat_title(req.title)
     db.commit()
     return {"ok": True}
 

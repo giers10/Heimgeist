@@ -746,13 +746,13 @@ export default function GeneralSettings({
               {changelogError && (
                 <p className="setting-status error">{changelogError}</p>
               )}
-              {!changelogError && isLoadingChangelog && (
+              {isLoadingChangelog && (
                 <p className="setting-status neutral">Loading changelog...</p>
               )}
-              {!changelogError && !isLoadingChangelog && changelogEntries.length === 0 && (
+              {!isLoadingChangelog && !changelogError && changelogEntries.length === 0 && (
                 <p className="setting-description">No commits found.</p>
               )}
-              {!changelogError && changelogEntries.length > 0 && (
+              {changelogEntries.length > 0 && (
                 <>
                   <ul className="changelog-list">
                     {changelogEntries.map((entry) => {

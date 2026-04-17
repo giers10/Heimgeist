@@ -109,6 +109,52 @@ def inspect_whisper_model(model_name: str = DEFAULT_WHISPER_MODEL) -> Dict[str, 
     }
 
 
+def list_whisper_models() -> Dict[str, Any]:
+    error = whisper_runtime_error()
+    if error:
+        return {
+            "models": [
+                {
+                    "name": DEFAULT_WHISPER_MODEL,
+                    "available": False,
+                    "downloaded": False,
+                }
+            ],
+            "error": error,
+        }
+
+    whisper_mod = _load_whisper_module()
+    if whisper_mod is None:
+        return {
+            "models": [
+                {
+                    "name": DEFAULT_WHISPER_MODEL,
+                    "available": False,
+                    "downloaded": False,
+                }
+            ],
+            "error": "Failed to import the Whisper runtime.",
+        }
+
+    try:
+        names = list(whisper_mod.available_models())
+    except Exception:
+        names = [DEFAULT_WHISPER_MODEL]
+
+    out = []
+    for name in names:
+        status = inspect_whisper_model(name)
+        out.append(
+            {
+                "name": name,
+                "available": bool(status.get("available")),
+                "downloaded": bool(status.get("available")),
+            }
+        )
+
+    return {"models": out, "error": ""}
+
+
 def ensure_whisper_model_downloaded(model_name: str = DEFAULT_WHISPER_MODEL) -> Dict[str, Any]:
     status = inspect_whisper_model(model_name)
     if status["error"]:

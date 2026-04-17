@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { colorSchemes, applyColorScheme } from './colorSchemes'
 
 const COLOR_SCHEME_KEY = 'colorScheme'
+const STREAM_KEY = 'streamOutput'
 const UI_SCALE_KEY = 'uiScale'
 const OPEN_DEVTOOLS_ON_STARTUP_KEY = 'openDevToolsOnStartup'
 const DEFAULT_UI_SCALE = 1
@@ -18,7 +19,10 @@ function normalizeUiScale(value) {
   return Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, Math.round(numericValue * 100) / 100))
 }
 
-export default function InterfaceSettings() {
+export default function InterfaceSettings({
+  streamOutput = false,
+  onStreamOutputChange,
+}) {
   const [selectedColorScheme, setSelectedColorScheme] = useState('Default')
   const [uiScale, setUiScale] = useState(DEFAULT_UI_SCALE)
   const [openDevToolsOnStartup, setOpenDevToolsOnStartup] = useState(false)
@@ -61,6 +65,14 @@ export default function InterfaceSettings() {
     const nextValue = !openDevToolsOnStartup
     setOpenDevToolsOnStartup(nextValue)
     window.electronAPI.setSetting(OPEN_DEVTOOLS_ON_STARTUP_KEY, nextValue)
+  }
+
+  const handleStreamOutputToggle = () => {
+    const nextValue = !streamOutput
+    window.electronAPI.setSetting(STREAM_KEY, nextValue)
+    if (onStreamOutputChange) {
+      onStreamOutputChange(nextValue)
+    }
   }
 
   return (
@@ -117,6 +129,20 @@ export default function InterfaceSettings() {
         </label>
         <p className="setting-description">
           Only applies in Electron development mode. When enabled, Heimgeist opens detached DevTools for new windows and updates currently open windows right away.
+        </p>
+      </div>
+      <div className="setting-section">
+        <h3>Stream Output</h3>
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            checked={streamOutput}
+            onChange={handleStreamOutputToggle}
+          />
+          <span className="slider"></span>
+        </label>
+        <p className="setting-description">
+          Shows assistant replies token by token while they are generating instead of waiting for the full message to finish first.
         </p>
       </div>
     </div>

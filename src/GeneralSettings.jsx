@@ -480,6 +480,11 @@ export default function GeneralSettings({
   const audioDeviceRefreshLabel = audioInputDevices.some(device => device.hasLabel)
     ? 'Refresh devices'
     : 'Allow microphone access';
+  const chatModelOptions = buildSelectOptions(chatModels, selectedModel, 'saved model unavailable');
+  const visionModelOptions = buildSelectOptions(visionModels, visionModel, 'saved model unavailable');
+  const embeddingModelOptions = buildSelectOptions(embeddingModels, embedModel, 'saved model unavailable');
+  const rerankingModelOptions = buildSelectOptions(rerankingModels, rerankModel, 'saved model unavailable');
+  const transcriptionModelOptions = buildSelectOptions(whisperModels, transcriptionModel, 'saved model unavailable');
 
   return (
     <div className="settings-content-panel">
@@ -507,24 +512,34 @@ export default function GeneralSettings({
       </div>
       <div className="setting-section">
         <h3>Embedding Model</h3>
-        <div className="setting-switch-row">
-          <span className={"setting-switch-label" + (embedModel !== BGE_EMBED_MODEL ? " active" : "")}>
-            nomic
-          </span>
-          <label className="toggle-switch toggle-switch--binary-select">
-            <input
-              type="checkbox"
-              checked={embedModel === BGE_EMBED_MODEL}
-              onChange={handleEmbedModelToggle}
-            />
-            <span className="slider"></span>
-          </label>
-          <span className={"setting-switch-label" + (embedModel === BGE_EMBED_MODEL ? " active" : "")}>
-            bge-m3
-          </span>
-        </div>
+        <select
+          className="select"
+          value={embedModel}
+          onChange={handleEmbedModelChange}
+        >
+          {embeddingModelOptions.length === 0 && <option value="">— No embedding models available —</option>}
+          {embeddingModelOptions.map(model => (
+            <option key={model.value} value={model.value}>{model.label}</option>
+          ))}
+        </select>
         <p className="setting-description">
-          Heimgeist uses this model for web-search reranking and for building or rebuilding local database embeddings.
+          Heimgeist uses this model for building or rebuilding local database embeddings.
+        </p>
+      </div>
+      <div className="setting-section">
+        <h3>Reranking Model</h3>
+        <select
+          className="select"
+          value={rerankModel}
+          onChange={handleRerankModelChange}
+        >
+          {rerankingModelOptions.length === 0 && <option value="">— No reranking models available —</option>}
+          {rerankingModelOptions.map(model => (
+            <option key={model.value} value={model.value}>{model.label}</option>
+          ))}
+        </select>
+        <p className="setting-description">
+          Heimgeist currently uses an embedding-based reranker for web search, so this should generally be an embedding-capable Ollama model.
         </p>
       </div>
       <div className="setting-section">
@@ -544,6 +559,19 @@ export default function GeneralSettings({
         {audioInputEnabled && (
           <>
             <div className="setting-control-row">
+              <select
+                className="select"
+                value={transcriptionModel}
+                onChange={handleTranscriptionModelChange}
+                disabled={!audioInputSupported}
+              >
+                {transcriptionModelOptions.length === 0 && <option value="">— No Whisper models available —</option>}
+                {transcriptionModelOptions.map(model => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
               <select
                 className="select"
                 value={audioInputDeviceId}
@@ -582,6 +610,9 @@ export default function GeneralSettings({
               <p className={`setting-status ${audioInputStatus.tone}`}>{audioInputStatus.message}</p>
             )}
             <p className="setting-description">
+              Select the Whisper model Heimgeist should use for microphone transcription.
+            </p>
+            <p className="setting-description">
               Whisper can auto-detect the spoken language, but you can force a fixed input language here when auto-detection drifts.
             </p>
           </>
@@ -594,9 +625,26 @@ export default function GeneralSettings({
           value={selectedModel}
           onChange={handleModelChange}
         >
-          {models.length === 0 && <option>— No models available —</option>}
-          {models.map(m => <option key={m} value={m}>{m}</option>)}
+          {chatModelOptions.length === 0 && <option value="">— No chat models available —</option>}
+          {chatModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
         </select>
+        <p className="setting-description">
+          Heimgeist uses this model for normal text chat.
+        </p>
+      </div>
+      <div className="setting-section">
+        <h3>Vision Model</h3>
+        <select
+          className="select"
+          value={visionModel}
+          onChange={handleVisionModelChange}
+        >
+          {visionModelOptions.length === 0 && <option value="">— No vision models available —</option>}
+          {visionModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
+        </select>
+        <p className="setting-description">
+          Heimgeist uses this model when a chat message includes image attachments.
+        </p>
       </div>
       <div className="setting-section">
         <h3>Stream Output</h3>

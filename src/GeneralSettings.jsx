@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   AUDIO_INPUT_DEVICE_ID_KEY,
   AUDIO_INPUT_ENABLED_KEY,
+  AUDIO_INPUT_LANGUAGE_KEY,
+  AUDIO_INPUT_LANGUAGE_OPTIONS,
   ensureAudioInputPermission,
   listAudioInputDevices,
   supportsAudioInputCapture,
@@ -13,6 +15,7 @@ const EMBED_MODEL_KEY = 'embedModel';
 const MODEL_KEY = 'chatModel';
 const STREAM_KEY = 'streamOutput';
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
+const DEFAULT_AUDIO_INPUT_LANGUAGE = '';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
 const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434';
 const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest';
@@ -47,6 +50,7 @@ export default function GeneralSettings({
   onBackendApiUrlChange,
   onAudioInputEnabledChange,
   onAudioInputDeviceChange,
+  onAudioInputLanguageChange,
 }) {
   const [backendApiUrl, setBackendApiUrl] = useState('');
   const [ollamaApiUrl, setOllamaApiUrl] = useState('');
@@ -56,6 +60,7 @@ export default function GeneralSettings({
   const [streamOutput, setStreamOutput] = useState(false);
   const [audioInputEnabled, setAudioInputEnabled] = useState(false);
   const [audioInputDeviceId, setAudioInputDeviceId] = useState(DEFAULT_AUDIO_INPUT_DEVICE_ID);
+  const [audioInputLanguage, setAudioInputLanguage] = useState(DEFAULT_AUDIO_INPUT_LANGUAGE);
   const [audioInputDevices, setAudioInputDevices] = useState([]);
   const [isRefreshingAudioDevices, setIsRefreshingAudioDevices] = useState(false);
   const [audioInputStatus, setAudioInputStatus] = useState({ tone: 'neutral', message: '' });
@@ -86,6 +91,11 @@ export default function GeneralSettings({
         typeof settings.audioInputDeviceId === 'string'
           ? settings.audioInputDeviceId
           : DEFAULT_AUDIO_INPUT_DEVICE_ID
+      );
+      setAudioInputLanguage(
+        typeof settings.audioInputLanguage === 'string'
+          ? settings.audioInputLanguage
+          : DEFAULT_AUDIO_INPUT_LANGUAGE
       );
       setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
     });
@@ -268,6 +278,15 @@ export default function GeneralSettings({
     }
   };
 
+  const handleAudioInputLanguageChange = (event) => {
+    const nextLanguage = event.target.value;
+    setAudioInputLanguage(nextLanguage);
+    window.electronAPI.setSetting(AUDIO_INPUT_LANGUAGE_KEY, nextLanguage);
+    if (onAudioInputLanguageChange) {
+      onAudioInputLanguageChange(nextLanguage);
+    }
+  };
+
   const handleCheckForUpdates = async () => {
     setIsCheckingForUpdates(true);
     try {
@@ -425,6 +444,18 @@ export default function GeneralSettings({
                   </option>
                 ))}
               </select>
+              <select
+                className="select"
+                value={audioInputLanguage}
+                onChange={handleAudioInputLanguageChange}
+                disabled={!audioInputSupported}
+              >
+                {AUDIO_INPUT_LANGUAGE_OPTIONS.map(language => (
+                  <option key={language.value || 'auto'} value={language.value}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 className="button"
@@ -437,6 +468,9 @@ export default function GeneralSettings({
             {audioInputStatus.message && (
               <p className={`setting-status ${audioInputStatus.tone}`}>{audioInputStatus.message}</p>
             )}
+            <p className="setting-description">
+              Whisper can auto-detect the spoken language, but you can force a fixed input language here when auto-detection drifts.
+            </p>
           </>
         )}
       </div>

@@ -241,6 +241,7 @@ def transcribe_audio_bytes(
     audio_bytes: bytes,
     mime_type: str,
     model_name: str = DEFAULT_WHISPER_MODEL,
+    language: Optional[str] = None,
 ) -> Dict[str, Any]:
     if not audio_bytes:
         raise RuntimeError("Recorded audio was empty.")
@@ -256,7 +257,14 @@ def transcribe_audio_bytes(
             _convert_audio_to_wav(input_path, wav_path)
             source_path = wav_path
 
-        result = model.transcribe(str(source_path), task="transcribe", fp16=device == "cuda")
+        transcription_options = {
+            "task": "transcribe",
+            "fp16": device == "cuda",
+        }
+        if language:
+            transcription_options["language"] = str(language).strip().lower()
+
+        result = model.transcribe(str(source_path), **transcription_options)
         return {
             "model": model_name,
             "device": device,

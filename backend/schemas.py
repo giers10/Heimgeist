@@ -84,6 +84,7 @@ class AudioTranscriptionRequest(BaseModel):
     mime_type: str
     audio_base64: str
     model: Optional[str] = None
+    language: Optional[str] = None
 
 
 class AudioTranscriptionResponse(BaseModel):

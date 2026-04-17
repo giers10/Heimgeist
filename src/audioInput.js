@@ -1,5 +1,22 @@
 export const AUDIO_INPUT_ENABLED_KEY = 'audioInputEnabled'
 export const AUDIO_INPUT_DEVICE_ID_KEY = 'audioInputDeviceId'
+export const AUDIO_INPUT_LANGUAGE_KEY = 'audioInputLanguage'
+
+export const AUDIO_INPUT_LANGUAGE_OPTIONS = [
+  { value: '', label: 'Auto' },
+  { value: 'de', label: 'German' },
+  { value: 'en', label: 'English' },
+  { value: 'fr', label: 'French' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'it', label: 'Italian' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'nl', label: 'Dutch' },
+  { value: 'pl', label: 'Polish' },
+  { value: 'tr', label: 'Turkish' },
+  { value: 'ru', label: 'Russian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'zh', label: 'Chinese' },
+]
 
 const AUDIO_RECORDER_MIME_CANDIDATES = [
   'audio/webm;codecs=opus',

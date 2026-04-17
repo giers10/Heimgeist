@@ -159,6 +159,7 @@ async def transcribe_audio_route(req: schemas.AudioTranscriptionRequest):
             audio_bytes,
             mime_type,
             req.model or DEFAULT_WHISPER_MODEL,
+            req.language,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -28,6 +28,7 @@ const MAX_UI_SCALE = 1.3
 const DEFAULT_OPEN_DEVTOOLS_ON_STARTUP = false
 const DEFAULT_AUDIO_INPUT_ENABLED = true
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = ''
+const DEFAULT_AUDIO_INPUT_LANGUAGE = ''
 
 const defaultSettings = {
   backendApiUrl: DEFAULT_BACKEND_API_URL,
@@ -38,6 +39,7 @@ const defaultSettings = {
   openDevToolsOnStartup: DEFAULT_OPEN_DEVTOOLS_ON_STARTUP,
   audioInputEnabled: DEFAULT_AUDIO_INPUT_ENABLED,
   audioInputDeviceId: DEFAULT_AUDIO_INPUT_DEVICE_ID,
+  audioInputLanguage: DEFAULT_AUDIO_INPUT_LANGUAGE,
   chatModel: 'llama3',
 }
 
@@ -92,6 +94,7 @@ function migrateSettings(rawSettings) {
   nextSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(nextSettings.openDevToolsOnStartup)
   nextSettings.audioInputEnabled = normalizeBooleanSetting(nextSettings.audioInputEnabled)
   nextSettings.audioInputDeviceId = String(nextSettings.audioInputDeviceId || '').trim()
+  nextSettings.audioInputLanguage = String(nextSettings.audioInputLanguage || '').trim().toLowerCase()
 
   return { nextSettings, migrated }
 }
@@ -553,6 +556,8 @@ ipcMain.handle('set-setting', (event, key, value) => {
     appSettings[key] = normalizeBooleanSetting(value)
   } else if (key === 'audioInputDeviceId') {
     appSettings[key] = String(value || '').trim()
+  } else if (key === 'audioInputLanguage') {
+    appSettings[key] = String(value || '').trim().toLowerCase()
   } else {
     appSettings[key] = value
   }
@@ -572,6 +577,7 @@ ipcMain.handle('update-settings', (event, settings) => {
   appSettings.openDevToolsOnStartup = normalizeOpenDevToolsOnStartup(appSettings.openDevToolsOnStartup)
   appSettings.audioInputEnabled = normalizeBooleanSetting(appSettings.audioInputEnabled)
   appSettings.audioInputDeviceId = String(appSettings.audioInputDeviceId || '').trim()
+  appSettings.audioInputLanguage = String(appSettings.audioInputLanguage || '').trim().toLowerCase()
   saveSettings()
   if (Object.prototype.hasOwnProperty.call(settings, 'uiScale')) {
     applyUiScaleToAllWindows()

@@ -295,6 +295,7 @@ export default function App() {
   const imageDragDepthRef = useRef(0)
   const [audioInputEnabled, setAudioInputEnabled] = useState(false)
   const [audioInputDeviceId, setAudioInputDeviceId] = useState('')
+  const [audioInputLanguage, setAudioInputLanguage] = useState('')
   const [isRecordingAudio, setIsRecordingAudio] = useState(false)
   const [isTranscribingAudio, setIsTranscribingAudio] = useState(false)
   const [audioRecordingMs, setAudioRecordingMs] = useState(0)
@@ -554,6 +555,7 @@ export default function App() {
         body: JSON.stringify({
           mime_type: mimeType || detectedMimeType || 'audio/webm',
           audio_base64: payload,
+          language: audioInputLanguage || null,
         }),
       })
       const data = await expectBackendJson(response)
@@ -1144,6 +1146,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       setStreamOutput(settings.streamOutput || false);
       setAudioInputEnabled(settings.audioInputEnabled === true);
       setAudioInputDeviceId(typeof settings.audioInputDeviceId === 'string' ? settings.audioInputDeviceId : '');
+      setAudioInputLanguage(typeof settings.audioInputLanguage === 'string' ? settings.audioInputLanguage : '');
       setScrollPositions(settings.scrollPositions || {}); // Load scroll positions
       applyColorScheme(settings.colorScheme || 'Default'); // Apply initial scheme
     }).finally(() => {
@@ -2788,6 +2791,7 @@ async function createNewChat() {
                 onStreamOutputChange={setStreamOutput}
                 onAudioInputEnabledChange={setAudioInputEnabled}
                 onAudioInputDeviceChange={setAudioInputDeviceId}
+                onAudioInputLanguageChange={setAudioInputLanguage}
                 onLibrariesPurged={handleLibrariesPurged}
               />
             )}

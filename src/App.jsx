@@ -2149,6 +2149,23 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     setIsChatModelPickerOpen(false)
   }, [activeSessionId, activeSidebarMode])
 
+  useEffect(() => {
+    if (!isAttachmentMenuOpen) return
+
+    const onPointerDown = (event) => {
+      if (!attachmentMenuRef.current?.contains(event.target)) {
+        setIsAttachmentMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [isAttachmentMenuOpen])
+
+  useEffect(() => {
+    setIsAttachmentMenuOpen(false)
+  }, [activeSessionId, activeSidebarMode, canAttachImages])
+
   // Persist the scrollTop of the session we are LEAVING (on chat change or when leaving the chat view)
   useEffect(() => {
     const leavingSessionId = activeSessionId;

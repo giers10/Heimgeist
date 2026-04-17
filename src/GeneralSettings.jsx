@@ -206,7 +206,14 @@ export default function GeneralSettings({
     if (onModelChange) {
       onModelChange(nextModel);
     }
-  }, [chatModels, selectedModel, onModelChange, panel, settingsHydrated]);
+    if (visionModels.includes(nextModel) && nextModel !== visionModel) {
+      setVisionModel(nextModel);
+      window.electronAPI.setSetting(VISION_MODEL_KEY, nextModel);
+      if (onVisionModelChange) {
+        onVisionModelChange(nextModel);
+      }
+    }
+  }, [chatModels, onModelChange, onVisionModelChange, panel, selectedModel, settingsHydrated, visionModel, visionModels]);
 
   useEffect(() => {
     if (panel !== 'AI Models') {
@@ -349,6 +356,13 @@ export default function GeneralSettings({
     window.electronAPI.setSetting(MODEL_KEY, newModel);
     if (onModelChange) {
       onModelChange(newModel);
+    }
+    if (visionModels.includes(newModel) && newModel !== visionModel) {
+      setVisionModel(newModel);
+      window.electronAPI.setSetting(VISION_MODEL_KEY, newModel);
+      if (onVisionModelChange) {
+        onVisionModelChange(newModel);
+      }
     }
   };
 

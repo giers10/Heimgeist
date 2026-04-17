@@ -324,21 +324,6 @@ export default function GeneralSettings({
     };
   }, [audioInputSupported, panel]);
 
-  const handleBackendUrlChange = (event) => {
-    const newUrl = event.target.value;
-    setBackendApiUrl(newUrl);
-    window.electronAPI.setSetting(BACKEND_API_URL_KEY, newUrl);
-    if (onBackendApiUrlChange) {
-      onBackendApiUrlChange(newUrl);
-    }
-  };
-
-  const handleOllamaUrlChange = (event) => {
-    const newUrl = event.target.value;
-    setOllamaApiUrl(newUrl);
-    window.electronAPI.setSetting(OLLAMA_API_URL_KEY, newUrl);
-  };
-
   const handleModelChange = (event) => {
     const newModel = event.target.value;
     setSelectedModel(newModel);
@@ -378,15 +363,6 @@ export default function GeneralSettings({
     }
   };
 
-  const handleStreamToggle = () => {
-    const newStreamValue = !streamOutput;
-    setStreamOutput(newStreamValue);
-    window.electronAPI.setSetting(STREAM_KEY, newStreamValue);
-    if (onStreamOutputChange) {
-      onStreamOutputChange(newStreamValue);
-    }
-  };
-
   const refreshAudioDevices = async ({ requestAccess = false } = {}) => {
     if (!audioInputSupported) {
       return;
@@ -419,18 +395,6 @@ export default function GeneralSettings({
       });
     } finally {
       setIsRefreshingAudioDevices(false);
-    }
-  };
-
-  const handleAudioInputToggle = () => {
-    const nextValue = !audioInputEnabled;
-    setAudioInputEnabled(nextValue);
-    window.electronAPI.setSetting(AUDIO_INPUT_ENABLED_KEY, nextValue);
-    if (onAudioInputEnabledChange) {
-      onAudioInputEnabledChange(nextValue);
-    }
-    if (nextValue) {
-      refreshAudioDevices();
     }
   };
 

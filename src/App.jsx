@@ -1757,6 +1757,10 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     return chatSessions.find(s => s.session_id === activeSessionId)?.messages || [];
   }, [activeSessionId, chatSessions]);
 
+  const activeChatSession = useMemo(() => {
+    return chatSessions.find(session => session.session_id === activeSessionId) || null
+  }, [activeSessionId, chatSessions])
+
   const activeLibrary = useMemo(() => {
     return libraries.find(lib => lib.slug === activeLibrarySlug) || null;
   }, [activeLibrarySlug, libraries]);
@@ -1778,6 +1782,10 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     if (chatLibrary.states?.is_indexed) return ''
     return chatLibraryHasActiveJob ? ' (syncing)' : ' (needs sync)'
   }, [chatLibrary, chatLibraryHasActiveJob])
+
+  const chatModelPickerOptions = useMemo(() => {
+    return buildModelPickerOptions(availableChatModels, model, 'saved model unavailable')
+  }, [availableChatModels, model])
 
   function getChatLibrarySlugForSession(sessionId) {
     if (!sessionId) return null

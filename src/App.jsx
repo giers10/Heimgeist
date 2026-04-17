@@ -2573,6 +2573,23 @@ async function sendMessage() {
         }
 
         console.error('Failed to send message:', error)
+        if (Number(error?.status) >= 400 && Number(error?.status) < 500) {
+          setAssistantMessageContent(targetSessionId, assistantMsgId, fullReply, { removeIfEmpty: true })
+          setChatSessions(prevSessions =>
+            prevSessions.map(session =>
+              session.session_id === targetSessionId
+                ? {
+                    ...session,
+                    messages: (session.messages || []).filter(message => message.id !== userMsg.id),
+                  }
+                : session
+            )
+          )
+          setInput(composerSnapshot)
+          setComposerAttachments(attachmentSnapshot)
+          window.alert(getErrorText(error))
+          return
+        }
         setAssistantMessageContent(targetSessionId, assistantMsgId, 'Error: ' + getErrorText(error), { removeIfEmpty: true })
         return
       }

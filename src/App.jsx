@@ -2400,7 +2400,13 @@ async function sendMessage() {
     isNewChat = currentSession && currentSession.name === "New Chat" && currentSession.messages.length === 0
   }
 
+  const existingMessages = (chatSessions.find(s => s.session_id === targetSessionId)?.messages) || []
   const outgoingAttachments = composerAttachments.map(({ id, ...attachment }) => ({ ...attachment }))
+  const conversationNeedsVision = existingMessages.some(messageHasImageAttachments) || outgoingAttachments.some(attachmentIsImage)
+  if (conversationNeedsVision && !canAttachImages) {
+    window.alert(imageAttachmentUnavailableReason)
+    return
+  }
   const composerSnapshot = input
   const attachmentSnapshot = composerAttachments.map(attachment => ({ ...attachment }))
   const userMsg = {

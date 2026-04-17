@@ -9,8 +9,15 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .app_settings import get_embed_model_preference, get_ollama_api_url, normalize_embed_model
-from .whisper_admin import DEFAULT_WHISPER_MODEL, ensure_whisper_model_downloaded, inspect_whisper_model
+from .app_settings import (
+    get_embed_model_preference,
+    get_ollama_api_url,
+    get_rerank_model_preference,
+    get_transcription_model_preference,
+    normalize_embed_model,
+    normalize_rerank_model,
+)
+from .whisper_admin import ensure_whisper_model_downloaded, inspect_whisper_model
 
 
 LOCAL_OLLAMA_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -56,9 +63,11 @@ async def _list_model_names(ollama_url: str, *, timeout: float = 5.0) -> List[st
 async def inspect_ollama_startup() -> Dict[str, Any]:
     ollama_url = get_ollama_api_url()
     embed_model = get_embed_model_preference()
+    rerank_model = get_rerank_model_preference()
+    transcription_model = get_transcription_model_preference()
     ollama_bin = _ollama_binary()
     is_local = _is_local_ollama_url(ollama_url)
-    whisper_status = inspect_whisper_model(DEFAULT_WHISPER_MODEL)
+    whisper_status = inspect_whisper_model(transcription_model)
     available_models: List[str] = []
     error = ""
     running = False
@@ -70,13 +79,17 @@ async def inspect_ollama_startup() -> Dict[str, Any]:
         error = str(exc)
 
     available = bool(set(available_models) & _model_aliases(embed_model))
+    rerank_available = bool(set(available_models) & _model_aliases(rerank_model))
     return {
         "ollama_url": ollama_url,
         "ollama_running": running,
         "ollama_binary_found": bool(ollama_bin),
         "can_manage_locally": bool(ollama_bin) and is_local,
         "selected_embed_model": embed_model,
+        "selected_rerank_model": rerank_model,
+        "selected_transcription_model": transcription_model,
         "embedding_model_available": available,
+        "reranking_model_available": rerank_available,
         "available_models": available_models,
         "whisper_model": whisper_status["model"],
         "whisper_model_available": bool(whisper_status["available"]),
@@ -167,13 +180,24 @@ async def prepare_startup_models() -> Dict[str, Any]:
         "skipped": False,
         "reason": "",
     }
+    rerank_result: Dict[str, Any] = {
+        "model": status["selected_rerank_model"],
+        "available": bool(status["reranking_model_available"]),
+        "downloaded": False,
+        "skipped": False,
+        "reason": "",
+    }
 
     if not status["ollama_running"]:
         embedding_result["skipped"] = True
         embedding_result["reason"] = "Ollama is not running."
+        rerank_result["skipped"] = True
+        rerank_result["reason"] = "Ollama is not running."
     elif not status["can_manage_locally"]:
         embedding_result["skipped"] = True
         embedding_result["reason"] = "Automatic model pulls are only available for local Ollama."
+        rerank_result["skipped"] = True
+        rerank_result["reason"] = "Automatic model pulls are only available for local Ollama."
     elif not status["embedding_model_available"]:
         pulled = await pull_local_model(status["selected_embed_model"])
         status = pulled["status"]
@@ -185,8 +209,24 @@ async def prepare_startup_models() -> Dict[str, Any]:
             "reason": "",
         }
 
+    rerank_model = normalize_rerank_model(status["selected_rerank_model"])
+    if rerank_model == normalize_embed_model(status["selected_embed_model"]):
+        rerank_result["available"] = bool(status["embedding_model_available"])
+        rerank_result["downloaded"] = bool(embedding_result.get("downloaded"))
+    elif not rerank_result["skipped"] and not status["reranking_model_available"]:
+        pulled = await pull_local_model(rerank_model)
+        status = pulled["status"]
+        rerank_result = {
+            "model": pulled["model"],
+            "available": bool(status["reranking_model_available"]),
+            "downloaded": bool(pulled.get("downloaded")),
+            "skipped": False,
+            "reason": "",
+        }
+
     return {
         "ollama": status,
         "whisper": whisper_result,
         "embedding_model": embedding_result,
+        "reranking_model": rerank_result,
     }

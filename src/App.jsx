@@ -2350,9 +2350,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     if (activeSidebarMode !== 'chats' || !hasFilePayload(event)) return
     event.preventDefault()
     imageDragDepthRef.current += 1
-    if (eventHasImageFiles(event) || Array.from(event?.dataTransfer?.files || []).some(isSupportedChatFile)) {
-      setIsChatDragActive(true)
-    }
+    setIsChatDragActive(true)
   }
 
   const handleChatDragOver = (event) => {

@@ -15,5 +15,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const url = event.currentTarget.href;
     ipcRenderer.send('open-external-link', url);
   },
-  onWindowFocus: (callback) => ipcRenderer.on('window-focused', callback)
+  onWindowFocus: (callback) => ipcRenderer.on('window-focused', callback),
+  offWindowFocus: (callback) => ipcRenderer.removeListener('window-focused', callback),
 })

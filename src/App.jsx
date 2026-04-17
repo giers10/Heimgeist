@@ -1692,6 +1692,37 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     let cancelled = false
     const controller = new AbortController()
 
+    if (!backendApiUrl || !model) {
+      setSelectedChatModelSupportsVision(false)
+      return () => {
+        controller.abort()
+      }
+    }
+
+    ;(async () => {
+      try {
+        const data = await fetchModelCapabilities(model, controller.signal)
+        if (!cancelled) {
+          setSelectedChatModelSupportsVision(Boolean(data?.supports_vision))
+        }
+      } catch (error) {
+        if (!cancelled && !isAbortError(error)) {
+          console.warn('Failed to load chat model capabilities', error)
+          setSelectedChatModelSupportsVision(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [backendApiUrl, model])
+
+  useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+
     if (!backendApiUrl || !visionModel) {
       setSelectedVisionModelSupportsVision(false)
       return () => {
@@ -1722,7 +1753,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   useEffect(() => {
     imageDragDepthRef.current = 0
     setIsChatDragActive(false)
-  }, [selectedVisionModelSupportsVision, activeSidebarMode])
+  }, [canAttachImages, activeSidebarMode])
 
   useEffect(() => {
     if (audioInputEnabled || !isRecordingAudio) {

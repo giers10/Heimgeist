@@ -643,13 +643,7 @@ export default function App() {
   }
 
   function messageHasImageAttachments(message) {
-    return Array.isArray(message?.attachments) && message.attachments.length > 0
-  }
-
-  function resolveChatRequestModel(attachments = []) {
-    return Array.isArray(attachments) && attachments.length > 0
-      ? (visionModel || model)
-      : model
+    return Array.isArray(message?.attachments) && message.attachments.some(attachmentIsImage)
   }
 
   function getErrorText(error) {
@@ -778,16 +772,67 @@ export default function App() {
     }
   }
 
+  function buildAttachmentTitleSeed(text, attachments = []) {
+    const trimmed = String(text || '').trim()
+    if (trimmed) {
+      return trimmed
+    }
+    const firstAttachment = Array.isArray(attachments) ? attachments[0] : null
+    const firstName = getAttachmentDisplayName(firstAttachment, '')
+    return firstName || 'Attachment'
+  }
+
+  function appendComposerFileAttachments(attachments) {
+    if (!Array.isArray(attachments) || attachments.length === 0) {
+      return
+    }
+    setComposerAttachments(prev => [...prev, ...attachments])
+  }
+
+  async function appendComposerFilePaths(paths) {
+    const nextAttachments = []
+    const rejected = []
+
+    for (const rawPath of Array.from(paths || [])) {
+      const sourcePath = String(rawPath || '').trim()
+      const label = getFileName(sourcePath, 'file')
+      if (!sourcePath) {
+        rejected.push('One selected file had no usable local path.')
+        continue
+      }
+      if (!isSupportedChatFilePath(sourcePath)) {
+        rejected.push(`${label}: unsupported file type for chat attachments.`)
+        continue
+      }
+
+      nextAttachments.push(buildComposerFileAttachment({
+        sourcePath,
+        name: getFileName(sourcePath, 'file'),
+        mimeType: guessMimeTypeFromName(sourcePath),
+      }))
+    }
+
+    if (nextAttachments.length > 0) {
+      appendComposerFileAttachments(nextAttachments)
+    }
+
+    if (rejected.length > 0) {
+      window.alert(rejected.join('\n'))
+    }
+  }
+
   async function appendComposerImageFiles(fileList) {
     const incoming = Array.from(fileList || []).filter(isImageFile)
     if (!incoming.length) {
       return
     }
-    if (!selectedVisionModelSupportsVision) {
+    if (!canAttachImages) {
+      window.alert(imageAttachmentUnavailableReason)
       return
     }
 
-    const remainingSlots = Math.max(0, MAX_IMAGE_ATTACHMENTS - composerAttachments.length)
+    const currentImageCount = composerAttachments.filter(attachmentIsImage).length
+    const remainingSlots = Math.max(0, MAX_IMAGE_ATTACHMENTS - currentImageCount)
     if (remainingSlots <= 0) {
       window.alert(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images per message.`)
       return
@@ -831,10 +876,73 @@ export default function App() {
   }
 
   function openImagePicker() {
-    if (!selectedVisionModelSupportsVision) {
+    if (!canAttachImages) {
       return
     }
     imageInputRef.current?.click()
+  }
+
+  async function openFilePicker() {
+    try {
+      const pickedPaths = await window.electronAPI?.pickPaths?.({
+        title: 'Select files for chat',
+        filters: CHAT_FILE_PICKER_FILTERS,
+      })
+      await appendComposerFilePaths(pickedPaths)
+    } catch (error) {
+      console.error('Failed to open file picker', error)
+      window.alert(`File selection failed: ${getErrorText(error)}`)
+    }
+  }
+
+  async function appendDroppedChatFiles(fileList) {
+    const incoming = Array.from(fileList || [])
+    if (!incoming.length) {
+      return
+    }
+
+    const imageFiles = []
+    const fileAttachments = []
+    const rejected = []
+
+    for (const file of incoming) {
+      if (isImageFile(file)) {
+        if (!canAttachImages) {
+          rejected.push(`${file.name || 'image'}: ${imageAttachmentUnavailableReason}`)
+          continue
+        }
+        imageFiles.push(file)
+        continue
+      }
+
+      if (!isSupportedChatFile(file)) {
+        rejected.push(`${file?.name || 'file'}: unsupported file type for chat attachments.`)
+        continue
+      }
+
+      const sourcePath = String(file?.path || '').trim()
+      if (!sourcePath) {
+        rejected.push(`${file.name || 'file'}: local file paths are required for drag and drop in the desktop app.`)
+        continue
+      }
+
+      fileAttachments.push(buildComposerFileAttachment({
+        sourcePath,
+        name: file.name || getFileName(sourcePath, 'file'),
+        mimeType: file.type || guessMimeTypeFromName(file.name || sourcePath),
+        size: file.size,
+      }))
+    }
+
+    if (imageFiles.length > 0) {
+      await appendComposerImageFiles(imageFiles)
+    }
+    if (fileAttachments.length > 0) {
+      appendComposerFileAttachments(fileAttachments)
+    }
+    if (rejected.length > 0) {
+      window.alert(rejected.join('\n'))
+    }
   }
 
   function clearAudioTimers() {

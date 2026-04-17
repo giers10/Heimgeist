@@ -503,226 +503,207 @@ export default function GeneralSettings({
   const rerankingModelOptions = buildSelectOptions(rerankingModels, rerankModel, 'saved model unavailable', showMissingModelLabel);
   const transcriptionModelOptions = buildSelectOptions(whisperModels, transcriptionModel, 'saved model unavailable', showMissingModelLabel);
 
-  return (
-    <div className="settings-content-panel">
-      <div className="setting-section">
-        <h3>Heimgeist Backend URL</h3>
-        <input
-          type="text"
-          className="input"
-          value={backendApiUrl}
-          onChange={handleBackendUrlChange}
-          placeholder={`e.g., ${DEFAULT_BACKEND_API_URL}`}
-        />
-        <p className="setting-description">Internal UI requests like chats, sessions, and databases go to this URL.</p>
-      </div>
-      <div className="setting-section">
-        <h3>Ollama URL</h3>
-        <input
-          type="text"
-          className="input"
-          value={ollamaApiUrl}
-          onChange={handleOllamaUrlChange}
-          placeholder={`e.g., ${DEFAULT_OLLAMA_API_URL}`}
-        />
-        <p className="setting-description">Heimgeist uses this URL to talk to Ollama for models and chat generation.</p>
-      </div>
-      <div className="setting-section">
-        <h3>Embedding Model</h3>
-        <select
-          className="select"
-          value={embedModel}
-          onChange={handleEmbedModelChange}
-        >
-          {embeddingModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No embedding models available —'}</option>}
-          {embeddingModelOptions.map(model => (
-            <option key={model.value} value={model.value}>{model.label}</option>
-          ))}
-        </select>
-        <p className="setting-description">
-          Heimgeist uses this model for building or rebuilding local database embeddings.
-        </p>
-      </div>
-      <div className="setting-section">
-        <h3>Reranking Model</h3>
-        <select
-          className="select"
-          value={rerankModel}
-          onChange={handleRerankModelChange}
-        >
-          {rerankingModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No reranking models available —'}</option>}
-          {rerankingModelOptions.map(model => (
-            <option key={model.value} value={model.value}>{model.label}</option>
-          ))}
-        </select>
-        <p className="setting-description">
-          Heimgeist currently uses an embedding-based reranker for web search, so this should generally be an embedding-capable Ollama model.
-        </p>
-      </div>
-      <div className="setting-section">
-        <h3>Audio Input</h3>
-        <label className="toggle-switch">
-          <input
-            type="checkbox"
-            checked={audioInputEnabled}
-            onChange={handleAudioInputToggle}
-            disabled={!audioInputSupported}
-          />
-          <span className="slider"></span>
-        </label>
-        <p className="setting-description">
-          Enables microphone transcription in the chat composer. Heimgeist records locally and sends the clip to the local Whisper runtime.
-        </p>
-        {audioInputEnabled && (
-          <>
-            <div className="setting-control-row">
-              <select
-                className="select"
-                value={transcriptionModel}
-                onChange={handleTranscriptionModelChange}
-                disabled={!audioInputSupported}
-              >
-                {transcriptionModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No Whisper models available —'}</option>}
-                {transcriptionModelOptions.map(model => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="select"
-                value={audioInputDeviceId}
-                onChange={handleAudioInputDeviceChange}
-                disabled={!audioInputSupported}
-              >
-                <option value={DEFAULT_AUDIO_INPUT_DEVICE_ID}>System default microphone</option>
-                {audioInputOptions.map(device => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="select"
-                value={audioInputLanguage}
-                onChange={handleAudioInputLanguageChange}
-                disabled={!audioInputSupported}
-              >
-                {AUDIO_INPUT_LANGUAGE_OPTIONS.map(language => (
-                  <option key={language.value || 'auto'} value={language.value}>
-                    {language.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="button"
-                onClick={() => refreshAudioDevices({ requestAccess: true })}
-                disabled={!audioInputSupported || isRefreshingAudioDevices}
-              >
-                {isRefreshingAudioDevices ? 'Working…' : audioDeviceRefreshLabel}
-              </button>
-            </div>
-            {audioInputStatus.message && (
-              <p className={`setting-status ${audioInputStatus.tone}`}>{audioInputStatus.message}</p>
-            )}
-            <p className="setting-description">
-              Select the Whisper model Heimgeist should use for microphone transcription.
-            </p>
-            <p className="setting-description">
-              Whisper can auto-detect the spoken language, but you can force a fixed input language here when auto-detection drifts.
-            </p>
-          </>
-        )}
-      </div>
-      <div className="setting-section">
-        <h3>Chat Model</h3>
-        <select
-          className="select"
-          value={selectedModel}
-          onChange={handleModelChange}
-        >
-          {chatModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No chat models available —'}</option>}
-          {chatModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
-        </select>
-        <p className="setting-description">
-          Heimgeist uses this model for normal text chat.
-        </p>
-      </div>
-      <div className="setting-section">
-        <h3>Vision Model</h3>
-        <select
-          className="select"
-          value={visionModel}
-          onChange={handleVisionModelChange}
-        >
-          {visionModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No vision models available —'}</option>}
-          {visionModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
-        </select>
-        <p className="setting-description">
-          Heimgeist uses this model when a chat message includes image attachments.
-        </p>
-      </div>
-      <div className="setting-section">
-        <h3>Stream Output</h3>
-        <label className="toggle-switch">
-          <input
-            type="checkbox"
-            checked={streamOutput}
-            onChange={handleStreamToggle}
-          />
-          <span className="slider"></span>
-        </label>
-      </div>
-      <div className="setting-section">
-        <h3>Updates</h3>
-        <div className="setting-control-row">
-          <button
-            type="button"
-            className="button"
-            onClick={handleCheckForUpdates}
-            disabled={isCheckingForUpdates}
+  if (panel === 'AI Models') {
+    return (
+      <div className="settings-content-panel">
+        <div className="setting-section">
+          <h3>Chat Model</h3>
+          <select
+            className="select"
+            value={selectedModel}
+            onChange={handleModelChange}
           >
-            {isCheckingForUpdates ? 'Checking...' : 'Check for Update'}
-          </button>
-        </div>
-        <p className="setting-description">
-          Compares the local Git commit with remote <code>master</code>, pulls changes when needed, and restarts Heimgeist automatically. The same check also runs on every startup.
-        </p>
-        {updateStatus.message && (
-          <p className={`setting-status ${getStatusTone(updateStatus.state)}`}>
-            {updateStatus.message}
+            {chatModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No chat models available —'}</option>}
+            {chatModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
+          </select>
+          <p className="setting-description">
+            Heimgeist uses this model for normal text chat.
           </p>
-        )}
-        {(updateStatus.localCommit || updateStatus.remoteCommit || updateCheckedAtLabel) && (
-          <div className="setting-meta">
-            {updateStatus.localCommit && <div>Local: <code>{shortCommit(updateStatus.localCommit)}</code></div>}
-            {updateStatus.remoteCommit && <div>Remote: <code>{shortCommit(updateStatus.remoteCommit)}</code></div>}
-            {updateCheckedAtLabel && <div>Last checked: {updateCheckedAtLabel}</div>}
+        </div>
+        <div className="setting-section">
+          <h3>Vision Model</h3>
+          <select
+            className="select"
+            value={visionModel}
+            onChange={handleVisionModelChange}
+          >
+            {visionModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No vision models available —'}</option>}
+            {visionModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
+          </select>
+          <p className="setting-description">
+            Heimgeist uses this model when a chat message includes image attachments.
+          </p>
+        </div>
+        <div className="setting-section">
+          <h3>Embedding Model</h3>
+          <select
+            className="select"
+            value={embedModel}
+            onChange={handleEmbedModelChange}
+          >
+            {embeddingModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No embedding models available —'}</option>}
+            {embeddingModelOptions.map(model => (
+              <option key={model.value} value={model.value}>{model.label}</option>
+            ))}
+          </select>
+          <p className="setting-description">
+            Heimgeist uses this model for building or rebuilding local database embeddings.
+          </p>
+        </div>
+        <div className="setting-section">
+          <h3>Reranking Model</h3>
+          <select
+            className="select"
+            value={rerankModel}
+            onChange={handleRerankModelChange}
+          >
+            {rerankingModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No reranking models available —'}</option>}
+            {rerankingModelOptions.map(model => (
+              <option key={model.value} value={model.value}>{model.label}</option>
+            ))}
+          </select>
+          <p className="setting-description">
+            Heimgeist currently uses an embedding-based reranker for web search, so this should generally be an embedding-capable Ollama model.
+          </p>
+        </div>
+        <div className="setting-section">
+          <h3>Transcription Model</h3>
+          <select
+            className="select"
+            value={transcriptionModel}
+            onChange={handleTranscriptionModelChange}
+          >
+            {transcriptionModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No Whisper models available —'}</option>}
+            {transcriptionModelOptions.map(model => (
+              <option key={model.value} value={model.value}>
+                {model.label}
+              </option>
+            ))}
+          </select>
+          <p className="setting-description">
+            Heimgeist uses this Whisper model for microphone transcription.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (panel === 'Microphone') {
+    return (
+      <div className="settings-content-panel">
+        <div className="setting-section">
+          <h3>Microphone</h3>
+          <div className="setting-control-row">
+            <select
+              className="select"
+              value={audioInputDeviceId}
+              onChange={handleAudioInputDeviceChange}
+              disabled={!audioInputSupported}
+            >
+              <option value={DEFAULT_AUDIO_INPUT_DEVICE_ID}>System default microphone</option>
+              {audioInputOptions.map(device => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="select"
+              value={audioInputLanguage}
+              onChange={handleAudioInputLanguageChange}
+              disabled={!audioInputSupported}
+            >
+              {AUDIO_INPUT_LANGUAGE_OPTIONS.map(language => (
+                <option key={language.value || 'auto'} value={language.value}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="button"
+              onClick={() => refreshAudioDevices({ requestAccess: true })}
+              disabled={!audioInputSupported || isRefreshingAudioDevices}
+            >
+              {isRefreshingAudioDevices ? 'Working…' : audioDeviceRefreshLabel}
+            </button>
           </div>
-        )}
-      </div>
-      <div className="setting-section danger-zone">
-        <h3>Purge Databases</h3>
-        <div className="setting-control-row">
-          <button
-            type="button"
-            className="button danger"
-            onClick={handlePurgeLibraries}
-            disabled={isPurgingLibraries || !backendApiUrl}
-          >
-            {isPurgingLibraries ? 'Purging...' : 'Delete All Databases'}
-          </button>
-        </div>
-        <p className="setting-description">
-          Removes every local Heimgeist database, including staged files, corpora, and indexes. This is meant as a recovery action when the DB panel becomes unusable. Chat history stays intact.
-        </p>
-        {libraryPurgeStatus.message && (
-          <p className={`setting-status ${libraryPurgeStatus.tone}`}>
-            {libraryPurgeStatus.message}
+          {audioInputStatus.message && (
+            <p className={`setting-status ${audioInputStatus.tone}`}>{audioInputStatus.message}</p>
+          )}
+          <p className="setting-description">
+            Microphone input is available in the chat composer. Heimgeist records locally and sends the clip to the configured Whisper model.
           </p>
-        )}
+          <p className="setting-description">
+            Whisper can auto-detect the spoken language, but you can force a fixed input language here when auto-detection drifts.
+          </p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (panel === 'Updates') {
+    return (
+      <div className="settings-content-panel">
+        <div className="setting-section">
+          <h3>Updates</h3>
+          <div className="setting-control-row">
+            <button
+              type="button"
+              className="button"
+              onClick={handleCheckForUpdates}
+              disabled={isCheckingForUpdates}
+            >
+              {isCheckingForUpdates ? 'Checking...' : 'Check for Update'}
+            </button>
+          </div>
+          <p className="setting-description">
+            Compares the local Git commit with remote <code>master</code>, pulls changes when needed, and restarts Heimgeist automatically. The same check also runs on every startup.
+          </p>
+          {updateStatus.message && (
+            <p className={`setting-status ${getStatusTone(updateStatus.state)}`}>
+              {updateStatus.message}
+            </p>
+          )}
+          {(updateStatus.localCommit || updateStatus.remoteCommit || updateCheckedAtLabel) && (
+            <div className="setting-meta">
+              {updateStatus.localCommit && <div>Local: <code>{shortCommit(updateStatus.localCommit)}</code></div>}
+              {updateStatus.remoteCommit && <div>Remote: <code>{shortCommit(updateStatus.remoteCommit)}</code></div>}
+              {updateCheckedAtLabel && <div>Last checked: {updateCheckedAtLabel}</div>}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (panel === 'Advanced') {
+    return (
+      <div className="settings-content-panel">
+        <div className="setting-section danger-zone">
+          <h3>Purge Databases</h3>
+          <div className="setting-control-row">
+            <button
+              type="button"
+              className="button danger"
+              onClick={handlePurgeLibraries}
+              disabled={isPurgingLibraries || !backendApiUrl}
+            >
+              {isPurgingLibraries ? 'Purging...' : 'Delete All Databases'}
+            </button>
+          </div>
+          <p className="setting-description">
+            Removes every local Heimgeist database, including staged files, corpora, and indexes. This is meant as a recovery action when the DB panel becomes unusable. Chat history stays intact.
+          </p>
+          {libraryPurgeStatus.message && (
+            <p className={`setting-status ${libraryPurgeStatus.tone}`}>
+              {libraryPurgeStatus.message}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

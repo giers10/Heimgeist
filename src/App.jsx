@@ -2641,7 +2641,7 @@ async function sendMessage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: targetSessionId,
-          message: userMsg.content || (outgoingAttachments.length > 0 ? 'Image attachment' : userMsg.content),
+          message: buildAttachmentTitleSeed(userMsg.content, outgoingAttachments),
           model
         })
       })
@@ -2662,6 +2662,20 @@ async function sendMessage() {
     }
 
     console.error('Failed to send message:', error)
+    if (Number(error?.status) >= 400 && Number(error?.status) < 500) {
+      setChatSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.session_id === targetSessionId
+            ? {
+                ...session,
+                messages: (session.messages || []).filter(message => message.id !== userMsg.id),
+              }
+            : session
+        )
+      )
+      setInput(composerSnapshot)
+      setComposerAttachments(attachmentSnapshot)
+    }
     const errorMsg = { role: 'assistant', content: 'Error: ' + getErrorText(error), id: `msg-${Date.now()}-${Math.random()}` }
     setChatSessions(prevSessions =>
       prevSessions.map(session =>

@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getChangelogPage: (page) => ipcRenderer.invoke('get-changelog-page', page),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
   updateSettings: (settings) => ipcRenderer.invoke('update-settings', settings),
-  pickPaths: () => ipcRenderer.invoke('pick-paths'),
+  pickPaths: (options) => ipcRenderer.invoke('pick-paths', options),
   openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
   openExternalLink: (event) => {
     event.preventDefault();

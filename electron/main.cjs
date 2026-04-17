@@ -708,9 +708,19 @@ ipcMain.handle('update-settings', (event, settings) => {
   return true
 })
 
-ipcMain.handle('pick-paths', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
+ipcMain.handle('pick-paths', async (event, options = {}) => {
+  const dialogOptions = {
     properties: ['openFile', 'multiSelections'],
+  }
+  if (Array.isArray(options?.filters) && options.filters.length > 0) {
+    dialogOptions.filters = options.filters
+  }
+  if (typeof options?.title === 'string' && options.title.trim()) {
+    dialogOptions.title = options.title.trim()
+  }
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    ...dialogOptions,
   })
   return result.canceled ? [] : result.filePaths
 })

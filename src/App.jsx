@@ -339,7 +339,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [activeSidebarMode, setActiveSidebarMode] = useState('chats') // 'chats', 'dbs', 'settings'
   const activeSidebarModeRef = useRef(activeSidebarMode)
-  const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('AI Models');
+  const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('General');
   const [editingSessionId, setEditingSessionId] = useState(null); // ID of the session being edited
   const [editingLibrarySlug, setEditingLibrarySlug] = useState(null)
   const [libraries, setLibraries] = useState([])
@@ -2504,6 +2504,12 @@ async function createNewChat() {
           {activeSidebarMode === 'settings' && (
             <div className="settings-list">
               <div
+                className={`settings-item ${activeSettingsSubmenu === 'General' ? 'active' : ''}`}
+                onClick={() => setActiveSettingsSubmenu('General')}
+              >
+                General
+              </div>
+              <div
                 className={`settings-item ${activeSettingsSubmenu === 'AI Models' ? 'active' : ''}`}
                 onClick={() => setActiveSettingsSubmenu('AI Models')}
               >
@@ -2514,12 +2520,6 @@ async function createNewChat() {
                 onClick={() => setActiveSettingsSubmenu('Interface')}
               >
                 Interface
-              </div>
-              <div
-                className={`settings-item ${activeSettingsSubmenu === 'Microphone' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('Microphone')}
-              >
-                Microphone
               </div>
               <div
                 className={`settings-item ${activeSettingsSubmenu === 'Backend' ? 'active' : ''}`}
@@ -2969,6 +2969,13 @@ async function createNewChat() {
             <div className="header">
               <strong>{activeSettingsSubmenu} Settings</strong>
             </div>
+            {activeSettingsSubmenu === 'General' && (
+              <GeneralSettings
+                panel="General"
+                onAudioInputDeviceChange={setAudioInputDeviceId}
+                onAudioInputLanguageChange={setAudioInputLanguage}
+              />
+            )}
             {activeSettingsSubmenu === 'AI Models' && (
               <GeneralSettings
                 panel="AI Models"
@@ -2982,13 +2989,6 @@ async function createNewChat() {
               <InterfaceSettings
                 streamOutput={streamOutput}
                 onStreamOutputChange={setStreamOutput}
-              />
-            )}
-            {activeSettingsSubmenu === 'Microphone' && (
-              <GeneralSettings
-                panel="Microphone"
-                onAudioInputDeviceChange={setAudioInputDeviceId}
-                onAudioInputLanguageChange={setAudioInputLanguage}
               />
             )}
             {activeSettingsSubmenu === 'Backend' && (

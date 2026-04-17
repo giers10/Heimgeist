@@ -396,6 +396,7 @@ export default function App() {
   const [isChatDragActive, setIsChatDragActive] = useState(false)
   const chatRef = useRef(null)
   const textareaRef = useRef(null); // Ref for the textarea
+  const modelRef = useRef(model)
   const dbPickerRef = useRef(null)
   const chatModelPickerRef = useRef(null)
   const imageInputRef = useRef(null)
@@ -574,7 +575,7 @@ export default function App() {
 
     try {
       const data = await fetchModelCapabilities(nextModel)
-      if (!data?.supports_vision) {
+      if (!data?.supports_vision || modelRef.current !== nextModel) {
         return false
       }
       setVisionModel(nextModel)
@@ -1380,6 +1381,10 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       cancelled = true
     };
   }, []);
+
+  useEffect(() => {
+    modelRef.current = model
+  }, [model])
 
   useEffect(() => {
     let cancelled = false

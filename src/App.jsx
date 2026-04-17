@@ -27,6 +27,27 @@ function sanitizeGeneratedChatTitle(title) {
     .trim()
 }
 
+function explainSingleLineOllama502(text) {
+  const raw = String(text || '')
+  const trimmed = raw.trim()
+  if (!trimmed || /[\r\n]/.test(trimmed)) {
+    return raw
+  }
+
+  const lower = trimmed.toLowerCase()
+  const isSingleLine502Error = (
+    lower.includes('error') &&
+    lower.includes('http') &&
+    lower.includes('502')
+  )
+
+  if (!isSingleLine502Error) {
+    return raw
+  }
+
+  return `${trimmed}\n\nOllama returned HTTP 502. This usually means Ollama stopped responding or crashed while handling the request.\n\nIf other models still work, try updating Ollama. Newer models may require a newer Ollama release.`
+}
+
 // Extract <think> or <thinking> block (first occurrence) and return { think, answer }
 function splitThinkBlocks(text) {
   if (!text) return { think: null, answer: '' };
@@ -66,7 +87,8 @@ function splitThinkBlocks(text) {
 
 // Renders assistant message with a collapsible "Thoughts" block (if present)
 function AssistantMessageContent({ content, streamOutput, sources }) {
-  const { think, answer } = splitThinkBlocks(content || '');
+  const displayContent = explainSingleLineOllama502(content || '');
+  const { think, answer } = splitThinkBlocks(displayContent);
   const [open, setOpen] = React.useState(false);
   const showThinkButton = !!think;
 
@@ -96,7 +118,7 @@ function AssistantMessageContent({ content, streamOutput, sources }) {
       )}
       <div
         className="msg-content"
-        dangerouslySetInnerHTML={{ __html: markdownToHTML(answer || content || '') }}
+        dangerouslySetInnerHTML={{ __html: markdownToHTML(answer || displayContent || '') }}
       />
       {Array.isArray(sources) && sources.length > 0 && (
         <div className="msg-sources chips">

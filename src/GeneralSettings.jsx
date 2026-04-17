@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   AUDIO_INPUT_DEVICE_ID_KEY,
-  AUDIO_INPUT_ENABLED_KEY,
   AUDIO_INPUT_LANGUAGE_KEY,
   AUDIO_INPUT_LANGUAGE_OPTIONS,
   ensureAudioInputPermission,
@@ -9,18 +8,14 @@ import {
   supportsAudioInputCapture,
 } from './audioInput';
 
-const BACKEND_API_URL_KEY = 'backendApiUrl';
-const OLLAMA_API_URL_KEY = 'ollamaApiUrl';
 const EMBED_MODEL_KEY = 'embedModel';
 const RERANK_MODEL_KEY = 'rerankModel';
 const MODEL_KEY = 'chatModel';
 const VISION_MODEL_KEY = 'visionModel';
 const TRANSCRIPTION_MODEL_KEY = 'transcriptionModel';
-const STREAM_KEY = 'streamOutput';
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
 const DEFAULT_AUDIO_INPUT_LANGUAGE = '';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
-const DEFAULT_OLLAMA_API_URL = 'http://127.0.0.1:11434';
 const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest';
 const DEFAULT_TRANSCRIPTION_MODEL = 'base';
 const DEFAULT_UPDATE_STATUS = {
@@ -59,18 +54,15 @@ function getStatusTone(state) {
 }
 
 export default function GeneralSettings({
+  panel,
   onModelChange,
   onVisionModelChange,
   onTranscriptionModelChange,
-  onStreamOutputChange,
   onLibrariesPurged,
-  onBackendApiUrlChange,
-  onAudioInputEnabledChange,
   onAudioInputDeviceChange,
   onAudioInputLanguageChange,
 }) {
   const [backendApiUrl, setBackendApiUrl] = useState('');
-  const [ollamaApiUrl, setOllamaApiUrl] = useState('');
   const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
   const [rerankModel, setRerankModel] = useState(DEFAULT_EMBED_MODEL);
   const [chatModels, setChatModels] = useState([]);
@@ -81,8 +73,6 @@ export default function GeneralSettings({
   const [selectedModel, setSelectedModel] = useState('');
   const [visionModel, setVisionModel] = useState('');
   const [transcriptionModel, setTranscriptionModel] = useState(DEFAULT_TRANSCRIPTION_MODEL);
-  const [streamOutput, setStreamOutput] = useState(false);
-  const [audioInputEnabled, setAudioInputEnabled] = useState(false);
   const [audioInputDeviceId, setAudioInputDeviceId] = useState(DEFAULT_AUDIO_INPUT_DEVICE_ID);
   const [audioInputLanguage, setAudioInputLanguage] = useState(DEFAULT_AUDIO_INPUT_LANGUAGE);
   const [audioInputDevices, setAudioInputDevices] = useState([]);

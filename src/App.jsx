@@ -360,7 +360,9 @@ export default function App() {
 
   // Use currentSessionId for the actual chat operations
   const [model, setModel] = useState('')
-  const [selectedModelSupportsVision, setSelectedModelSupportsVision] = useState(false)
+  const [visionModel, setVisionModel] = useState('')
+  const [transcriptionModel, setTranscriptionModel] = useState('base')
+  const [selectedVisionModelSupportsVision, setSelectedVisionModelSupportsVision] = useState(false)
   const [input, setInput] = useState('')
   const [composerAttachments, setComposerAttachments] = useState([])
   const [isChatDragActive, setIsChatDragActive] = useState(false)
@@ -469,6 +471,16 @@ export default function App() {
 
   function isAbortError(error) {
     return error?.name === 'AbortError'
+  }
+
+  function messageHasImageAttachments(message) {
+    return Array.isArray(message?.attachments) && message.attachments.length > 0
+  }
+
+  function resolveChatRequestModel(attachments = []) {
+    return Array.isArray(attachments) && attachments.length > 0
+      ? (visionModel || model)
+      : model
   }
 
   function getErrorText(error) {
@@ -1264,6 +1276,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       setBackendApiUrl(resolveBackendApiUrl(settings));
       setColorScheme(settings.colorScheme || 'Default');
       setModel(settings.chatModel || ''); // Load the selected model, with a fallback
+      setVisionModel(settings.visionModel || settings.chatModel || '');
+      setTranscriptionModel(settings.transcriptionModel || 'base');
       setStreamOutput(settings.streamOutput || false);
       setAudioInputEnabled(settings.audioInputEnabled === true);
       setAudioInputDeviceId(typeof settings.audioInputDeviceId === 'string' ? settings.audioInputDeviceId : '');
@@ -1299,8 +1313,8 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     let cancelled = false
     const controller = new AbortController()
 
-    if (!backendApiUrl || !model) {
-      setSelectedModelSupportsVision(false)
+    if (!backendApiUrl || !visionModel) {
+      setSelectedVisionModelSupportsVision(false)
       return () => {
         controller.abort()
       }
@@ -1308,14 +1322,14 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
     ;(async () => {
       try {
-        const data = await fetchModelCapabilities(model, controller.signal)
+        const data = await fetchModelCapabilities(visionModel, controller.signal)
         if (!cancelled) {
-          setSelectedModelSupportsVision(Boolean(data?.supports_vision))
+          setSelectedVisionModelSupportsVision(Boolean(data?.supports_vision))
         }
       } catch (error) {
         if (!cancelled && !isAbortError(error)) {
           console.warn('Failed to load model capabilities', error)
-          setSelectedModelSupportsVision(false)
+          setSelectedVisionModelSupportsVision(false)
         }
       }
     })()
@@ -1324,12 +1338,12 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       cancelled = true
       controller.abort()
     }
-  }, [backendApiUrl, model])
+  }, [backendApiUrl, visionModel])
 
   useEffect(() => {
     imageDragDepthRef.current = 0
     setIsChatDragActive(false)
-  }, [selectedModelSupportsVision, activeSidebarMode])
+  }, [selectedVisionModelSupportsVision, activeSidebarMode])
 
   useEffect(() => {
     if (audioInputEnabled || !isRecordingAudio) {

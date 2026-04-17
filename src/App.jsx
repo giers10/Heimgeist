@@ -2402,8 +2402,8 @@ async function sendMessage() {
 
   const existingMessages = (chatSessions.find(s => s.session_id === targetSessionId)?.messages) || []
   const outgoingAttachments = composerAttachments.map(({ id, ...attachment }) => ({ ...attachment }))
-  const conversationNeedsVision = existingMessages.some(messageHasImageAttachments) || outgoingAttachments.some(attachmentIsImage)
-  if (conversationNeedsVision && !canAttachImages) {
+  const historyNeedsVision = existingMessages.some(messageHasImageAttachments)
+  if (historyNeedsVision && !canAttachImages) {
     window.alert(imageAttachmentUnavailableReason)
     return
   }

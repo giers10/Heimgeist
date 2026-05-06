@@ -181,33 +181,6 @@ export default function App() {
     }
   }
 
-  function setAssistantMessageContent(sessionId, messageId, content, options = {}) {
-    const { removeIfEmpty = false } = options
-
-    setChatSessions(prevSessions =>
-      prevSessions.map(session => {
-        if (session.session_id !== sessionId) return session
-
-        const nextMessages = []
-        for (const message of session.messages || []) {
-          if (message.id !== messageId) {
-            nextMessages.push(message)
-            continue
-          }
-
-          if (removeIfEmpty && !content) continue
-          nextMessages.push({ ...message, content })
-        }
-
-        return { ...session, messages: nextMessages }
-      })
-    )
-  }
-
-  function messageHasImageAttachments(message) {
-    return Array.isArray(message?.attachments) && message.attachments.some(attachmentIsImage)
-  }
-
   async function syncVisionModelFromChatModel(nextModel, options = {}) {
     const { allowCapabilityLookup = true } = options
     if (!nextModel) {
@@ -250,16 +223,6 @@ export default function App() {
     setModel(nextModel)
     window.electronAPI.setSetting('chatModel', nextModel)
     await syncVisionModelFromChatModel(nextModel)
-  }
-
-  function buildAttachmentTitleSeed(text, attachments = []) {
-    const trimmed = String(text || '').trim()
-    if (trimmed) {
-      return trimmed
-    }
-    const firstAttachment = Array.isArray(attachments) ? attachments[0] : null
-    const firstName = getAttachmentDisplayName(firstAttachment, '')
-    return firstName || 'Attachment'
   }
 
   function appendComposerFileAttachments(attachments) {

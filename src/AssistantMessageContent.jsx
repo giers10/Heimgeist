@@ -1,6 +1,7 @@
 import React from 'react'
 import { markdownToHTML } from './markdown'
 import { enrichOllamaErrorText, splitThinkBlocks } from './chatText'
+import desktopApi from './desktop/desktopApi'
 
 export default function AssistantMessageContent({ content, streamOutput, sources }) {
   const displayContent = enrichOllamaErrorText(content || '')

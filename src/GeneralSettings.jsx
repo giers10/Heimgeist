@@ -7,6 +7,7 @@ import {
   listAudioInputDevices,
   supportsAudioInputCapture,
 } from './audioInput';
+import desktopApi from './desktop/desktopApi';
 
 const EMBED_MODEL_KEY = 'embedModel';
 const RERANK_MODEL_KEY = 'rerankModel';

@@ -5,6 +5,7 @@ import { HashRouter as Router, Routes, Route } from 'react-router-dom'
 import App from './App.jsx'
 import './styles.css'
 import { applyColorScheme } from './colorSchemes'
+import desktopApi from './desktop/desktopApi'
 
 function Main() {
   useEffect(() => {

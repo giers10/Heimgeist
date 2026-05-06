@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import desktopApi from './desktop/desktopApi'
 
 const TOAST_DURATION_MS = {
   info: 3600,

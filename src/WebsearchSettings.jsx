@@ -1,6 +1,7 @@
 // src/WebsearchSettings.jsx
 import React, { useEffect, useState } from 'react';
 import { WEBSEARCH_ENGINE_OPTIONS, normalizeWebsearchEngines } from './websearchEngines'
+import desktopApi from './desktop/desktopApi'
 
 const BACKEND_API_URL_KEY = 'backendApiUrl'
 const OLLAMA_API_URL_KEY = 'ollamaApiUrl'

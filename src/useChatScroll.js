@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { BOTTOM_EPSILON, TOP_ALIGN_OFFSET } from './appConfig'
+import desktopApi from './desktop/desktopApi'
 
 export function useChatScroll({
   activeSessionId,

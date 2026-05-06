@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { colorSchemes, applyColorScheme } from './colorSchemes'
+import desktopApi from './desktop/desktopApi'
 
 const COLOR_SCHEME_KEY = 'colorScheme'
 const STREAM_KEY = 'streamOutput'

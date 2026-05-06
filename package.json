@@ -9,6 +9,8 @@
     "dev:backend": "node scripts/run-backend.cjs",
     "dev:renderer": "vite --port 5173 --strictPort",
     "dev:electron": "node scripts/run-electron-dev.cjs",
+    "dev:tauri": "tauri dev",
+    "tauri": "tauri",
     "build": "vite build",
     "start": "electron ."
   },

@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.giers.heimgeist",
   "build": {
-    "beforeDevCommand": "npm run dev:renderer",
+    "beforeDevCommand": "npm run dev:renderer:tauri",
     "beforeBuildCommand": "npm run build",
-    "devUrl": "http://127.0.0.1:5173",
+    "devUrl": "http://127.0.0.1:5174",
     "frontendDist": "../dist"
   },
   "app": {

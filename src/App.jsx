@@ -140,7 +140,7 @@ export default function App() {
   const audioAutoStopTimerRef = useRef(null)
   const audioStartedAtRef = useRef(0)
   const audioTranscriptionAbortRef = useRef(null)
-  const [backendApiUrl, setBackendApiUrl] = useState(API); // State for Heimgeist backend URL
+  const [backendApiUrl, setBackendApiUrl] = useState(DEFAULT_BACKEND_API_URL); // State for Heimgeist backend URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);
   const [startupTaskMessage, setStartupTaskMessage] = useState('');

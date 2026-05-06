@@ -22,10 +22,8 @@ import {
   readFileAsDataUrl,
 } from './attachments'
 import {
-  AUDIO_RECORDING_TICK_MS,
   BOTTOM_EPSILON,
   DEFAULT_BACKEND_API_URL,
-  MAX_AUDIO_RECORDING_MS,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGE_ATTACHMENTS,
   TOP_ALIGN_OFFSET,
@@ -46,35 +44,8 @@ import {
   loadStoredWebsearchEngines,
   normalizeWebsearchEngines,
 } from './websearchEngines'
-import {
-  getAudioInputConstraints,
-  getPreferredAudioRecorderMimeType,
-  stopMediaStream,
-  supportsAudioInputCapture,
-} from './audioInput'
+import { formatRecordingDuration, useAudioInput } from './useAudioInput'
 import { useChatLibrarySelection } from './useChatLibrarySelection'
-
-function appendTranscriptToComposer(currentInput, transcript) {
-  const nextTranscript = String(transcript || '').trim()
-  if (!nextTranscript) {
-    return currentInput || ''
-  }
-
-  const existing = String(currentInput || '')
-  if (!existing.trim()) {
-    return nextTranscript
-  }
-
-  const separator = /[\s\n]$/.test(existing) ? '' : '\n'
-  return `${existing}${separator}${nextTranscript}`
-}
-
-function formatRecordingDuration(milliseconds) {
-  const totalSeconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
 
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])

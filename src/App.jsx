@@ -87,18 +87,9 @@ export default function App() {
   const [libraries, setLibraries] = useState([])
   const [libraryJobs, setLibraryJobs] = useState([])
   const [activeLibrarySlug, setActiveLibrarySlug] = useState(null)
-  const [chatLibraryBySession, setChatLibraryBySession] = useState(() => {
-    try {
-      const raw = localStorage.getItem(CHAT_LIBRARY_MAP_KEY)
-      return raw ? JSON.parse(raw) : {}
-    } catch {
-      return {}
-    }
-  })
   const [isCreatingLibrary, setIsCreatingLibrary] = useState(false)
   const [newLibraryName, setNewLibraryName] = useState('')
   const [libraryCreateError, setLibraryCreateError] = useState('')
-  const [isDbPickerOpen, setIsDbPickerOpen] = useState(false)
   const [isChatModelPickerOpen, setIsChatModelPickerOpen] = useState(false)
   const [availableChatModels, setAvailableChatModels] = useState([])
   const [availableVisionModels, setAvailableVisionModels] = useState([])
@@ -117,7 +108,6 @@ export default function App() {
   const chatRef = useRef(null)
   const textareaRef = useRef(null); // Ref for the textarea
   const modelRef = useRef(model)
-  const dbPickerRef = useRef(null)
   const chatModelPickerRef = useRef(null)
   const attachmentMenuRef = useRef(null)
   const imageInputRef = useRef(null)

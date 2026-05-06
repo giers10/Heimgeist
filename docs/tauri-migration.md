@@ -28,10 +28,26 @@ The development backend is still the normal FastAPI backend started from the rep
 The backend now centralizes runtime data paths in `backend/paths.py`.
 
 - Development remains unchanged when no internal deployment hooks are set: chat data uses `backend/app.db` and local RAG data uses `backend/libraries`.
-- Packaged Tauri builds should launch the backend with an app-managed data root so the backend stores data under the OS-appropriate app data directory.
+- Packaged Tauri builds launch the backend with an app-managed data root so the backend stores data under the OS-appropriate app data directory.
 - The intended packaged locations are Application Support on macOS, LocalAppData on Windows, and the XDG data directory or `~/.local/share` equivalent on Linux.
 - `HEIMGEIST_DATA_DIR`, `HEIMGEIST_DB_PATH`, and `HEIMGEIST_LIB_ROOT` are internal app/sidecar plumbing hooks for packaged launchers and developer verification. They are not user-facing settings.
-- This step does not move or migrate existing development data.
+- Packaging does not move or migrate existing development data.
+
+## macOS Packaged App
+
+The first local macOS `.app` flow is implemented.
+
+- Packaging command: `npm run package:mac`.
+- Sidecar build command: `npm run build:sidecar`.
+- Output app: `src-tauri/target/release/bundle/macos/Heimgeist.app`.
+- `backend/sidecar_main.py` starts Uvicorn for `backend.main:app` on `127.0.0.1:8000`.
+- `scripts/build-backend-sidecar.cjs` uses `backend/.venv`, installs PyInstaller there if needed, detects the Rust host target triple, and writes Tauri external binaries under `src-tauri/binaries/`.
+- `src-tauri/tauri.conf.json` bundles the backend sidecar plus ffmpeg/ffprobe helper binaries through `bundle.externalBin`.
+- In release builds, `src-tauri/src/main.rs` starts the bundled sidecar when no compatible Heimgeist backend is already healthy on `127.0.0.1:8000`, waits for `/health`, and fails clearly if the port is occupied by a different service.
+- The Tauri shell passes `HEIMGEIST_DATA_DIR` and `HEIMGEIST_SETTINGS_FILE` to the sidecar. ffmpeg and ffprobe paths are passed when the bundled helpers exist.
+- The sidecar is stopped when the Tauri app exits.
+
+Ollama remains an external service. SearXNG remains optional.
 
 ## Desktop Bridge Surface
 
@@ -65,10 +81,10 @@ The only remaining Electron references should be historical migration documentat
 ## Remaining Production-Release Tasks
 
 - Replace update/changelog placeholders with a signed Tauri update flow or another release strategy.
-- Package the FastAPI backend as a sidecar or equivalent production process.
-- Launch the packaged backend with app-managed data paths from the Tauri shell.
-- Preserve ffmpeg/ffprobe environment handling for packaged audio transcription.
-- Add production backend startup health gating and shutdown behavior.
-- Finalize bundle metadata, icons, signing, notarization, and installer behavior.
+- Finalize signing and notarization for macOS distribution.
+- Implement updater/changelog parity or decide on a different release strategy.
+- Add full Windows/Linux sidecar and bundle scripts, including platform-specific helper binaries and process shutdown behavior.
+- Polish installer behavior and final bundle metadata/icons.
+- Audit the PyInstaller sidecar contents and size before public release.
 - Decide whether the settings route needs a dedicated Tauri window for production parity.
 - Expand the basic Tauri menu if product-specific app menu actions are needed.

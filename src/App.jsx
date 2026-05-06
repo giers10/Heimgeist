@@ -750,21 +750,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 }
 
 
-  // Persist userScrolledUp state per session + live ref for closures (streaming)
-  const [userScrolledUpState, setUserScrolledUpState] = useState({});
-  const userScrolledUpRef = useRef({});
-
-  // When a response arrives in a non-active chat, remember to scroll to the new ASSISTANT message on open
-  const [pendingScrollToLastUser, setPendingScrollToLastUser] = useState({}); // { [sessionId]: assistantMsgId }
-
-  // Live per-session scrollTop tracker to avoid races
-  const scrollTopsRef = useRef({});
-  // Live per-session previous scrollTop tracker to detect scroll direction
-  const prevScrollTopsRef = useRef({});
-
-  // Tip state: { [sessionId]: messageId }
-  const [newMsgTip, setNewMsgTip] = useState({});
-
   // Collapse state per user message: { [msgKey]: boolean } — true means "collapsed"
   const [collapsedUserMsgs, setCollapsedUserMsgs] = useState({});
 
@@ -801,22 +786,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     setCollapsedUserMsgs(prev => ({ ...prev, [key]: !(prev[key] ?? true) }));
   }
 
-  const setUserScrolledUp = React.useCallback((sessionId, value) => {
-    setUserScrolledUpState(prev => {
-      const next = { ...prev, [sessionId]: value };
-      userScrolledUpRef.current = next;
-      return next;
-    });
-  }, []);
-
   const activeRequestRef = useRef(null);
-  const justSentMessage = useRef(false);
-  const lastSentSessionRef = useRef(null);
-  const activeSessionIdRef = useRef(activeSessionId);
-  useEffect(() => {
-    activeSessionIdRef.current = activeSessionId;
-  }, [activeSessionId]);
-
   const beginCancelableRequest = React.useCallback((sessionId) => {
     const controller = new AbortController()
     activeRequestRef.current = { controller, sessionId }
@@ -843,9 +813,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       activeRequestRef.current?.controller.abort()
     }
   }, [])
-
-  // Flag to ensure we only restore once per open of a chat
-  const restoredForRef = useRef(null);
 
   // Sidebar resizing state
   const [sidebarWidth, setSidebarWidth] = useState(230);

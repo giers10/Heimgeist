@@ -5,6 +5,7 @@ use std::{
     io::{Read, Write},
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
+    process::Command as StdCommand,
     sync::Mutex,
     thread,
     time::{Duration, Instant},
@@ -58,17 +59,46 @@ impl BackendSidecar {
             child: Mutex::new(Some(child)),
         }
     }
-}
 
-impl Drop for BackendSidecar {
-    fn drop(&mut self) {
-        if let Ok(mut child) = self.child.lock() {
-            if let Some(child) = child.take() {
-                let _ = child.kill();
+    fn shutdown(&self) {
+        let child = match self.child.lock() {
+            Ok(mut child) => child.take(),
+            Err(_) => None,
+        };
+
+        if let Some(child) = child {
+            let pid = child.pid();
+            terminate_process_tree(pid);
+            if let Err(error) = child.kill() {
+                eprintln!("Failed to stop Heimgeist backend sidecar pid {pid}: {error}");
             }
         }
     }
 }
+
+impl Drop for BackendSidecar {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+#[cfg(unix)]
+fn terminate_process_tree(pid: u32) {
+    let pid = pid.to_string();
+    let _ = StdCommand::new("pkill")
+        .args(["-TERM", "-P", &pid])
+        .status();
+}
+
+#[cfg(windows)]
+fn terminate_process_tree(pid: u32) {
+    let _ = StdCommand::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .status();
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminate_process_tree(_pid: u32) {}
 
 #[derive(Debug, Deserialize)]
 struct PickPathsOptions {

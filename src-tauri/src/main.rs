@@ -417,12 +417,16 @@ fn update_settings(settings: SettingsMap, store: State<'_, SettingsStore>) -> Re
 
 #[tauri::command]
 fn get_update_status() -> Value {
-    unavailable_update_status("Tauri update checks are not implemented in this production release phase.")
+    unavailable_update_status(
+        "Tauri update checks are not implemented in this production release phase.",
+    )
 }
 
 #[tauri::command]
 fn check_for_updates() -> Value {
-    unavailable_update_status("Tauri update checks are not implemented in this production release phase.")
+    unavailable_update_status(
+        "Tauri update checks are not implemented in this production release phase.",
+    )
 }
 
 #[tauri::command]

@@ -2,12 +2,42 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
+import AssistantMessageContent from './AssistantMessageContent'
 import GeneralSettings from './GeneralSettings'
 import InterfaceSettings from './InterfaceSettings'
 import LibraryManager from './LibraryManager'
 import WebsearchSettings from './WebsearchSettings'
-import { markdownToHTML  } from './markdown';
 import { applyColorScheme } from './colorSchemes'
+import {
+  AttachmentStrip,
+  CHAT_FILE_PICKER_FILTERS,
+  attachmentIsImage,
+  buildComposerFileAttachment,
+  getAttachmentDisplayName,
+  getFileName,
+  guessMimeTypeFromName,
+  hasFilePayload,
+  isImageFile,
+  isSupportedChatFile,
+  isSupportedChatFilePath,
+  readFileAsDataUrl,
+} from './attachments'
+import {
+  AUDIO_RECORDING_TICK_MS,
+  BOTTOM_EPSILON,
+  CHAT_LIBRARY_MAP_KEY,
+  DEFAULT_BACKEND_API_URL,
+  MAX_AUDIO_RECORDING_MS,
+  MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_IMAGE_ATTACHMENTS,
+  TOP_ALIGN_OFFSET,
+  WEBSEARCH_ENGINES_KEY,
+  WEBSEARCH_URL_KEY,
+  migrateLegacySearxUrl,
+  resolveBackendApiUrl,
+} from './appConfig'
+import { sanitizeChatTitle, splitThinkBlocks } from './chatText'
+import { buildModelPickerOptions } from './modelPicker'
 import {
   loadStoredWebsearchEngines,
   normalizeWebsearchEngines,

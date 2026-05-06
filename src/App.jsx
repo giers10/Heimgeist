@@ -1073,46 +1073,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [canAttachImages, activeSidebarMode])
 
   useEffect(() => {
-    if (audioInputEnabled || !isRecordingAudio) {
-      return
-    }
-    stopAudioRecording({ shouldTranscribe: false })
-  }, [audioInputEnabled, isRecordingAudio])
-
-  useEffect(() => {
-    if (audioInputRuntimeReady || !isRecordingAudio) {
-      return
-    }
-    stopAudioRecording({ shouldTranscribe: false })
-  }, [audioInputRuntimeReady, isRecordingAudio])
-
-  useEffect(() => {
-    if (activeSidebarMode === 'chats' || !isRecordingAudio) {
-      return
-    }
-    stopAudioRecording()
-  }, [activeSidebarMode, isRecordingAudio])
-
-  useEffect(() => {
-    return () => {
-      audioTranscriptionAbortRef.current?.abort()
-      clearAudioTimers()
-      const recorder = audioRecorderRef.current
-      if (recorder) {
-        recorder.ondataavailable = null
-        recorder.onstop = null
-        recorder.onerror = null
-        try {
-          if (recorder.state !== 'inactive') {
-            recorder.stop()
-          }
-        } catch {}
-      }
-      stopMediaStream(audioStreamRef.current)
-    }
-  }, [])
-
-  useEffect(() => {
     if (!settingsLoaded || loading || !backendApiUrl || startupOllamaCheckRanRef.current) return
     startupOllamaCheckRanRef.current = true
 

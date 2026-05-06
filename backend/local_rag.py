@@ -24,11 +24,11 @@ from .app_settings import (
     get_embed_model_preference,
     get_ollama_api_url,
 )
+from .paths import library_root
 
 router = APIRouter(tags=["local-rag"])
 
-LIB_ROOT = Path(__file__).parent / "libraries"
-LIB_ROOT.mkdir(parents=True, exist_ok=True)
+LIB_ROOT = library_root()
 
 RAW_CORPUS_PROFILE = "per-file-default-v1"
 PREPARE_PROFILE = "selective-enrich-v2"

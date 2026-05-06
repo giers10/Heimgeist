@@ -1,7 +1,9 @@
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy import text
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
+from .paths import database_path, sqlite_database_url
 
 """
 Database utilities and configuration. This module defines the SQLAlchemy
@@ -15,7 +17,8 @@ only run once on startup. It is safe to call repeatedly: when a column
 already exists, the function will simply no-op.
 """
 
-DATABASE_URL = "sqlite:///./backend/app.db"
+DATABASE_PATH = database_path()
+DATABASE_URL = sqlite_database_url(DATABASE_PATH)
 
 engine = create_engine(
     DATABASE_URL, connect_args={"check_same_thread": False}

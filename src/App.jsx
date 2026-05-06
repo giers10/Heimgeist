@@ -1,5 +1,5 @@
 // /Users/giers/Heimgeist/src/App.jsx
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import AssistantMessageContent from './AssistantMessageContent'
@@ -22,11 +22,9 @@ import {
   readFileAsDataUrl,
 } from './attachments'
 import {
-  BOTTOM_EPSILON,
   DEFAULT_BACKEND_API_URL,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGE_ATTACHMENTS,
-  TOP_ALIGN_OFFSET,
   WEBSEARCH_ENGINES_KEY,
   WEBSEARCH_URL_KEY,
   migrateLegacySearxUrl,
@@ -46,6 +44,7 @@ import {
 } from './websearchEngines'
 import { formatRecordingDuration, useAudioInput } from './useAudioInput'
 import { useChatLibrarySelection } from './useChatLibrarySelection'
+import { useChatScroll } from './useChatScroll'
 
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])

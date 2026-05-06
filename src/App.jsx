@@ -578,25 +578,21 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           historyForSearch[historyForSearch.length - 1] = { role: 'user', content: promptText }
         }
 
-        const resp = await fetch(`${backendApiUrl}/websearch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const searchContext = await fetchWebSearchContext({
+          apiBase: backendApiUrl,
+          engines: searxEngines,
+          historyLimit: 8,
+          messages: historyForSearch,
+          model,
+          prompt: promptText,
+          searxUrl,
           signal: requestController.signal,
-          body: JSON.stringify({
-            prompt: promptText,
-            model,
-            messages: historyForSearch,
-            history_limit: 8,
-            searx_url: searxUrl || null,
-            engines: Array.isArray(searxEngines) ? searxEngines : null,
-          })
         })
-        const data = await resp.json()
-        if (data && typeof data.context_block === 'string' && data.context_block.trim()) {
-          contextBlocks.push(data.context_block.trim())
+        if (searchContext.contextBlock) {
+          contextBlocks.push(searchContext.contextBlock)
         }
-        if (Array.isArray(data?.sources)) {
-          citationSources.push(...data.sources)
+        if (Array.isArray(searchContext.sources)) {
+          citationSources.push(...searchContext.sources)
         }
       } catch (error) {
         if (isAbortError(error)) throw error
@@ -623,19 +619,17 @@ async function regenerateFromIndex(index, overrideUserText = null) {
       )
 
       try {
-        const res = await fetch(`${backendApiUrl}/sessions/${sessionId}/regenerate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await postRegenerateMessage({
+          apiBase: backendApiUrl,
+          enrichedMessage: enrichedPrompt,
+          index,
+          model,
+          sessionId,
           signal: requestController.signal,
-          body: JSON.stringify({
-            index,
-            model,
-            stream: true,
-            enriched_message: enrichedPrompt,
-            sources: citationSources || [],
-            vision_model: visionModel || null,
-            transcription_model: transcriptionModel || null,
-          })
+          sources: citationSources || [],
+          stream: true,
+          transcriptionModel,
+          visionModel,
         })
         if (!res.ok) throw new Error(await readBackendErrorText(res))
 
@@ -679,19 +673,17 @@ async function regenerateFromIndex(index, overrideUserText = null) {
         return
       }
     } else {
-      const res = await fetch(`${backendApiUrl}/sessions/${sessionId}/regenerate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await postRegenerateMessage({
+        apiBase: backendApiUrl,
+        enrichedMessage: enrichedPrompt,
+        index,
+        model,
+        sessionId,
         signal: requestController.signal,
-        body: JSON.stringify({
-          index,
-          model,
-          stream: false,
-          enriched_message: enrichedPrompt,
-          sources: citationSources || [],
-          vision_model: visionModel || null,
-          transcription_model: transcriptionModel || null,
-        })
+        sources: citationSources || [],
+        stream: false,
+        transcriptionModel,
+        visionModel,
       })
       if (!res.ok) throw new Error(await readBackendErrorText(res))
 

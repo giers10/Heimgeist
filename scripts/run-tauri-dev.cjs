@@ -108,7 +108,7 @@ async function launchTauri() {
     stopSpawnedBackend()
 
     if (signal) {
-      process.kill(process.pid, signal)
+      process.exit(signal === 'SIGINT' || signal === 'SIGTERM' ? 0 : 1)
       return
     }
 

@@ -49,7 +49,6 @@ References checked during the spike:
 - No Electron files, scripts, or IPC behavior were removed.
 - No Python backend sidecar, packaging, or lifecycle work was added.
 - No Tauri updater, app menu, second settings window, UI zoom side effects, DevTools preference side effects, or packaging parity was implemented.
-- No Python backend sidecar or packaging work was added.
 
 ## Remaining Parity Gaps
 

@@ -90,6 +90,16 @@ export default function App() {
   const [isCreatingLibrary, setIsCreatingLibrary] = useState(false)
   const [newLibraryName, setNewLibraryName] = useState('')
   const [libraryCreateError, setLibraryCreateError] = useState('')
+  const {
+    chatLibrary,
+    chatLibrarySlug,
+    chatLibraryStatusSuffix,
+    clearChatLibrarySelections,
+    getChatLibraryForSession,
+    isLibrarySyncing,
+    removeLibraryFromChatSelections,
+    setChatLibraryForSession,
+  } = useChatLibrarySelection({ activeSessionId, libraries, libraryJobs })
   const [isChatModelPickerOpen, setIsChatModelPickerOpen] = useState(false)
   const [availableChatModels, setAvailableChatModels] = useState([])
   const [availableVisionModels, setAvailableVisionModels] = useState([])

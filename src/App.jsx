@@ -187,7 +187,7 @@ export default function App() {
 
     if (availableVisionModels.includes(nextModel)) {
       setVisionModel(nextModel)
-      window.electronAPI.setSetting('visionModel', nextModel)
+      desktopApi.setSetting('visionModel', nextModel)
       return true
     }
 
@@ -201,7 +201,7 @@ export default function App() {
         return false
       }
       setVisionModel(nextModel)
-      window.electronAPI.setSetting('visionModel', nextModel)
+      desktopApi.setSetting('visionModel', nextModel)
       return true
     } catch (error) {
       if (!isAbortError(error)) {
@@ -219,7 +219,7 @@ export default function App() {
 
     setIsChatModelPickerOpen(false)
     setModel(nextModel)
-    window.electronAPI.setSetting('chatModel', nextModel)
+    desktopApi.setSetting('chatModel', nextModel)
     await syncVisionModelFromChatModel(nextModel)
   }
 

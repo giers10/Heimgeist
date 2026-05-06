@@ -1,4 +1,4 @@
-const { spawn } = require('child_process')
+const { spawn, spawnSync } = require('child_process')
 const fs = require('fs')
 const http = require('http')
 const path = require('path')
@@ -59,10 +59,47 @@ function resolveTauriCommand() {
   }
 }
 
-function stopChild(child, signal = 'SIGTERM') {
-  if (child && !child.killed) {
-    child.kill(signal)
+function getChildPids(pid) {
+  if (process.platform === 'win32') {
+    return []
   }
+
+  const result = spawnSync('pgrep', ['-P', String(pid)], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+  if (result.status !== 0 || !result.stdout.trim()) {
+    return []
+  }
+
+  return result.stdout.trim().split(/\s+/).map(Number).filter(Number.isFinite)
+}
+
+function stopPidTree(pid, signal = 'SIGTERM') {
+  for (const childPid of getChildPids(pid)) {
+    stopPidTree(childPid, signal)
+  }
+
+  try {
+    process.kill(pid, signal)
+  } catch (_error) {
+    // The process may already have exited while walking the tree.
+  }
+}
+
+function stopChild(child, signal = 'SIGTERM') {
+  if (!child || child.killed || !child.pid) {
+    return
+  }
+
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+      stdio: 'ignore',
+    })
+    return
+  }
+
+  stopPidTree(child.pid, signal)
 }
 
 function stopSpawnedBackend(signal = 'SIGTERM') {

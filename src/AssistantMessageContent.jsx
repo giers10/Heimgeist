@@ -66,7 +66,7 @@ export default function AssistantMessageContent({ content, streamOutput, sources
                   event.preventDefault()
                   try {
                     const parsed = new URL(u)
-                    desktopApi?.openPath?.(decodeURIComponent(parsed.pathname))
+                    desktopApi.openPath(decodeURIComponent(parsed.pathname))
                   } catch {}
                 }}
               >

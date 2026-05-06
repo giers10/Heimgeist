@@ -3,10 +3,8 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import AssistantMessageContent from './AssistantMessageContent'
-import GeneralSettings from './GeneralSettings'
-import InterfaceSettings from './InterfaceSettings'
 import LibraryManager from './LibraryManager'
-import WebsearchSettings from './WebsearchSettings'
+import { SettingsPanel, SettingsSidebar } from './SettingsPanels'
 import { applyColorScheme } from './colorSchemes'
 import {
   AttachmentStrip,

@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{fs, path::PathBuf, sync::Mutex};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -217,18 +221,92 @@ fn normalize_settings(settings: &mut SettingsMap) {
     settings.insert("audioInputLanguage".into(), json!(audio_input_language));
 }
 
-fn settings_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+fn explicit_settings_file_path() -> Option<PathBuf> {
     if let Ok(path) = std::env::var("HEIMGEIST_SETTINGS_FILE") {
         let trimmed = path.trim();
         if !trimmed.is_empty() {
-            return Ok(PathBuf::from(trimmed));
+            return Some(PathBuf::from(trimmed));
         }
     }
 
+    None
+}
+
+fn tauri_settings_file_path(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
         .map(|dir| dir.join(SETTINGS_FILE_NAME))
         .map_err(|error| format!("Could not resolve Tauri settings path: {error}"))
+}
+
+fn settings_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    explicit_settings_file_path()
+        .map(Ok)
+        .unwrap_or_else(|| tauri_settings_file_path(app))
+}
+
+fn paths_equal(first: &Path, second: &Path) -> bool {
+    match (first.canonicalize(), second.canonicalize()) {
+        (Ok(first), Ok(second)) => first == second,
+        _ => first == second,
+    }
+}
+
+fn push_unique_candidate(candidates: &mut Vec<PathBuf>, candidate: PathBuf, tauri_path: &Path) {
+    if paths_equal(&candidate, tauri_path)
+        || candidates
+            .iter()
+            .any(|existing| paths_equal(existing, &candidate))
+    {
+        return;
+    }
+
+    candidates.push(candidate);
+}
+
+fn electron_settings_candidates(app: &AppHandle, tauri_path: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(config_dir) = app.path().config_dir() {
+        let product_name = app
+            .config()
+            .product_name
+            .as_deref()
+            .unwrap_or("Heimgeist");
+
+        for app_dir in [product_name, "Heimgeist", "heimgeist"] {
+            push_unique_candidate(
+                &mut candidates,
+                config_dir.join(app_dir).join(SETTINGS_FILE_NAME),
+                tauri_path,
+            );
+        }
+    }
+
+    candidates
+}
+
+fn import_electron_settings_if_available(
+    app: &AppHandle,
+    tauri_path: &Path,
+) -> Option<SettingsMap> {
+    for candidate in electron_settings_candidates(app, tauri_path) {
+        match read_settings_file(&candidate) {
+            Ok(Some(settings)) => {
+                println!(
+                    "Imported Electron settings for first Tauri run from {}",
+                    candidate.display()
+                );
+                return Some(settings);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("Skipping Electron settings import from {}: {error}", candidate.display());
+            }
+        }
+    }
+
+    None
 }
 
 fn read_settings_file(path: &PathBuf) -> Result<Option<SettingsMap>, String> {
@@ -271,7 +349,15 @@ fn load_settings_store(app: &AppHandle) -> Result<SettingsStore, String> {
             let (settings, migrated) = migrate_settings(Some(raw_settings));
             (settings, migrated)
         }
-        None => (default_settings(), true),
+        None => {
+            let imported_settings = if explicit_settings_file_path().is_none() {
+                import_electron_settings_if_available(app, &path)
+            } else {
+                None
+            };
+            let (settings, _migrated) = migrate_settings(imported_settings);
+            (settings, true)
+        }
     };
 
     if should_write {
@@ -452,6 +538,7 @@ fn open_external_link(app: AppHandle, url: String) -> Result<bool, String> {
 
 fn main() {
     tauri::Builder::default()
+        .menu(|handle| tauri::menu::Menu::default(handle))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {

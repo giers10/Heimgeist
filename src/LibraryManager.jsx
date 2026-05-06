@@ -130,7 +130,7 @@ export default function LibraryManager({
 
   async function addPaths() {
     if (!library) return
-    const paths = await window.electronAPI?.pickPaths?.()
+    const paths = await desktopApi?.pickPaths?.()
     if (!Array.isArray(paths) || paths.length === 0) return
     try {
       await registerPaths(paths)
@@ -307,7 +307,7 @@ export default function LibraryManager({
                       >
                         {file.enrich_enabled ? 'Use Raw Only' : 'Enable Enrich'}
                       </button>
-                      <button className="button ghost" onClick={() => window.electronAPI?.openPath?.(file.path)}>Open</button>
+                      <button className="button ghost" onClick={() => desktopApi?.openPath?.(file.path)}>Open</button>
                       <button className="button ghost" disabled={busy || isSyncing} onClick={() => removeFile(file.rel)}>Remove</button>
                     </div>
                   </div>

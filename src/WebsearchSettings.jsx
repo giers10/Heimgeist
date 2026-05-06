@@ -24,7 +24,7 @@ export default function WebsearchSettings({
   useEffect(() => {
     let cancelled = false
 
-    window.electronAPI.getSettings().then(settings => {
+    desktopApi.getSettings().then(settings => {
       if (cancelled) {
         return
       }
@@ -46,7 +46,7 @@ export default function WebsearchSettings({
   const handleBackendUrlChange = (event) => {
     const newUrl = event.target.value
     setBackendApiUrl(newUrl)
-    window.electronAPI.setSetting(BACKEND_API_URL_KEY, newUrl)
+    desktopApi.setSetting(BACKEND_API_URL_KEY, newUrl)
     if (onBackendApiUrlChange) {
       onBackendApiUrlChange(newUrl)
     }
@@ -55,7 +55,7 @@ export default function WebsearchSettings({
   const handleOllamaUrlChange = (event) => {
     const newUrl = event.target.value
     setOllamaApiUrl(newUrl)
-    window.electronAPI.setSetting(OLLAMA_API_URL_KEY, newUrl)
+    desktopApi.setSetting(OLLAMA_API_URL_KEY, newUrl)
   }
 
 return (

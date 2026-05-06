@@ -687,10 +687,10 @@ export default function App() {
       }
     };
 
-    window.electronAPI.onWindowFocus(handleFocus);
+    desktopApi.onWindowFocus(handleFocus);
 
     return () => {
-      window.electronAPI.offWindowFocus(handleFocus);
+      desktopApi.offWindowFocus(handleFocus);
     };
   }, []);
 

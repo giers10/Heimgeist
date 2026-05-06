@@ -28,7 +28,7 @@ export default function InterfaceSettings({
   const [openDevToolsOnStartup, setOpenDevToolsOnStartup] = useState(false)
 
   useEffect(() => {
-    window.electronAPI.getSettings().then(settings => {
+    desktopApi.getSettings().then(settings => {
       const schemeName = settings.colorScheme || 'Default'
       setSelectedColorScheme(schemeName)
       setUiScale(normalizeUiScale(settings.uiScale))
@@ -44,13 +44,13 @@ export default function InterfaceSettings({
   const handleColorSchemeChange = (event) => {
     const newScheme = event.target.value
     setSelectedColorScheme(newScheme)
-    window.electronAPI.setSetting(COLOR_SCHEME_KEY, newScheme)
+    desktopApi.setSetting(COLOR_SCHEME_KEY, newScheme)
   }
 
   const persistUiScale = (value) => {
     const nextScale = normalizeUiScale(value)
     setUiScale(nextScale)
-    window.electronAPI.setSetting(UI_SCALE_KEY, nextScale)
+    desktopApi.setSetting(UI_SCALE_KEY, nextScale)
   }
 
   const handleUiScaleChange = (event) => {
@@ -64,12 +64,12 @@ export default function InterfaceSettings({
   const handleOpenDevToolsOnStartupToggle = () => {
     const nextValue = !openDevToolsOnStartup
     setOpenDevToolsOnStartup(nextValue)
-    window.electronAPI.setSetting(OPEN_DEVTOOLS_ON_STARTUP_KEY, nextValue)
+    desktopApi.setSetting(OPEN_DEVTOOLS_ON_STARTUP_KEY, nextValue)
   }
 
   const handleStreamOutputToggle = () => {
     const nextValue = !streamOutput
-    window.electronAPI.setSetting(STREAM_KEY, nextValue)
+    desktopApi.setSetting(STREAM_KEY, nextValue)
     if (onStreamOutputChange) {
       onStreamOutputChange(nextValue)
     }

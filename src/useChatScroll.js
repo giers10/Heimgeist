@@ -41,7 +41,7 @@ export function useChatScroll({
 
         setScrollPositions(prev => {
           const updated = { ...prev, [leavingSessionId]: top }
-          window.electronAPI.updateSettings({ scrollPositions: updated })
+          desktopApi.updateSettings({ scrollPositions: updated })
           return updated
         })
       }

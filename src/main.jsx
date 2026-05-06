@@ -8,7 +8,7 @@ import { applyColorScheme } from './colorSchemes'
 
 function Main() {
   useEffect(() => {
-    window.electronAPI.getSettings().then(settings => {
+    desktopApi.getSettings().then(settings => {
       applyColorScheme(settings.colorScheme || 'Default')
     })
   }, [])

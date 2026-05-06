@@ -109,8 +109,8 @@ export default function GeneralSettings({
     let cancelled = false;
 
     Promise.all([
-      window.electronAPI.getSettings(),
-      window.electronAPI.getUpdateStatus(),
+      desktopApi.getSettings(),
+      desktopApi.getUpdateStatus(),
     ]).then(([settings, status]) => {
       if (cancelled) {
         return;
@@ -202,13 +202,13 @@ export default function GeneralSettings({
     }
 
     setSelectedModel(nextModel);
-    window.electronAPI.setSetting(MODEL_KEY, nextModel);
+    desktopApi.setSetting(MODEL_KEY, nextModel);
     if (onModelChange) {
       onModelChange(nextModel);
     }
     if (visionModels.includes(nextModel) && nextModel !== visionModel) {
       setVisionModel(nextModel);
-      window.electronAPI.setSetting(VISION_MODEL_KEY, nextModel);
+      desktopApi.setSetting(VISION_MODEL_KEY, nextModel);
       if (onVisionModelChange) {
         onVisionModelChange(nextModel);
       }
@@ -232,7 +232,7 @@ export default function GeneralSettings({
     }
 
     setVisionModel(nextModel);
-    window.electronAPI.setSetting(VISION_MODEL_KEY, nextModel);
+    desktopApi.setSetting(VISION_MODEL_KEY, nextModel);
     if (onVisionModelChange) {
       onVisionModelChange(nextModel);
     }
@@ -251,7 +251,7 @@ export default function GeneralSettings({
 
     const nextModel = embeddingModels[0] || DEFAULT_EMBED_MODEL;
     setEmbedModel(nextModel);
-    window.electronAPI.setSetting(EMBED_MODEL_KEY, nextModel);
+    desktopApi.setSetting(EMBED_MODEL_KEY, nextModel);
   }, [embeddingModels, embedModel, panel, settingsHydrated]);
 
   useEffect(() => {
@@ -267,7 +267,7 @@ export default function GeneralSettings({
 
     const nextModel = embedModel || rerankingModels[0] || DEFAULT_EMBED_MODEL;
     setRerankModel(nextModel);
-    window.electronAPI.setSetting(RERANK_MODEL_KEY, nextModel);
+    desktopApi.setSetting(RERANK_MODEL_KEY, nextModel);
   }, [rerankingModels, rerankModel, embedModel, panel, settingsHydrated]);
 
   useEffect(() => {
@@ -283,7 +283,7 @@ export default function GeneralSettings({
 
     const nextModel = whisperModels[0] || DEFAULT_TRANSCRIPTION_MODEL;
     setTranscriptionModel(nextModel);
-    window.electronAPI.setSetting(TRANSCRIPTION_MODEL_KEY, nextModel);
+    desktopApi.setSetting(TRANSCRIPTION_MODEL_KEY, nextModel);
     if (onTranscriptionModelChange) {
       onTranscriptionModelChange(nextModel);
     }
@@ -353,13 +353,13 @@ export default function GeneralSettings({
   const handleModelChange = (event) => {
     const newModel = event.target.value;
     setSelectedModel(newModel);
-    window.electronAPI.setSetting(MODEL_KEY, newModel);
+    desktopApi.setSetting(MODEL_KEY, newModel);
     if (onModelChange) {
       onModelChange(newModel);
     }
     if (visionModels.includes(newModel) && newModel !== visionModel) {
       setVisionModel(newModel);
-      window.electronAPI.setSetting(VISION_MODEL_KEY, newModel);
+      desktopApi.setSetting(VISION_MODEL_KEY, newModel);
       if (onVisionModelChange) {
         onVisionModelChange(newModel);
       }
@@ -369,7 +369,7 @@ export default function GeneralSettings({
   const handleVisionModelChange = (event) => {
     const newModel = event.target.value;
     setVisionModel(newModel);
-    window.electronAPI.setSetting(VISION_MODEL_KEY, newModel);
+    desktopApi.setSetting(VISION_MODEL_KEY, newModel);
     if (onVisionModelChange) {
       onVisionModelChange(newModel);
     }
@@ -378,19 +378,19 @@ export default function GeneralSettings({
   const handleEmbedModelChange = (event) => {
     const nextModel = event.target.value;
     setEmbedModel(nextModel);
-    window.electronAPI.setSetting(EMBED_MODEL_KEY, nextModel);
+    desktopApi.setSetting(EMBED_MODEL_KEY, nextModel);
   };
 
   const handleRerankModelChange = (event) => {
     const nextModel = event.target.value;
     setRerankModel(nextModel);
-    window.electronAPI.setSetting(RERANK_MODEL_KEY, nextModel);
+    desktopApi.setSetting(RERANK_MODEL_KEY, nextModel);
   };
 
   const handleTranscriptionModelChange = (event) => {
     const nextModel = event.target.value;
     setTranscriptionModel(nextModel);
-    window.electronAPI.setSetting(TRANSCRIPTION_MODEL_KEY, nextModel);
+    desktopApi.setSetting(TRANSCRIPTION_MODEL_KEY, nextModel);
     if (onTranscriptionModelChange) {
       onTranscriptionModelChange(nextModel);
     }
@@ -434,7 +434,7 @@ export default function GeneralSettings({
   const handleAudioInputDeviceChange = (event) => {
     const nextDeviceId = event.target.value;
     setAudioInputDeviceId(nextDeviceId);
-    window.electronAPI.setSetting(AUDIO_INPUT_DEVICE_ID_KEY, nextDeviceId);
+    desktopApi.setSetting(AUDIO_INPUT_DEVICE_ID_KEY, nextDeviceId);
     if (onAudioInputDeviceChange) {
       onAudioInputDeviceChange(nextDeviceId);
     }
@@ -443,7 +443,7 @@ export default function GeneralSettings({
   const handleAudioInputLanguageChange = (event) => {
     const nextLanguage = event.target.value;
     setAudioInputLanguage(nextLanguage);
-    window.electronAPI.setSetting(AUDIO_INPUT_LANGUAGE_KEY, nextLanguage);
+    desktopApi.setSetting(AUDIO_INPUT_LANGUAGE_KEY, nextLanguage);
     if (onAudioInputLanguageChange) {
       onAudioInputLanguageChange(nextLanguage);
     }
@@ -452,7 +452,7 @@ export default function GeneralSettings({
   const handleCheckForUpdates = async () => {
     setIsCheckingForUpdates(true);
     try {
-      const status = await window.electronAPI.checkForUpdates();
+      const status = await desktopApi.checkForUpdates();
       setUpdateStatus(status || DEFAULT_UPDATE_STATUS);
     } catch (error) {
       setUpdateStatus({
@@ -472,7 +472,7 @@ export default function GeneralSettings({
     setChangelogError('');
 
     try {
-      const result = await window.electronAPI.getChangelogPage(page);
+      const result = await desktopApi.getChangelogPage(page);
       setChangelogEntries(Array.isArray(result?.entries) ? result.entries : []);
       setChangelogPage(Number.isInteger(result?.page) ? result.page : page);
       setChangelogHasMore(Boolean(result?.hasMore));

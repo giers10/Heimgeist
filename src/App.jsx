@@ -1411,25 +1411,21 @@ async function sendMessage() {
 
     if (userMsg.content && webSearchEnabled) {
       try {
-        const resp = await fetch(`${backendApiUrl}/websearch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const searchContext = await fetchWebSearchContext({
+          apiBase: backendApiUrl,
+          engines: searxEngines,
+          historyLimit: 8,
+          messages: historyForSearch,
+          model,
+          prompt: userMsg.content,
+          searxUrl,
           signal: requestController.signal,
-          body: JSON.stringify({
-            prompt: userMsg.content,
-            model,
-            messages: historyForSearch,
-            history_limit: 8,
-            searx_url: searxUrl || null,
-            engines: Array.isArray(searxEngines) ? searxEngines : null,
-          })
         })
-        const data = await resp.json()
-        if (data && typeof data.context_block === 'string' && data.context_block.trim()) {
-          contextBlocks.push(data.context_block.trim())
+        if (searchContext.contextBlock) {
+          contextBlocks.push(searchContext.contextBlock)
         }
-        if (Array.isArray(data?.sources)) {
-          citationSources.push(...data.sources)
+        if (Array.isArray(searchContext.sources)) {
+          citationSources.push(...searchContext.sources)
         }
       } catch (error) {
         if (isAbortError(error)) throw error
@@ -1455,21 +1451,18 @@ async function sendMessage() {
       )
 
       try {
-        const res = await fetch(`${backendApiUrl}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await postChatMessage({
+          apiBase: backendApiUrl,
+          attachments: outgoingAttachments,
+          enrichedMessage: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
+          message: userMsg.content,
+          model,
+          sessionId: targetSessionId,
           signal: requestController.signal,
-          body: JSON.stringify({
-            session_id: targetSessionId,
-            model,
-            message: userMsg.content,
-            enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
-            stream: true,
-            sources: citationSources || [],
-            attachments: outgoingAttachments,
-            vision_model: visionModel || null,
-            transcription_model: transcriptionModel || null,
-          })
+          sources: citationSources || [],
+          stream: true,
+          transcriptionModel,
+          visionModel,
         })
         if (!res.ok) {
           const error = new Error(await readBackendErrorText(res))
@@ -1542,21 +1535,18 @@ async function sendMessage() {
         return
       }
     } else {
-      const res = await fetch(`${backendApiUrl}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await postChatMessage({
+        apiBase: backendApiUrl,
+        attachments: outgoingAttachments,
+        enrichedMessage: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
+        message: userMsg.content,
+        model,
+        sessionId: targetSessionId,
         signal: requestController.signal,
-        body: JSON.stringify({
-          session_id: targetSessionId,
-          model,
-          message: userMsg.content,
-          enriched_message: userMsg.content && contextBlocks.length > 0 ? enrichedPrompt : null,
-          stream: false,
-          sources: citationSources || [],
-          attachments: outgoingAttachments,
-          vision_model: visionModel || null,
-          transcription_model: transcriptionModel || null,
-        })
+        sources: citationSources || [],
+        stream: false,
+        transcriptionModel,
+        visionModel,
       })
       if (!res.ok) {
         const error = new Error(await readBackendErrorText(res))
@@ -1599,14 +1589,11 @@ async function sendMessage() {
     }
 
     if (isNewChat) {
-      fetch(`${backendApiUrl}/generate-title`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: targetSessionId,
-          message: buildAttachmentTitleSeed(userMsg.content, outgoingAttachments),
-          model
-        })
+      requestGeneratedTitle({
+        apiBase: backendApiUrl,
+        message: buildAttachmentTitleSeed(userMsg.content, outgoingAttachments),
+        model,
+        sessionId: targetSessionId,
       })
       .then(r => r.json())
       .then(data => {

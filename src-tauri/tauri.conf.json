@@ -31,7 +31,8 @@
     "icon": ["icons/icon.png"],
     "externalBin": [
       "binaries/heimgeist-backend",
-      "binaries/heimgeist-ffmpeg"
+      "binaries/heimgeist-ffmpeg",
+      "binaries/heimgeist-ffprobe"
     ]
   }
 }

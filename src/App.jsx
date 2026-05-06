@@ -1292,6 +1292,26 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     return chatSessions.find(s => s.session_id === activeSessionId)?.messages || [];
   }, [activeSessionId, chatSessions]);
 
+  const {
+    activeSessionIdRef,
+    handleNewMsgTipClick,
+    newMsgTip,
+    restoredForRef,
+    scrollMessageToTop,
+    scrollPendingMessageForSession,
+    scrollToBottom,
+    setNewMsgTip,
+    setPendingScrollToLastUser,
+    setScrollPositions,
+    setUserScrolledUp,
+    userScrolledUpRef,
+  } = useChatScroll({
+    activeSessionId,
+    activeSidebarMode,
+    chatRef,
+    messagesLength: messages.length,
+  })
+
   const activeChatSession = useMemo(() => {
     return chatSessions.find(session => session.session_id === activeSessionId) || null
   }, [activeSessionId, chatSessions])

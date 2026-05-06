@@ -9,6 +9,8 @@ const targetTriple = resolveTargetTriple()
 const executableExtension = process.platform === 'win32' ? '.exe' : ''
 const backendOutputName = `heimgeist-backend-${targetTriple}${executableExtension}`
 const backendOutputPath = path.join(binariesDir, backendOutputName)
+const ffmpegOutputPath = outputPathForBaseName('heimgeist-ffmpeg')
+const ffprobeOutputPath = outputPathForBaseName('heimgeist-ffprobe')
 
 function resolveTargetTriple() {
   const output = execFileSync('rustc', ['-vV'], { encoding: 'utf8' })
@@ -29,6 +31,10 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}`)
   }
+}
+
+function outputPathForBaseName(outputBaseName) {
+  return path.join(binariesDir, `${outputBaseName}-${targetTriple}${executableExtension}`)
 }
 
 function ensurePython() {
@@ -55,52 +61,41 @@ function copyExecutable(sourcePath, outputBaseName) {
     return null
   }
   fs.mkdirSync(binariesDir, { recursive: true })
-  const outputPath = path.join(binariesDir, `${outputBaseName}-${targetTriple}${executableExtension}`)
+  const outputPath = outputPathForBaseName(outputBaseName)
   fs.copyFileSync(sourcePath, outputPath)
   fs.chmodSync(outputPath, 0o755)
   return outputPath
 }
 
-function maybeCopyFfmpeg() {
-  try {
-    const ffmpegPath = require('ffmpeg-static')
-    const outputPath = copyExecutable(ffmpegPath, 'heimgeist-ffmpeg')
-    if (outputPath) {
-      console.log(`Bundled ffmpeg helper: ${outputPath}`)
-    }
-  } catch (error) {
-    console.warn(`Could not bundle ffmpeg-static: ${error.message}`)
+function copyRequiredFfmpeg() {
+  const ffmpegPath = require('ffmpeg-static')
+  const outputPath = copyExecutable(ffmpegPath, 'heimgeist-ffmpeg')
+  if (!outputPath) {
+    throw new Error('Could not bundle ffmpeg-static: package did not provide a binary path.')
   }
+  console.log(`Bundled ffmpeg helper: ${outputPath}`)
 }
 
-function maybeCopyFfprobe() {
-  try {
-    const ffprobeStatic = require('ffprobe-static')
-    const ffprobePath = ffprobeStatic && ffprobeStatic.path
-    if (!ffprobePath || !fs.existsSync(ffprobePath)) {
-      console.warn('Could not bundle ffprobe-static: package did not provide a binary path.')
-      return
-    }
-
-    const probe = spawnSync(ffprobePath, ['-version'], {
-      encoding: 'utf8',
-      timeout: 5000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    if (probe.status !== 0) {
-      console.warn(
-        `Skipping bundled ffprobe: ${ffprobePath} did not run successfully on this machine. Audio/video duration probing remains a release gap.`,
-      )
-      return
-    }
-
-    const outputPath = copyExecutable(ffprobePath, 'heimgeist-ffprobe')
-    if (outputPath) {
-      console.log(`Bundled ffprobe helper: ${outputPath}`)
-    }
-  } catch (error) {
-    console.warn(`Could not bundle ffprobe-static: ${error.message}`)
+function copyRequiredFfprobe() {
+  const ffprobeStatic = require('ffprobe-static')
+  const ffprobePath = ffprobeStatic && ffprobeStatic.path
+  if (!ffprobePath || !fs.existsSync(ffprobePath)) {
+    throw new Error('Could not bundle ffprobe-static: package did not provide a binary path.')
   }
+
+  const probe = spawnSync(ffprobePath, ['-version'], {
+    encoding: 'utf8',
+    timeout: 20000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  if (probe.status !== 0) {
+    throw new Error(
+      `Could not bundle ffprobe-static: ${ffprobePath} did not run successfully on this machine.`,
+    )
+  }
+
+  const outputPath = copyExecutable(ffprobePath, 'heimgeist-ffprobe')
+  console.log(`Bundled ffprobe helper: ${outputPath}`)
 }
 
 function writeBinariesIgnore() {
@@ -119,6 +114,8 @@ function buildBackendSidecar() {
 
   fs.rmSync(pyinstallerRoot, { recursive: true, force: true })
   fs.rmSync(backendOutputPath, { force: true })
+  fs.rmSync(ffmpegOutputPath, { force: true })
+  fs.rmSync(ffprobeOutputPath, { force: true })
   fs.mkdirSync(distPath, { recursive: true })
   fs.mkdirSync(workPath, { recursive: true })
   fs.mkdirSync(specPath, { recursive: true })
@@ -173,5 +170,5 @@ ensurePython()
 ensurePyInstaller()
 writeBinariesIgnore()
 buildBackendSidecar()
-maybeCopyFfmpeg()
-maybeCopyFfprobe()
+copyRequiredFfmpeg()
+copyRequiredFfprobe()

@@ -1543,12 +1543,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   }, [backendApiUrl]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CHAT_LIBRARY_MAP_KEY, JSON.stringify(chatLibraryBySession || {}));
-    } catch {}
-  }, [chatLibraryBySession]);
-
-  useEffect(() => {
     if (!backendApiUrl) return;
     const interval = setInterval(() => {
       refreshLibraries();
@@ -1561,22 +1555,6 @@ async function regenerateFromIndex(index, overrideUserText = null) {
   useEffect(() => {
     fetchHistory(activeSessionId);
   }, [activeSessionId, backendApiUrl]);
-
-  useEffect(() => {
-    const validSlugs = new Set(libraries.map(library => library.slug))
-    setChatLibraryBySession(prev => {
-      let changed = false
-      const next = {}
-      for (const [sessionId, slug] of Object.entries(prev || {})) {
-        if (validSlugs.has(slug)) {
-          next[sessionId] = slug
-        } else {
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [libraries])
 
   const handleSidebarClick = (mode) => {
     // Saving happens in the centralized cleanup effect below
@@ -1600,89 +1578,9 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     return libraries.find(lib => lib.slug === activeLibrarySlug) || null;
   }, [activeLibrarySlug, libraries]);
 
-  const chatLibrarySlug = activeSessionId ? (chatLibraryBySession[activeSessionId] || null) : null
-
-  const chatLibrary = useMemo(() => {
-    return libraries.find(lib => lib.slug === chatLibrarySlug) || null;
-  }, [chatLibrarySlug, libraries]);
-
-  const chatLibraryHasActiveJob = useMemo(() => {
-    if (!chatLibrarySlug) return false
-    return libraryJobs.some(job => job.slug === chatLibrarySlug && (job.status === 'queued' || job.status === 'running'))
-  }, [chatLibrarySlug, libraryJobs])
-
-  const chatLibraryStatusSuffix = useMemo(() => {
-    if (!chatLibrary) return ''
-    if (!chatLibrary.files?.length) return ' (empty)'
-    if (chatLibrary.states?.is_indexed) return ''
-    return chatLibraryHasActiveJob ? ' (syncing)' : ' (needs sync)'
-  }, [chatLibrary, chatLibraryHasActiveJob])
-
   const chatModelPickerOptions = useMemo(() => {
     return buildModelPickerOptions(availableChatModels, model, 'saved model unavailable')
   }, [availableChatModels, model])
-
-  function getChatLibrarySlugForSession(sessionId) {
-    if (!sessionId) return null
-    return chatLibraryBySession[sessionId] || null
-  }
-
-  function getChatLibraryForSession(sessionId) {
-    const slug = getChatLibrarySlugForSession(sessionId)
-    if (!slug) return null
-    return libraries.find(lib => lib.slug === slug) || null
-  }
-
-  function isLibrarySyncing(slug) {
-    if (!slug) return false
-    return libraryJobs.some(job => job.slug === slug && (job.status === 'queued' || job.status === 'running'))
-  }
-
-  function setChatLibraryForSession(sessionId, slug) {
-    if (!sessionId) return
-    setChatLibraryBySession(prev => {
-      const next = { ...(prev || {}) }
-      if (slug) {
-        next[sessionId] = slug
-      } else {
-        delete next[sessionId]
-      }
-      return next
-    })
-  }
-
-  function removeLibraryFromChatSelections(slug) {
-    if (!slug) return
-    setChatLibraryBySession(prev => {
-      let changed = false
-      const next = {}
-      for (const [sessionId, librarySlug] of Object.entries(prev || {})) {
-        if (librarySlug === slug) {
-          changed = true
-          continue
-        }
-        next[sessionId] = librarySlug
-      }
-      return changed ? next : prev
-    })
-  }
-
-  useEffect(() => {
-    if (!isDbPickerOpen) return
-
-    const onPointerDown = (event) => {
-      if (!dbPickerRef.current?.contains(event.target)) {
-        setIsDbPickerOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [isDbPickerOpen])
-
-  useEffect(() => {
-    setIsDbPickerOpen(false)
-  }, [activeSessionId, activeSidebarMode])
 
   useEffect(() => {
     if (!isChatModelPickerOpen) return

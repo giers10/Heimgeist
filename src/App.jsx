@@ -96,20 +96,6 @@ export default function App() {
   const [audioInputEnabled, setAudioInputEnabled] = useState(true)
   const [audioInputDeviceId, setAudioInputDeviceId] = useState('')
   const [audioInputLanguage, setAudioInputLanguage] = useState('')
-  const [audioInputRuntimeReady, setAudioInputRuntimeReady] = useState(true)
-  const [audioInputRuntimeMessage, setAudioInputRuntimeMessage] = useState('')
-  const [isRecordingAudio, setIsRecordingAudio] = useState(false)
-  const [isTranscribingAudio, setIsTranscribingAudio] = useState(false)
-  const [audioRecordingMs, setAudioRecordingMs] = useState(0)
-  const audioRecorderRef = useRef(null)
-  const audioStreamRef = useRef(null)
-  const audioChunksRef = useRef([])
-  const audioStopPromiseRef = useRef(null)
-  const audioRecorderMimeTypeRef = useRef('')
-  const audioTickTimerRef = useRef(null)
-  const audioAutoStopTimerRef = useRef(null)
-  const audioStartedAtRef = useRef(0)
-  const audioTranscriptionAbortRef = useRef(null)
   const [backendApiUrl, setBackendApiUrl] = useState(DEFAULT_BACKEND_API_URL); // State for Heimgeist backend URL
   const [colorScheme, setColorScheme] = useState('Default'); // State for color scheme
   const [streamOutput, setStreamOutput] = useState(false);
@@ -133,6 +119,27 @@ export default function App() {
   }, [searxEngines]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const {
+    audioInputRuntimeMessage,
+    audioInputRuntimeReady,
+    audioRecordingMs,
+    isRecordingAudio,
+    isTranscribingAudio,
+    setAudioInputRuntimeMessage,
+    setAudioInputRuntimeReady,
+    syncAudioInputRuntimeFromStartupStatus,
+    toggleAudioRecording,
+  } = useAudioInput({
+    activeSidebarMode,
+    audioInputDeviceId,
+    audioInputEnabled,
+    audioInputLanguage,
+    backendApiUrl,
+    isSending,
+    setInput,
+    textareaRef,
+    transcriptionModel,
+  })
   const [loading, setLoading] = useState(true); // Loading state for initial session fetch
   const [unreadSessions, setUnreadSessions] = useState([]); // Track unread messages
   const [scrollPositions, setScrollPositions] = useState({}); // Store scroll positions for each session

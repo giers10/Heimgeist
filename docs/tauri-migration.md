@@ -23,6 +23,16 @@ The development backend is still the normal FastAPI backend started from the rep
 - On first Tauri run only, when the Tauri settings file does not exist, Tauri attempts to import the historical Electron settings file from the platform config directory, including `Heimgeist/settings.json`.
 - Existing Tauri settings are never overwritten by imported settings.
 
+## Packaged Backend Data Paths
+
+The backend now centralizes runtime data paths in `backend/paths.py`.
+
+- Development remains unchanged when no internal deployment hooks are set: chat data uses `backend/app.db` and local RAG data uses `backend/libraries`.
+- Packaged Tauri builds should launch the backend with an app-managed data root so the backend stores data under the OS-appropriate app data directory.
+- The intended packaged locations are Application Support on macOS, LocalAppData on Windows, and the XDG data directory or `~/.local/share` equivalent on Linux.
+- `HEIMGEIST_DATA_DIR`, `HEIMGEIST_DB_PATH`, and `HEIMGEIST_LIB_ROOT` are internal app/sidecar plumbing hooks for packaged launchers and developer verification. They are not user-facing settings.
+- This step does not move or migrate existing development data.
+
 ## Desktop Bridge Surface
 
 Renderer code should continue to call only `src/desktop/desktopApi.js` for desktop functions. That bridge owns direct access to the Tauri global and maps the renderer API to Tauri commands/events.
@@ -56,6 +66,7 @@ The only remaining Electron references should be historical migration documentat
 
 - Replace update/changelog placeholders with a signed Tauri update flow or another release strategy.
 - Package the FastAPI backend as a sidecar or equivalent production process.
+- Launch the packaged backend with app-managed data paths from the Tauri shell.
 - Preserve ffmpeg/ffprobe environment handling for packaged audio transcription.
 - Add production backend startup health gating and shutdown behavior.
 - Finalize bundle metadata, icons, signing, notarization, and installer behavior.

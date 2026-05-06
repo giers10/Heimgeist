@@ -23,6 +23,12 @@ The `DBs` tab is no longer a placeholder. You can:
 
 When files are added or removed, Heimgeist automatically rebuilds the local RAG pipeline for that database: corpus, enrichment, embeddings, and indexes. In the chat composer, you can select which database the current chat should use. For each chat turn, Heimgeist queries the selected database, turns the top results into a local context block, appends that block to the user prompt, and sends the enriched prompt to Ollama.
 
+## Local Data
+
+Heimgeist stores chat history and local library indexes on the local machine. During development, the backend keeps using `backend/app.db` and `backend/libraries` so existing local data remains available.
+
+Packaged Tauri builds should launch the backend with app-managed data paths so chats and local libraries live under the operating system's normal application data location, such as Application Support on macOS, LocalAppData on Windows, or the XDG data directory on Linux. These paths are managed by the app and are not exposed as normal user settings.
+
 ## Stack
 
 - Frontend: Tauri, React, Vite
@@ -78,6 +84,7 @@ npm run dev
 │   ├── ollama_client.py
 │   ├── models.py
 │   ├── database.py
+│   ├── paths.py
 │   ├── schemas.py
 │   └── requirements.txt
 ├── src-tauri/

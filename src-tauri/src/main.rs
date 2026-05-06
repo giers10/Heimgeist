@@ -266,10 +266,15 @@ fn write_settings_file(path: &PathBuf, settings: &SettingsMap) -> Result<(), Str
 fn load_settings_store(app: &AppHandle) -> Result<SettingsStore, String> {
     let path = settings_file_path(app)?;
     let raw_settings = read_settings_file(&path)?;
-    let should_write = raw_settings.is_none();
-    let (settings, migrated) = migrate_settings(raw_settings);
+    let (settings, should_write) = match raw_settings {
+        Some(raw_settings) => {
+            let (settings, migrated) = migrate_settings(Some(raw_settings));
+            (settings, migrated)
+        }
+        None => (default_settings(), true),
+    };
 
-    if should_write || migrated {
+    if should_write {
         write_settings_file(&path, &settings)?;
     }
 

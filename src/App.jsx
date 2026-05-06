@@ -1714,41 +1714,7 @@ async function createNewChat() {
     setActiveSessionId(sessionId);
     // Clear unread dot immediately for this chat
     setUnreadSessions(prev => prev.filter(id => id !== sessionId));
-
-    // If we had queued a guided scroll for this chat (from background replies), run it now, smoothly
-    const pendingId = pendingScrollToLastUser[sessionId];
-    if (pendingId) {
-      // Defer until the chat content renders; restoration is gated by restoredForRef, so won't fight
-      requestAnimationFrame(() => {
-        let tries = 12; // ~200ms @ 60fps
-        const attempt = () => {
-          const chatDiv = chatRef.current;
-          if (!chatDiv) return;
-
-          let el = document.getElementById(pendingId);
-          if (!el) {
-            const sess = chatSessions.find(s => s.session_id === sessionId);
-            if (sess && Array.isArray(sess.messages)) {
-              for (let i = sess.messages.length - 1; i >= 0; i--) {
-                const m = sess.messages[i];
-                if (m.role === 'assistant' && m.id) { el = document.getElementById(m.id); break; }
-              }
-            }
-          }
-
-          if (el) {
-            scrollMessageToTop(el.id, 'smooth', sessionId);
-            setPendingScrollToLastUser(prev => {
-              const { [sessionId]: _omit, ...rest } = prev;
-              return rest;
-            });
-          } else if (tries-- > 0) {
-            requestAnimationFrame(attempt);
-          }
-        };
-        requestAnimationFrame(attempt);
-      });
-    }
+    scrollPendingMessageForSession(sessionId, chatSessions)
   }
 
   function handleRename(sessionId, newName) {

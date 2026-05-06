@@ -491,7 +491,9 @@ fn start_backend_sidecar(app: &AppHandle, settings_path: &Path) -> Result<Backen
     }
 
     if !should_start_backend_sidecar() {
-        println!("Heimgeist backend is not running; dev shell expects an external backend wrapper.");
+        println!(
+            "Heimgeist backend is not running; dev shell expects an external backend wrapper."
+        );
         return Ok(BackendSidecar::empty());
     }
 

@@ -268,11 +268,7 @@ fn electron_settings_candidates(app: &AppHandle, tauri_path: &Path) -> Vec<PathB
     let mut candidates = Vec::new();
 
     if let Ok(config_dir) = app.path().config_dir() {
-        let product_name = app
-            .config()
-            .product_name
-            .as_deref()
-            .unwrap_or("Heimgeist");
+        let product_name = app.config().product_name.as_deref().unwrap_or("Heimgeist");
 
         for app_dir in [product_name, "Heimgeist", "heimgeist"] {
             push_unique_candidate(
@@ -301,7 +297,10 @@ fn import_electron_settings_if_available(
             }
             Ok(None) => {}
             Err(error) => {
-                eprintln!("Skipping Electron settings import from {}: {error}", candidate.display());
+                eprintln!(
+                    "Skipping Electron settings import from {}: {error}",
+                    candidate.display()
+                );
             }
         }
     }

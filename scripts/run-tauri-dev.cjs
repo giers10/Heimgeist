@@ -141,8 +141,14 @@ async function launchTauri() {
   })
 
   tauriProcess.on('exit', (code, signal) => {
+    const wasShuttingDown = shuttingDown
     shuttingDown = true
     stopSpawnedBackend()
+
+    if (wasShuttingDown) {
+      process.exit(0)
+      return
+    }
 
     if (signal) {
       process.exit(signal === 'SIGINT' || signal === 'SIGTERM' ? 0 : 1)

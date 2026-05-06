@@ -11,6 +11,9 @@
     "dev:tauri:shell": "tauri dev",
     "tauri": "tauri",
     "build": "vite build",
+    "build:sidecar": "node scripts/build-backend-sidecar.cjs",
+    "package:mac": "npm run build:sidecar && tauri build --bundles app",
+    "build:app": "npm run package:mac",
     "start": "npm run dev"
   },
   "dependencies": {

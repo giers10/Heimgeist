@@ -26,8 +26,12 @@
     }
   },
   "bundle": {
-    "active": false,
-    "targets": "all",
-    "icon": []
+    "active": true,
+    "targets": ["app"],
+    "icon": ["icons/icon.png"],
+    "externalBin": [
+      "binaries/heimgeist-backend",
+      "binaries/heimgeist-ffmpeg"
+    ]
   }
 }

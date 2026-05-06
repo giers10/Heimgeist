@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import AssistantMessageContent from './AssistantMessageContent'
+import ChatDatabasePicker from './ChatDatabasePicker'
 import LibraryManager from './LibraryManager'
 import { SettingsPanel, SettingsSidebar } from './SettingsPanels'
 import { applyColorScheme } from './colorSchemes'
@@ -23,7 +24,6 @@ import {
 import {
   AUDIO_RECORDING_TICK_MS,
   BOTTOM_EPSILON,
-  CHAT_LIBRARY_MAP_KEY,
   DEFAULT_BACKEND_API_URL,
   MAX_AUDIO_RECORDING_MS,
   MAX_IMAGE_ATTACHMENT_BYTES,
@@ -52,6 +52,7 @@ import {
   stopMediaStream,
   supportsAudioInputCapture,
 } from './audioInput'
+import { useChatLibrarySelection } from './useChatLibrarySelection'
 
 function appendTranscriptToComposer(currentInput, transcript) {
   const nextTranscript = String(transcript || '').trim()

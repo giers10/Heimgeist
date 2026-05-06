@@ -264,7 +264,7 @@ fn push_unique_candidate(candidates: &mut Vec<PathBuf>, candidate: PathBuf, taur
     candidates.push(candidate);
 }
 
-fn electron_settings_candidates(app: &AppHandle, tauri_path: &Path) -> Vec<PathBuf> {
+fn legacy_settings_candidates(app: &AppHandle, tauri_path: &Path) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
 
     if let Ok(config_dir) = app.path().config_dir() {
@@ -282,15 +282,12 @@ fn electron_settings_candidates(app: &AppHandle, tauri_path: &Path) -> Vec<PathB
     candidates
 }
 
-fn import_electron_settings_if_available(
-    app: &AppHandle,
-    tauri_path: &Path,
-) -> Option<SettingsMap> {
-    for candidate in electron_settings_candidates(app, tauri_path) {
+fn import_legacy_settings_if_available(app: &AppHandle, tauri_path: &Path) -> Option<SettingsMap> {
+    for candidate in legacy_settings_candidates(app, tauri_path) {
         match read_settings_file(&candidate) {
             Ok(Some(settings)) => {
                 println!(
-                    "Imported Electron settings for first Tauri run from {}",
+                    "Imported legacy Heimgeist settings for first Tauri run from {}",
                     candidate.display()
                 );
                 return Some(settings);
@@ -298,7 +295,7 @@ fn import_electron_settings_if_available(
             Ok(None) => {}
             Err(error) => {
                 eprintln!(
-                    "Skipping Electron settings import from {}: {error}",
+                    "Skipping legacy settings import from {}: {error}",
                     candidate.display()
                 );
             }
@@ -350,7 +347,7 @@ fn load_settings_store(app: &AppHandle) -> Result<SettingsStore, String> {
         }
         None => {
             let imported_settings = if explicit_settings_file_path().is_none() {
-                import_electron_settings_if_available(app, &path)
+                import_legacy_settings_if_available(app, &path)
             } else {
                 None
             };

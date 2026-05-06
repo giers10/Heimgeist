@@ -1572,8 +1572,6 @@ async function sendMessage() {
     id: `msg-${Date.now()}-${Math.random()}`
   }
   setIsAttachmentMenuOpen(false)
-  justSentMessage.current = true
-  lastSentSessionRef.current = targetSessionId
   setUserScrolledUp(targetSessionId, false)
 
   if (activeSessionIdRef.current === targetSessionId) {

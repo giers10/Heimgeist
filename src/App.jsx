@@ -11,7 +11,6 @@ import {
   CHAT_FILE_PICKER_FILTERS,
   attachmentIsImage,
   buildComposerFileAttachment,
-  getAttachmentDisplayName,
   getFileName,
   guessMimeTypeFromName,
   hasFilePayload,
@@ -33,12 +32,10 @@ import {
   expectBackendJson,
   getErrorText,
   isAbortError,
-  readBackendErrorText,
 } from './backendApi'
 import { sanitizeChatTitle, splitThinkBlocks } from './chatText'
 import { buildModelPickerOptions } from './modelPicker'
 import {
-  fetchLocalLibraryContext,
   fetchModelCapabilities,
   fetchStartupOllamaStatus,
   prepareStartupModels,

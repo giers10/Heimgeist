@@ -1014,6 +1014,41 @@ export default function App() {
     return buildModelPickerOptions(availableChatModels, model, 'saved model unavailable')
   }, [availableChatModels, model])
 
+  const { regenerateFromIndex, sendMessage } = createChatGenerationHandlers({
+    activeSessionId,
+    activeSessionIdRef,
+    backendApiUrl,
+    beginCancelableRequest,
+    canAttachImages,
+    chatSessions,
+    composerAttachments,
+    createNewChat,
+    finishCancelableRequest,
+    getChatLibraryForSession,
+    imageAttachmentUnavailableReason,
+    input,
+    isSending,
+    model,
+    restoredForRef,
+    scrollMessageToTop,
+    scrollToBottom,
+    searxEngines,
+    searxUrl,
+    setChatSessions,
+    setComposerAttachments,
+    setInput,
+    setIsAttachmentMenuOpen,
+    setNewMsgTip,
+    setPendingScrollToLastUser,
+    setUnreadSessions,
+    setUserScrolledUp,
+    streamOutput,
+    transcriptionModel,
+    userScrolledUpRef,
+    visionModel,
+    webSearchEnabled,
+  })
+
   useEffect(() => {
     if (!isChatModelPickerOpen) return
 

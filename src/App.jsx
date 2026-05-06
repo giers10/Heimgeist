@@ -2545,44 +2545,10 @@ async function createNewChat() {
             </div>
           )}
           {activeSidebarMode === 'settings' && (
-            <div className="settings-list">
-              <div
-                className={`settings-item ${activeSettingsSubmenu === 'General' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('General')}
-              >
-                General
-              </div>
-              <div
-                className={`settings-item ${activeSettingsSubmenu === 'AI Models' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('AI Models')}
-              >
-                AI Models
-              </div>
-              <div
-                className={`settings-item ${activeSettingsSubmenu === 'Interface' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('Interface')}
-              >
-                Interface
-              </div>
-              <div
-                className={`settings-item ${activeSettingsSubmenu === 'Backend' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('Backend')}
-              >
-                Backend
-              </div>
-              <div
-                className={`settings-item ${activeSettingsSubmenu === 'Updates' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('Updates')}
-              >
-                Updates
-              </div>
-              <div
-                className={`settings-item ${activeSettingsSubmenu === 'Advanced' ? 'active' : ''}`}
-                onClick={() => setActiveSettingsSubmenu('Advanced')}
-              >
-                Advanced
-              </div>
-            </div>
+            <SettingsSidebar
+              activeSection={activeSettingsSubmenu}
+              onSelect={setActiveSettingsSubmenu}
+            />
           )}
         </div>
         {activeSidebarMode !== 'settings' && (
@@ -3090,48 +3056,22 @@ async function createNewChat() {
           </>
         )}
         {activeSidebarMode === 'settings' && (
-          <>
-            <div className="header">
-              <strong>{activeSettingsSubmenu} Settings</strong>
-            </div>
-            {activeSettingsSubmenu === 'General' && (
-              <GeneralSettings
-                panel="General"
-                onAudioInputDeviceChange={setAudioInputDeviceId}
-                onAudioInputLanguageChange={setAudioInputLanguage}
-              />
-            )}
-            {activeSettingsSubmenu === 'AI Models' && (
-              <GeneralSettings
-                panel="AI Models"
-                onModelChange={setModel}
-                onVisionModelChange={setVisionModel}
-                onTranscriptionModelChange={setTranscriptionModel}
-                onLibrariesPurged={handleLibrariesPurged}
-              />
-            )}
-            {activeSettingsSubmenu === 'Interface' && (
-              <InterfaceSettings
-                streamOutput={streamOutput}
-                onStreamOutputChange={setStreamOutput}
-              />
-            )}
-            {activeSettingsSubmenu === 'Backend' && (
-              <WebsearchSettings
-                onBackendApiUrlChange={setBackendApiUrl}
-                searxUrl={searxUrl}
-                setSearxUrl={setSearxUrl}
-                engines={searxEngines}
-                setEngines={(next) => setSearxEngines(normalizeWebsearchEngines(next))}
-              />
-            )}
-            {activeSettingsSubmenu === 'Updates' && (
-              <GeneralSettings panel="Updates" />
-            )}
-            {activeSettingsSubmenu === 'Advanced' && (
-              <GeneralSettings panel="Advanced" onLibrariesPurged={handleLibrariesPurged} />
-            )}
-          </>
+          <SettingsPanel
+            activeSection={activeSettingsSubmenu}
+            onAudioInputDeviceChange={setAudioInputDeviceId}
+            onAudioInputLanguageChange={setAudioInputLanguage}
+            onBackendApiUrlChange={setBackendApiUrl}
+            onLibrariesPurged={handleLibrariesPurged}
+            onModelChange={setModel}
+            onStreamOutputChange={setStreamOutput}
+            onTranscriptionModelChange={setTranscriptionModel}
+            onVisionModelChange={setVisionModel}
+            searxEngines={searxEngines}
+            searxUrl={searxUrl}
+            setSearxEngines={setSearxEngines}
+            setSearxUrl={setSearxUrl}
+            streamOutput={streamOutput}
+          />
         )}
       </div>
     </div>

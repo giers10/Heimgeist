@@ -39,6 +39,16 @@ import {
 import { sanitizeChatTitle, splitThinkBlocks } from './chatText'
 import { buildModelPickerOptions } from './modelPicker'
 import {
+  fetchLocalLibraryContext,
+  fetchModelCapabilities,
+  fetchStartupOllamaStatus,
+  fetchWebSearchContext,
+  postChatMessage,
+  postRegenerateMessage,
+  prepareStartupModels,
+  requestGeneratedTitle,
+} from './chatApi'
+import {
   loadStoredWebsearchEngines,
   normalizeWebsearchEngines,
 } from './websearchEngines'

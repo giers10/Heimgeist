@@ -2,23 +2,18 @@
   "name": "Heimgeist",
   "version": "0.1.0",
   "private": true,
-  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "dev:backend": "node scripts/run-backend.cjs",
-    "dev:renderer": "vite --port 5173 --strictPort",
-    "dev:renderer:tauri": "vite --host 127.0.0.1 --port 5174 --strictPort",
-    "dev:electron": "node scripts/run-electron-dev.cjs",
+    "dev": "node scripts/run-tauri-dev.cjs",
     "dev:tauri": "node scripts/run-tauri-dev.cjs",
-    "dev:tauri:full": "node scripts/run-tauri-dev.cjs",
+    "dev:backend": "node scripts/run-backend.cjs",
+    "dev:renderer": "vite --host 127.0.0.1 --port 5174 --strictPort",
     "dev:tauri:shell": "tauri dev",
     "tauri": "tauri",
     "build": "vite build",
-    "start": "electron ."
+    "start": "npm run dev"
   },
   "dependencies": {
-    "@electron-toolkit/utils": "^4.0.0",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
     "react": "^18.3.1",
@@ -29,9 +24,6 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "concurrently": "^9.0.1",
-    "cross-env": "^7.0.3",
-    "electron": "^31.2.0",
     "vite": "^5.4.2",
     "wait-on": "^7.2.0"
   }

@@ -64,12 +64,15 @@ PY
 
 node_deps_usable() {
   node - <<'NODE' >/dev/null 2>&1
-require('concurrently')
-require('electron')
 require('react')
 require('vite')
 require('wait-on')
 NODE
+  if [ "$?" -ne 0 ]; then
+    return 1
+  fi
+
+  [ -x node_modules/.bin/tauri ] || [ -x node_modules/.bin/tauri.cmd ]
 }
 
 is_linux_x86_64() {
@@ -168,21 +171,6 @@ fi
 
 TORCH_FLAVOR="$(resolve_torch_flavor)"
 RECREATE_VENV=0
-
-if [ -z "${HEIMGEIST_SETTINGS_FILE:-}" ]; then
-  case "$(uname -s)" in
-    Darwin)
-      HEIMGEIST_SETTINGS_FILE="${HOME}/Library/Application Support/Heimgeist/settings.json"
-      ;;
-    Linux)
-      HEIMGEIST_SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/Heimgeist/settings.json"
-      ;;
-  esac
-  if [ -n "${HEIMGEIST_SETTINGS_FILE:-}" ]; then
-    export HEIMGEIST_SETTINGS_FILE
-    mkdir -p "$(dirname "$HEIMGEIST_SETTINGS_FILE")"
-  fi
-fi
 
 if [ ! -x "$VENV_DIR/bin/python" ] || ! "$VENV_DIR/bin/python" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)'; then
   RECREATE_VENV=1

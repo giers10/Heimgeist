@@ -2,8 +2,12 @@
 
 use std::{
     fs,
+    io::{Read, Write},
+    net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     sync::Mutex,
+    thread,
+    time::{Duration, Instant},
 };
 
 use serde::Deserialize;
@@ -11,8 +15,16 @@ use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_shell::{
+    process::{CommandChild, CommandEvent},
+    ShellExt,
+};
 
 const DEFAULT_BACKEND_API_URL: &str = "http://127.0.0.1:8000";
+const BACKEND_HOST: &str = "127.0.0.1";
+const BACKEND_PORT: u16 = 8000;
+const BACKEND_SIDECAR_NAME: &str = "heimgeist-backend";
+const BACKEND_STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const DEFAULT_OLLAMA_API_URL: &str = "http://127.0.0.1:11434";
 const DEFAULT_EMBED_MODEL: &str = "nomic-embed-text:latest";
 const DEFAULT_TRANSCRIPTION_MODEL: &str = "base";
@@ -28,6 +40,34 @@ type SettingsMap = Map<String, Value>;
 struct SettingsStore {
     path: PathBuf,
     settings: Mutex<SettingsMap>,
+}
+
+struct BackendSidecar {
+    child: Mutex<Option<CommandChild>>,
+}
+
+impl BackendSidecar {
+    fn empty() -> Self {
+        Self {
+            child: Mutex::new(None),
+        }
+    }
+
+    fn running(child: CommandChild) -> Self {
+        Self {
+            child: Mutex::new(Some(child)),
+        }
+    }
+}
+
+impl Drop for BackendSidecar {
+    fn drop(&mut self) {
+        if let Ok(mut child) = self.child.lock() {
+            if let Some(child) = child.take() {
+                let _ = child.kill();
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -337,6 +377,177 @@ fn write_settings_file(path: &PathBuf, settings: &SettingsMap) -> Result<(), Str
         .map_err(|error| format!("Could not write settings to {}: {error}", path.display()))
 }
 
+enum BackendHealth {
+    Healthy,
+    Unavailable,
+    Incompatible(String),
+}
+
+fn check_backend_health() -> BackendHealth {
+    let address = SocketAddr::from(([127, 0, 0, 1], BACKEND_PORT));
+    let mut stream = match TcpStream::connect_timeout(&address, Duration::from_millis(500)) {
+        Ok(stream) => stream,
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::TimedOut
+            ) =>
+        {
+            return BackendHealth::Unavailable;
+        }
+        Err(error) => {
+            return BackendHealth::Incompatible(format!(
+                "Could not connect to backend health port {BACKEND_PORT}: {error}"
+            ));
+        }
+    };
+
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+    if let Err(error) = stream.write_all(
+        format!("GET /health HTTP/1.1\r\nHost: {BACKEND_HOST}\r\nConnection: close\r\n\r\n")
+            .as_bytes(),
+    ) {
+        return BackendHealth::Incompatible(format!(
+            "Port {BACKEND_PORT} is occupied but did not accept a health request: {error}"
+        ));
+    }
+
+    let mut response = String::new();
+    if let Err(error) = stream.read_to_string(&mut response) {
+        return BackendHealth::Incompatible(format!(
+            "Port {BACKEND_PORT} is occupied but did not return a readable health response: {error}"
+        ));
+    }
+
+    if response.contains("200 OK") && response.contains("\"ok\"") {
+        BackendHealth::Healthy
+    } else {
+        let preview = response.lines().next().unwrap_or("empty response");
+        BackendHealth::Incompatible(format!(
+            "Port {BACKEND_PORT} is occupied but /health did not return Heimgeist health OK ({preview})."
+        ))
+    }
+}
+
+fn wait_for_backend_health(timeout: Duration) -> Result<(), String> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match check_backend_health() {
+            BackendHealth::Healthy => return Ok(()),
+            BackendHealth::Unavailable => {
+                if Instant::now() >= deadline {
+                    return Err(format!(
+                        "Timed out waiting for Heimgeist backend /health on {BACKEND_HOST}:{BACKEND_PORT}."
+                    ));
+                }
+                thread::sleep(Duration::from_millis(250));
+            }
+            BackendHealth::Incompatible(detail) => return Err(detail),
+        }
+    }
+}
+
+fn should_start_backend_sidecar() -> bool {
+    !cfg!(debug_assertions)
+        || std::env::var("HEIMGEIST_USE_BACKEND_SIDECAR")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+}
+
+fn bundled_executable_path(name: &str) -> Option<PathBuf> {
+    let exe_path = std::env::current_exe().ok()?;
+    let exe_dir = exe_path.parent()?;
+    let mut path = exe_dir.join(name);
+    #[cfg(windows)]
+    {
+        path.set_extension("exe");
+    }
+    path.exists().then_some(path)
+}
+
+fn app_managed_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve app data directory: {error}"))?;
+    fs::create_dir_all(&data_dir).map_err(|error| {
+        format!(
+            "Could not create app data directory {}: {error}",
+            data_dir.display()
+        )
+    })?;
+    Ok(data_dir)
+}
+
+fn start_backend_sidecar(app: &AppHandle, settings_path: &Path) -> Result<BackendSidecar, String> {
+    match check_backend_health() {
+        BackendHealth::Healthy => {
+            println!("Reusing healthy Heimgeist backend on {BACKEND_HOST}:{BACKEND_PORT}.");
+            return Ok(BackendSidecar::empty());
+        }
+        BackendHealth::Unavailable => {}
+        BackendHealth::Incompatible(detail) => return Err(detail),
+    }
+
+    if !should_start_backend_sidecar() {
+        println!("Heimgeist backend is not running; dev shell expects an external backend wrapper.");
+        return Ok(BackendSidecar::empty());
+    }
+
+    let data_dir = app_managed_data_dir(app)?;
+    let mut command = app
+        .shell()
+        .sidecar(BACKEND_SIDECAR_NAME)
+        .map_err(|error| format!("Could not resolve bundled backend sidecar: {error}"))?
+        .env("HEIMGEIST_DATA_DIR", data_dir.as_os_str())
+        .env("HEIMGEIST_SETTINGS_FILE", settings_path.as_os_str())
+        .env("HEIMGEIST_BACKEND_HOST", BACKEND_HOST)
+        .env("HEIMGEIST_BACKEND_PORT", BACKEND_PORT.to_string());
+
+    if let Some(ffmpeg_path) = bundled_executable_path("heimgeist-ffmpeg") {
+        command = command.env("HEIMGEIST_FFMPEG_PATH", ffmpeg_path.as_os_str());
+    }
+    if let Some(ffprobe_path) = bundled_executable_path("heimgeist-ffprobe") {
+        command = command.env("HEIMGEIST_FFPROBE_PATH", ffprobe_path.as_os_str());
+    }
+
+    let (mut events, child) = command
+        .spawn()
+        .map_err(|error| format!("Failed to start bundled backend sidecar: {error}"))?;
+    let pid = child.pid();
+    println!("Started bundled Heimgeist backend sidecar with pid {pid}.");
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = events.recv().await {
+            match event {
+                CommandEvent::Stdout(bytes) => {
+                    let line = String::from_utf8_lossy(&bytes);
+                    println!("[backend] {}", line.trim_end());
+                }
+                CommandEvent::Stderr(bytes) => {
+                    let line = String::from_utf8_lossy(&bytes);
+                    eprintln!("[backend] {}", line.trim_end());
+                }
+                CommandEvent::Error(error) => {
+                    eprintln!("[backend] {error}");
+                }
+                CommandEvent::Terminated(status) => {
+                    eprintln!(
+                        "[backend] sidecar terminated code={:?} signal={:?}",
+                        status.code, status.signal
+                    );
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    let sidecar = BackendSidecar::running(child);
+    wait_for_backend_health(BACKEND_STARTUP_TIMEOUT)?;
+    Ok(sidecar)
+}
+
 fn load_settings_store(app: &AppHandle) -> Result<SettingsStore, String> {
     let path = settings_file_path(app)?;
     let raw_settings = read_settings_file(&path)?;
@@ -541,9 +752,13 @@ fn main() {
         .menu(|handle| tauri::menu::Menu::default(handle))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let store = load_settings_store(app.handle()).map_err(std::io::Error::other)?;
+            let backend_sidecar =
+                start_backend_sidecar(app.handle(), &store.path).map_err(std::io::Error::other)?;
             app.manage(store);
+            app.manage(backend_sidecar);
             Ok(())
         })
         .on_window_event(|window, event| {

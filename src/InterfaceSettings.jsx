@@ -132,7 +132,7 @@ export default function InterfaceSettings({
           <span className="slider"></span>
         </label>
         <p className="setting-description">
-          Only applies in Electron development mode. When enabled, Heimgeist opens detached DevTools for new windows and updates currently open windows right away.
+          Stored for future desktop diagnostics. Tauri does not currently apply this preference automatically.
         </p>
       </div>
       <div className="setting-section">

@@ -229,7 +229,7 @@ export default function App() {
     }
 
     try {
-      const data = await fetchModelCapabilities(nextModel)
+      const data = await fetchModelCapabilities(backendApiUrl, nextModel)
       if (!data?.supports_vision || modelRef.current !== nextModel) {
         return false
       }
@@ -556,7 +556,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
     if (hasPromptText && selectedLibrary?.states?.is_indexed) {
       try {
-        const localContext = await fetchLocalLibraryContext(selectedLibrary.slug, promptText, requestController.signal)
+        const localContext = await fetchLocalLibraryContext(backendApiUrl, selectedLibrary.slug, promptText, requestController.signal)
         if (localContext.contextBlock) {
           contextBlocks.push(localContext.contextBlock)
         }
@@ -956,7 +956,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
     ;(async () => {
       try {
-        const data = await fetchModelCapabilities(model, controller.signal)
+        const data = await fetchModelCapabilities(backendApiUrl, model, controller.signal)
         if (!cancelled) {
           setSelectedChatModelSupportsVision(Boolean(data?.supports_vision))
         }
@@ -987,7 +987,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
 
     ;(async () => {
       try {
-        const data = await fetchModelCapabilities(visionModel, controller.signal)
+        const data = await fetchModelCapabilities(backendApiUrl, visionModel, controller.signal)
         if (!cancelled) {
           setSelectedVisionModelSupportsVision(Boolean(data?.supports_vision))
         }
@@ -1018,7 +1018,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
     const timerId = window.setTimeout(() => { ;(async () => {
       let actionStarted = false
       try {
-        let status = await fetchStartupOllamaStatus()
+        let status = await fetchStartupOllamaStatus(backendApiUrl)
         if (cancelled) return
         syncAudioInputRuntimeFromStartupStatus(status)
 
@@ -1052,7 +1052,7 @@ async function regenerateFromIndex(index, overrideUserText = null) {
           } else {
             setStartupTaskMessage(`Downloading ${status.selected_embed_model} from Ollama. This can take a while on first install.`)
           }
-          const prepared = await prepareStartupModels()
+          const prepared = await prepareStartupModels(backendApiUrl)
           if (cancelled) return
           syncAudioInputRuntimeFromStartupStatus(prepared?.ollama || status)
         }
@@ -1404,7 +1404,7 @@ async function sendMessage() {
 
     if (userMsg.content && selectedLibrary?.states?.is_indexed) {
       try {
-        const localContext = await fetchLocalLibraryContext(selectedLibrary.slug, userMsg.content, requestController.signal)
+        const localContext = await fetchLocalLibraryContext(backendApiUrl, selectedLibrary.slug, userMsg.content, requestController.signal)
         if (localContext.contextBlock) {
           contextBlocks.push(localContext.contextBlock)
         }

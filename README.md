@@ -27,7 +27,7 @@ When files are added or removed, Heimgeist automatically rebuilds the local RAG 
 
 Heimgeist stores chat history and local library indexes on the local machine. During development, the backend keeps using `backend/app.db` and `backend/libraries` so existing local data remains available.
 
-Packaged Tauri builds should launch the backend with app-managed data paths so chats and local libraries live under the operating system's normal application data location, such as Application Support on macOS, LocalAppData on Windows, or the XDG data directory on Linux. These paths are managed by the app and are not exposed as normal user settings.
+Packaged Tauri builds launch the bundled backend with app-managed data paths so chats and local libraries live under the operating system's normal application data location, such as Application Support on macOS, LocalAppData on Windows, or the XDG data directory on Linux. These paths are managed by the app and are not exposed as normal user settings.
 
 ## Stack
 
@@ -72,12 +72,38 @@ npm install
 npm run dev
 ```
 
+## Local macOS Packaging
+
+Requirements:
+
+- `backend/.venv` with backend dependencies installed
+- Rust/Tauri build prerequisites
+- Ollama installed and running separately
+- Optional: SearXNG on `http://127.0.0.1:8888`
+
+Build a local macOS app bundle:
+
+```bash
+npm run package:mac
+```
+
+This builds the React renderer, creates a PyInstaller backend sidecar from `backend/.venv`, bundles ffmpeg/ffprobe helpers when available from npm dependencies, and runs `tauri build --bundles app`.
+
+The `.app` is written to:
+
+```text
+src-tauri/target/release/bundle/macos/Heimgeist.app
+```
+
+The packaged app starts its own FastAPI backend sidecar on `127.0.0.1:8000`. Ollama remains an external requirement, and SearXNG remains optional.
+
 ## File Tree
 
 ```text
 .
 ├── backend/
 │   ├── main.py
+│   ├── sidecar_main.py
 │   ├── local_rag.py
 │   ├── rag/
 │   ├── websearch.py
@@ -90,6 +116,7 @@ npm run dev
 ├── src-tauri/
 │   ├── src/main.rs
 │   ├── tauri.conf.json
+│   ├── binaries/
 │   └── capabilities/
 ├── src/
 │   ├── App.jsx
@@ -102,5 +129,6 @@ npm run dev
 │   └── styles.css
 ├── package.json
 ├── run.sh
+├── scripts/
 └── vite.config.js
 ```

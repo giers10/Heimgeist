@@ -1,6 +1,5 @@
 // /Users/giers/Heimgeist/src/App.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom';
 import TextareaAutosize from 'react-textarea-autosize';
 import AssistantMessageContent from './AssistantMessageContent'
 import ChatDatabasePicker from './ChatDatabasePicker'
@@ -42,12 +41,9 @@ import {
   fetchLocalLibraryContext,
   fetchModelCapabilities,
   fetchStartupOllamaStatus,
-  fetchWebSearchContext,
-  postChatMessage,
-  postRegenerateMessage,
   prepareStartupModels,
-  requestGeneratedTitle,
 } from './chatApi'
+import { createChatGenerationHandlers } from './chatGeneration'
 import {
   loadStoredWebsearchEngines,
   normalizeWebsearchEngines,

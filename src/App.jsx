@@ -266,20 +266,6 @@ export default function App() {
     return expectBackendJson(response)
   }
 
-  function syncAudioInputRuntimeFromStartupStatus(status) {
-    const whisperReady = Boolean(status?.whisper_model_available)
-    if (whisperReady) {
-      setAudioInputRuntimeReady(true)
-      setAudioInputRuntimeMessage('')
-      return
-    }
-
-    const modelName = status?.whisper_model || 'base'
-    const reason = String(status?.whisper_error || '').trim()
-    setAudioInputRuntimeReady(false)
-    setAudioInputRuntimeMessage(reason || `Whisper ${modelName} is not available.`)
-  }
-
   async function fetchLocalLibraryContext(slug, prompt, signal) {
     if (!slug) return { contextBlock: null, sources: [] }
 

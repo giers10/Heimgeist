@@ -212,19 +212,6 @@ export default function App() {
     return Array.isArray(message?.attachments) && message.attachments.some(attachmentIsImage)
   }
 
-  async function fetchModelCapabilities(modelName, signal) {
-    const response = await fetch(
-      `${backendApiUrl}/models/capabilities?name=${encodeURIComponent(modelName)}`,
-      { signal }
-    )
-    return expectBackendJson(response)
-  }
-
-  async function fetchStartupOllamaStatus() {
-    const response = await fetch(`${backendApiUrl}/ollama/startup-status`)
-    return expectBackendJson(response)
-  }
-
   async function syncVisionModelFromChatModel(nextModel, options = {}) {
     const { allowCapabilityLookup = true } = options
     if (!nextModel) {
@@ -267,30 +254,6 @@ export default function App() {
     setModel(nextModel)
     window.electronAPI.setSetting('chatModel', nextModel)
     await syncVisionModelFromChatModel(nextModel)
-  }
-
-  async function prepareStartupModels() {
-    const response = await fetch(`${backendApiUrl}/startup/prepare-models`, { method: 'POST' })
-    return expectBackendJson(response)
-  }
-
-  async function fetchLocalLibraryContext(slug, prompt, signal) {
-    if (!slug) return { contextBlock: null, sources: [] }
-
-    const resp = await fetch(`${backendApiUrl}/libraries/${slug}/context`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal,
-      body: JSON.stringify({
-        prompt,
-        top_k: 5
-      })
-    })
-    const data = await resp.json()
-    return {
-      contextBlock: typeof data?.context_block === 'string' && data.context_block.trim() ? data.context_block.trim() : null,
-      sources: Array.isArray(data?.sources) ? data.sources : [],
-    }
   }
 
   function buildAttachmentTitleSeed(text, attachments = []) {

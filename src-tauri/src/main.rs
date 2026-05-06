@@ -785,8 +785,14 @@ fn open_external_link(app: AppHandle, url: String) -> Result<bool, String> {
     }
 }
 
+fn shutdown_backend_sidecar(app: &AppHandle) {
+    if let Some(sidecar) = app.try_state::<BackendSidecar>() {
+        sidecar.shutdown();
+    }
+}
+
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .menu(|handle| tauri::menu::Menu::default(handle))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -815,6 +821,15 @@ fn main() {
             open_path,
             open_external_link
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run Heimgeist Tauri desktop shell");
+        .build(tauri::generate_context!())
+        .expect("failed to build Heimgeist Tauri desktop shell");
+
+    app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) {
+            shutdown_backend_sidecar(app_handle);
+        }
+    });
 }

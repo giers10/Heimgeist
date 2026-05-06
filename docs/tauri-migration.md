@@ -32,6 +32,7 @@ References checked during the spike:
 - `src-tauri/tauri.conf.json` points Tauri at the existing Vite renderer on `http://127.0.0.1:5173` and the existing `dist` build output.
 - `src-tauri/src/main.rs` registers placeholder Tauri commands that match the current `desktopApi` surface.
 - `src-tauri/capabilities/default.json` grants the main window the default core capability for this spike.
+- `src-tauri/icons/icon.png` is a placeholder icon required by Tauri context generation.
 - `src/desktop/desktopApi.js` still prefers Electron. When Electron is absent and Tauri is present, it invokes matching Tauri commands. Without either desktop bridge, it falls back to safe defaults so the renderer can mount.
 
 ## Intentional Non-Goals

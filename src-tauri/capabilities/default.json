@@ -2,5 +2,11 @@
   "identifier": "default",
   "description": "Default capability for the Heimgeist Tauri migration spike.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "opener:allow-default-urls",
+    "opener:allow-open-path",
+    "opener:allow-open-url"
+  ]
 }

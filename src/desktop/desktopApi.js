@@ -27,6 +27,8 @@ const DEFAULT_UPDATE_STATUS = Object.freeze({
 const hasWindow = () => typeof window !== 'undefined'
 const getElectronApi = () => (hasWindow() ? window.electronAPI : undefined)
 const getTauriCore = () => (hasWindow() ? window.__TAURI__?.core : undefined)
+const getTauriEvent = () => (hasWindow() ? window.__TAURI__?.event : undefined)
+const tauriWindowFocusUnlisteners = new WeakMap()
 
 function callElectronApi(methodName, ...args) {
   const method = getElectronApi()?.[methodName]
@@ -77,6 +79,32 @@ function getExternalUrl(eventOrUrl) {
   return eventOrUrl?.currentTarget?.href || eventOrUrl?.target?.href || ''
 }
 
+function listenForTauriWindowFocus(callback) {
+  const listen = getTauriEvent()?.listen
+  if (typeof listen !== 'function') {
+    return undefined
+  }
+
+  const unlistenPromise = listen('window-focused', () => callback())
+  tauriWindowFocusUnlisteners.set(callback, unlistenPromise)
+  return unlistenPromise
+}
+
+function unlistenForTauriWindowFocus(callback) {
+  const unlistenPromise = tauriWindowFocusUnlisteners.get(callback)
+  if (!unlistenPromise) {
+    return undefined
+  }
+
+  tauriWindowFocusUnlisteners.delete(callback)
+  Promise.resolve(unlistenPromise).then((unlisten) => {
+    if (typeof unlisten === 'function') {
+      unlisten()
+    }
+  })
+  return unlistenPromise
+}
+
 const desktopApi = {
   getSettings: () => resultOrFallback(
     callElectronApi('getSettings') ?? callTauriCommand('get_settings'),
@@ -120,8 +148,8 @@ const desktopApi = {
     const url = getExternalUrl(eventOrUrl)
     return resultOrFallback(callTauriCommand('open_external_link', { url }), false)
   },
-  onWindowFocus: (callback) => callElectronApi('onWindowFocus', callback),
-  offWindowFocus: (callback) => callElectronApi('offWindowFocus', callback),
+  onWindowFocus: (callback) => callElectronApi('onWindowFocus', callback) ?? listenForTauriWindowFocus(callback),
+  offWindowFocus: (callback) => callElectronApi('offWindowFocus', callback) ?? unlistenForTauriWindowFocus(callback),
 }
 
 export default desktopApi

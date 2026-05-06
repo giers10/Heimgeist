@@ -1,10 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{
-    fs,
-    path::PathBuf,
-    sync::Mutex,
-};
+use std::{fs, path::PathBuf, sync::Mutex};
 
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -51,7 +47,10 @@ fn default_settings() -> SettingsMap {
     settings.insert("visionModel".into(), json!(""));
     settings.insert("embedModel".into(), json!(DEFAULT_EMBED_MODEL));
     settings.insert("rerankModel".into(), json!(DEFAULT_EMBED_MODEL));
-    settings.insert("transcriptionModel".into(), json!(DEFAULT_TRANSCRIPTION_MODEL));
+    settings.insert(
+        "transcriptionModel".into(),
+        json!(DEFAULT_TRANSCRIPTION_MODEL),
+    );
     settings.insert("colorScheme".into(), json!("Default"));
     settings.insert("uiScale".into(), json!(DEFAULT_UI_SCALE));
     settings.insert("openDevToolsOnStartup".into(), json!(false));
@@ -122,7 +121,10 @@ fn looks_like_ollama_url(value: &str) -> bool {
     tauri::Url::parse(value)
         .map(|parsed| {
             parsed.port() == Some(11434)
-                || parsed.path().trim_end_matches('/').eq_ignore_ascii_case("/api")
+                || parsed
+                    .path()
+                    .trim_end_matches('/')
+                    .eq_ignore_ascii_case("/api")
         })
         .unwrap_or(false)
 }
@@ -169,7 +171,10 @@ fn migrate_settings(source: Option<SettingsMap>) -> (SettingsMap, bool) {
     }
 
     if !source.contains_key("transcriptionModel") {
-        next.insert("transcriptionModel".into(), json!(DEFAULT_TRANSCRIPTION_MODEL));
+        next.insert(
+            "transcriptionModel".into(),
+            json!(DEFAULT_TRANSCRIPTION_MODEL),
+        );
         migrated = true;
     }
 
@@ -184,11 +189,12 @@ fn normalize_settings(settings: &mut SettingsMap) {
     let vision_model = normalize_model_name(settings.get("visionModel"), "");
     let embed_model = normalize_embed_model(settings.get("embedModel"));
     let rerank_model = normalize_embed_model(settings.get("rerankModel"));
-    let transcription_model =
-        normalize_model_name(settings.get("transcriptionModel"), DEFAULT_TRANSCRIPTION_MODEL);
+    let transcription_model = normalize_model_name(
+        settings.get("transcriptionModel"),
+        DEFAULT_TRANSCRIPTION_MODEL,
+    );
     let ui_scale = normalize_ui_scale(settings.get("uiScale"));
-    let open_devtools_on_startup =
-        normalize_boolean_setting(settings.get("openDevToolsOnStartup"));
+    let open_devtools_on_startup = normalize_boolean_setting(settings.get("openDevToolsOnStartup"));
     let audio_input_enabled = normalize_boolean_setting(settings.get("audioInputEnabled"));
     let audio_input_device_id = value_to_trimmed_string(settings.get("audioInputDeviceId"));
     let audio_input_language =
@@ -202,7 +208,10 @@ fn normalize_settings(settings: &mut SettingsMap) {
     settings.insert("rerankModel".into(), json!(rerank_model));
     settings.insert("transcriptionModel".into(), json!(transcription_model));
     settings.insert("uiScale".into(), json!(ui_scale));
-    settings.insert("openDevToolsOnStartup".into(), json!(open_devtools_on_startup));
+    settings.insert(
+        "openDevToolsOnStartup".into(),
+        json!(open_devtools_on_startup),
+    );
     settings.insert("audioInputEnabled".into(), json!(audio_input_enabled));
     settings.insert("audioInputDeviceId".into(), json!(audio_input_device_id));
     settings.insert("audioInputLanguage".into(), json!(audio_input_language));
@@ -296,11 +305,7 @@ fn get_settings(store: State<'_, SettingsStore>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn set_setting(
-    key: String,
-    value: Value,
-    store: State<'_, SettingsStore>,
-) -> Result<bool, String> {
+fn set_setting(key: String, value: Value, store: State<'_, SettingsStore>) -> Result<bool, String> {
     let mut settings = store
         .settings
         .lock()
@@ -312,10 +317,7 @@ fn set_setting(
 }
 
 #[tauri::command]
-fn update_settings(
-    settings: SettingsMap,
-    store: State<'_, SettingsStore>,
-) -> Result<bool, String> {
+fn update_settings(settings: SettingsMap, store: State<'_, SettingsStore>) -> Result<bool, String> {
     let mut current_settings = store
         .settings
         .lock()
@@ -347,7 +349,10 @@ fn get_changelog_page(page: Option<u64>) -> Value {
 }
 
 #[tauri::command]
-async fn pick_paths(app: AppHandle, options: Option<PickPathsOptions>) -> Result<Vec<String>, String> {
+async fn pick_paths(
+    app: AppHandle,
+    options: Option<PickPathsOptions>,
+) -> Result<Vec<String>, String> {
     let options = options.unwrap_or(PickPathsOptions {
         title: None,
         filters: None,
@@ -355,7 +360,12 @@ async fn pick_paths(app: AppHandle, options: Option<PickPathsOptions>) -> Result
     });
     let mut dialog = app.dialog().file();
 
-    if let Some(title) = options.title.as_deref().map(str::trim).filter(|title| !title.is_empty()) {
+    if let Some(title) = options
+        .title
+        .as_deref()
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+    {
         dialog = dialog.set_title(title);
     }
 

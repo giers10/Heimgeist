@@ -417,12 +417,12 @@ fn update_settings(settings: SettingsMap, store: State<'_, SettingsStore>) -> Re
 
 #[tauri::command]
 fn get_update_status() -> Value {
-    unavailable_update_status("Tauri update checks are not implemented in this migration phase.")
+    unavailable_update_status("Tauri update checks are not implemented in this production release phase.")
 }
 
 #[tauri::command]
 fn check_for_updates() -> Value {
-    unavailable_update_status("Tauri update checks are not implemented in this migration phase.")
+    unavailable_update_status("Tauri update checks are not implemented in this production release phase.")
 }
 
 #[tauri::command]
@@ -559,5 +559,5 @@ fn main() {
             open_external_link
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Heimgeist Tauri migration spike");
+        .expect("failed to run Heimgeist Tauri desktop shell");
 }

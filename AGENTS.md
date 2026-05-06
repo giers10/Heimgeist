@@ -88,7 +88,7 @@ Avoid broad file operations that traverse these directories. Use ignore patterns
 - Keep changes scoped to the request. Do not refactor large files such as `src/App.jsx`, `src/styles.css`, `backend/main.py`, or `backend/local_rag.py` unless the task needs it.
 - Prefer existing helper modules and patterns over new abstractions.
 - Preserve stable backend contracts and persisted data compatibility. Add small migration helpers when changing database-backed fields.
-- Keep settings keys backward compatible where possible. Existing settings migrations live in Electron and backend settings helpers.
+- Keep settings keys backward compatible where possible. Existing settings migrations live in Tauri and backend settings helpers.
 - Use structured JSON/schema changes rather than ad hoc string parsing for API payloads.
 - Add comments only where they explain non-obvious control flow, concurrency, migration, or integration behavior.
 - Do not silently swallow errors in user-facing flows; surface useful messages while preserving graceful degradation for optional services.

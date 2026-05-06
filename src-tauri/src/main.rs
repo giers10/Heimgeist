@@ -458,12 +458,18 @@ fn should_start_backend_sidecar() -> bool {
 fn bundled_executable_path(name: &str) -> Option<PathBuf> {
     let exe_path = std::env::current_exe().ok()?;
     let exe_dir = exe_path.parent()?;
-    let mut path = exe_dir.join(name);
+    #[cfg(not(windows))]
+    let path = exe_dir.join(name);
     #[cfg(windows)]
     {
+        let mut path = exe_dir.join(name);
         path.set_extension("exe");
+        path.exists().then_some(path)
     }
-    path.exists().then_some(path)
+    #[cfg(not(windows))]
+    {
+        path.exists().then_some(path)
+    }
 }
 
 fn app_managed_data_dir(app: &AppHandle) -> Result<PathBuf, String> {

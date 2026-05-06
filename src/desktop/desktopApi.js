@@ -29,18 +29,9 @@ const MIN_UI_SCALE = 0.7
 const MAX_UI_SCALE = 1.3
 
 const hasWindow = () => typeof window !== 'undefined'
-const getElectronApi = () => (hasWindow() ? window.electronAPI : undefined)
 const getTauriCore = () => (hasWindow() ? window.__TAURI__?.core : undefined)
 const getTauriEvent = () => (hasWindow() ? window.__TAURI__?.event : undefined)
 const tauriWindowFocusUnlisteners = new WeakMap()
-
-function callElectronApi(methodName, ...args) {
-  const method = getElectronApi()?.[methodName]
-  if (typeof method !== 'function') {
-    return undefined
-  }
-  return method(...args)
-}
 
 function callTauriCommand(commandName, args = {}) {
   const invoke = getTauriCore()?.invoke
@@ -68,7 +59,7 @@ function normalizeUiScale(value) {
 }
 
 function applyRendererUiScale(value) {
-  if (!hasWindow() || !window.document || getElectronApi()) {
+  if (!hasWindow() || !window.document) {
     return false
   }
 
@@ -137,50 +128,45 @@ function unlistenForTauriWindowFocus(callback) {
 
 const desktopApi = {
   getSettings: () => resultOrFallback(
-    callElectronApi('getSettings') ?? callTauriCommand('get_settings'),
+    callTauriCommand('get_settings'),
     defaultSettings,
   ),
   applyUiScale: (value) => applyRendererUiScale(value),
   getUpdateStatus: () => resultOrFallback(
-    callElectronApi('getUpdateStatus') ?? callTauriCommand('get_update_status'),
+    callTauriCommand('get_update_status'),
     defaultUpdateStatus,
   ),
   checkForUpdates: () => resultOrFallback(
-    callElectronApi('checkForUpdates') ?? callTauriCommand('check_for_updates'),
+    callTauriCommand('check_for_updates'),
     () => defaultUpdateStatus('Desktop update checks are not implemented in this runtime.'),
   ),
   getChangelogPage: (page) => resultOrFallback(
-    callElectronApi('getChangelogPage', page) ?? callTauriCommand('get_changelog_page', { page }),
+    callTauriCommand('get_changelog_page', { page }),
     () => defaultChangelogPage(page),
   ),
   setSetting: (key, value) => resultOrFallback(
-    callElectronApi('setSetting', key, value) ?? callTauriCommand('set_setting', { key, value }),
+    callTauriCommand('set_setting', { key, value }),
     false,
   ),
   updateSettings: (settings) => resultOrFallback(
-    callElectronApi('updateSettings', settings) ?? callTauriCommand('update_settings', { settings }),
+    callTauriCommand('update_settings', { settings }),
     false,
   ),
   pickPaths: (options) => resultOrFallback(
-    callElectronApi('pickPaths', options) ?? callTauriCommand('pick_paths', { options }),
+    callTauriCommand('pick_paths', { options }),
     [],
   ),
   openPath: (filePath) => resultOrFallback(
-    callElectronApi('openPath', filePath) ?? callTauriCommand('open_path', { filePath }),
+    callTauriCommand('open_path', { filePath }),
     false,
   ),
   openExternalLink: (eventOrUrl) => {
-    const electronResult = callElectronApi('openExternalLink', eventOrUrl)
-    if (electronResult !== undefined) {
-      return electronResult
-    }
-
     eventOrUrl?.preventDefault?.()
     const url = getExternalUrl(eventOrUrl)
     return resultOrFallback(callTauriCommand('open_external_link', { url }), false)
   },
-  onWindowFocus: (callback) => callElectronApi('onWindowFocus', callback) ?? listenForTauriWindowFocus(callback),
-  offWindowFocus: (callback) => callElectronApi('offWindowFocus', callback) ?? unlistenForTauriWindowFocus(callback),
+  onWindowFocus: (callback) => listenForTauriWindowFocus(callback),
+  offWindowFocus: (callback) => unlistenForTauriWindowFocus(callback),
 }
 
 export default desktopApi

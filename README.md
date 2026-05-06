@@ -1,10 +1,10 @@
 # Heimgeist
 
-Heimgeist is a local desktop chat client for Ollama. It combines an Electron + React renderer with a FastAPI backend, stores chat history in SQLite, supports optional SearXNG-backed web search, and can enrich prompts with context from local library indexes.
+Heimgeist is a local desktop chat client for Ollama. It combines a Tauri + React renderer with a FastAPI backend, stores chat history in SQLite, supports optional SearXNG-backed web search, and can enrich prompts with context from local library indexes.
 
 ## Features
 
-- Local desktop chat UI with Electron
+- Local desktop chat UI with Tauri
 - Ollama-backed chat with streaming and non-streaming replies
 - Persistent chat sessions and automatic title generation
 - Edit-and-regenerate flow for earlier user messages
@@ -25,7 +25,7 @@ When files are added or removed, Heimgeist automatically rebuilds the local RAG 
 
 ## Stack
 
-- Frontend: Electron, React, Vite
+- Frontend: Tauri, React, Vite
 - Backend: FastAPI, SQLAlchemy, SQLite
 - Search enrichment: SearXNG + page fetching/reranking
 - Local RAG pipeline: corpus build, enrichment, embedding, and retrieval helpers under `backend/rag/`
@@ -80,9 +80,10 @@ npm run dev
 │   ├── database.py
 │   ├── schemas.py
 │   └── requirements.txt
-├── electron/
-│   ├── main.cjs
-│   └── preload.cjs
+├── src-tauri/
+│   ├── src/main.rs
+│   ├── tauri.conf.json
+│   └── capabilities/
 ├── src/
 │   ├── App.jsx
 │   ├── LibraryManager.jsx

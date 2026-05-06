@@ -2,9 +2,7 @@
 
 ## Project Overview
 
-Heimgeist is a local desktop chat app for Ollama. It uses a React/Vite renderer, an Electron desktop shell, a FastAPI backend, SQLite chat storage, Whisper transcription, optional SearXNG web search, and local RAG libraries under the backend.
-
-A future migration to Tauri is planned, but do not begin that migration unless the task explicitly asks for it. Electron support must remain intact until Tauri reaches feature parity.
+Heimgeist is a local desktop chat app for Ollama. It uses a React/Vite renderer, a Tauri desktop shell, a FastAPI backend, SQLite chat storage, Whisper transcription, optional SearXNG web search, and local RAG libraries under the backend.
 
 ## Important Directories and Entry Points
 
@@ -14,11 +12,8 @@ A future migration to Tauri is planned, but do not begin that migration unless t
   - `src/chatApi.js`, `src/chatGeneration.js`, and `src/backendApi.js` contain backend request and streaming helpers.
   - `src/desktop/desktopApi.js` is the renderer platform abstraction for desktop APIs.
   - `src/styles.css` contains the main UI styling.
-- `electron/` - Electron desktop shell.
-  - `electron/main.cjs` creates windows, stores settings, handles updates, and implements IPC handlers.
-  - `electron/preload.cjs` exposes the Electron IPC surface as `window.electronAPI`.
-- `src-tauri/` - isolated Tauri migration scaffold.
-  - `src-tauri/src/main.rs` owns Tauri commands for the renderer `desktopApi` surface.
+- `src-tauri/` - Tauri desktop shell.
+  - `src-tauri/src/main.rs` owns Tauri commands for the renderer `desktopApi` surface, settings persistence, dialogs, path opening, external links, focus events, and update placeholders.
   - `src-tauri/tauri.conf.json` points Tauri at the existing Vite renderer.
   - `src-tauri/capabilities/` contains Tauri permission grants for enabled plugins.
 - `backend/` - FastAPI backend and local processing.
@@ -29,33 +24,28 @@ A future migration to Tauri is planned, but do not begin that migration unless t
   - `backend/database.py` points SQLite at `backend/app.db`.
 - `scripts/` - development wrappers used by npm scripts.
   - `scripts/run-backend.cjs` starts Uvicorn from `backend/.venv`.
-  - `scripts/run-electron-dev.cjs` waits for Vite and FastAPI, then launches Electron.
   - `scripts/run-tauri-dev.cjs` starts or reuses FastAPI, then launches the Tauri dev shell.
 - `run.sh` - bootstrap script for local development dependencies and dev startup.
-- `vite.config.js` - Vite dev/build configuration. Electron dev uses `127.0.0.1:5173`; Tauri dev uses an additive strict Vite port at `127.0.0.1:5174`.
+- `vite.config.js` - Vite dev/build configuration. Tauri dev uses the strict Vite port `127.0.0.1:5174`.
 
 ## Run and Build Commands
 
 - `./run.sh` - bootstrap/update Python and npm dependencies, then start the full dev stack.
-- `npm run dev` - start backend, Vite renderer, and Electron together.
+- `npm run dev` - start or reuse FastAPI on `127.0.0.1:8000`, start the Vite renderer on `127.0.0.1:5174`, then launch Tauri.
+- `npm run dev:tauri` - alias for the primary Tauri development workflow.
 - `npm run dev:backend` - start FastAPI on `127.0.0.1:8000` with reload. Requires `backend/.venv`.
-- `npm run dev:renderer` - start Vite on `127.0.0.1:5173`.
-- `npm run dev:renderer:tauri` - start Vite on `127.0.0.1:5174` for Tauri.
-- `npm run dev:electron` - wait for Vite and backend health, then start Electron.
-- `npm run dev:tauri` - start or reuse FastAPI on `127.0.0.1:8000`, start the Tauri Vite renderer on `127.0.0.1:5174`, then launch the Tauri shell.
+- `npm run dev:renderer` - start Vite on `127.0.0.1:5174` for Tauri.
 - `npm run dev:tauri:shell` - launch the raw Tauri shell when backend lifecycle is managed separately.
 - `npm run build` - build the renderer into `dist/`.
-- `npm start` - start Electron against the current app files.
+- `npm start` - alias for `npm run dev`.
 
 There are currently no npm `test` or `lint` scripts in `package.json`.
 
 ## Architectural Boundaries
 
-- Renderer code should remain platform-neutral where practical. It may call backend HTTP APIs and may call `desktopApi`, but it should not call `window.electronAPI` directly.
-- `src/desktop/desktopApi.js` is the renderer's platform abstraction. Add desktop capabilities there first, then back them with Electron IPC. This keeps the future Tauri migration bounded.
-- `electron/preload.cjs` is the only file that should expose raw Electron IPC to the renderer.
-- `electron/main.cjs` owns desktop concerns: windows, dialogs, shell opening, settings persistence, update checks, and IPC implementations.
-- `src-tauri/src/main.rs` owns the Tauri implementation of the same renderer `desktopApi` surface during migration. Keep it additive and do not remove Electron behavior until Tauri reaches parity.
+- Renderer code should remain platform-neutral where practical. It may call backend HTTP APIs and may call `desktopApi`, but it should not import or call Tauri APIs directly.
+- `src/desktop/desktopApi.js` is the renderer's platform abstraction. Add desktop capabilities there first, then back them with Tauri commands/events.
+- `src-tauri/src/main.rs` owns desktop concerns: windows, menus, dialogs, shell opening, settings persistence, update placeholders, focus events, and Tauri command implementations.
 - Backend code owns chat/session persistence, Ollama integration, Whisper transcription, web search enrichment, and RAG library processing.
 - Backend API contracts should stay stable unless intentionally coordinated with renderer changes. If a response/request shape changes in `backend/schemas.py` or route handlers, update the renderer callers in the same change.
 - Keep local RAG job orchestration and generated library state in the backend. Renderer code should use backend endpoints rather than reading library files directly.
@@ -70,28 +60,27 @@ Do not edit or commit generated/runtime data unless the task explicitly requires
 - `node_modules/` - npm dependencies.
 - `dist/` - Vite build output.
 - `__pycache__/`, `*.pyc`, `.DS_Store`, and similar machine-generated files.
-- Local app settings files under the Electron user data directory, the Tauri app config directory, or `HEIMGEIST_SETTINGS_FILE`.
+- Local app settings files under the Tauri app config directory or `HEIMGEIST_SETTINGS_FILE`.
 - Tauri-generated `src-tauri/target/`, `src-tauri/gen/`, and local `src-tauri/Cargo.lock` if generated by local verification.
 
 Avoid broad file operations that traverse these directories. Use ignore patterns with search tools when inspecting the repo.
 
 ## Verification Expectations
 
-- Frontend changes: run `npm run build` at minimum. For UI or interaction changes, also run the dev stack and exercise the affected flow in Electron.
+- Frontend changes: run `npm run build` at minimum. For UI or interaction changes, also run the dev stack and exercise the affected flow in Tauri.
 - Backend changes: run a targeted syntax/import check such as `backend/.venv/bin/python -m py_compile backend/main.py backend/local_rag.py` for touched modules, then start `npm run dev:backend` or the full dev stack and check `GET /health`.
-- Desktop bridge/Electron changes: run the full dev stack with `npm run dev` and verify Electron launches, settings load/save, dialogs or shell actions work, and no renderer code bypasses `src/desktop/desktopApi.js`.
-- Tauri desktop bridge changes: run `cargo check --manifest-path src-tauri/Cargo.toml` with a temp `CARGO_TARGET_DIR` when useful, run `npm run build`, and if practical run `npm run dev:tauri`. Use a temporary `HEIMGEIST_SETTINGS_FILE` when testing ordinary shared settings behavior; use a temporary `HOME` with a fake Electron settings file when testing first-run import, because `HEIMGEIST_SETTINGS_FILE` intentionally bypasses import.
+- Desktop bridge/Tauri changes: run `cargo check --manifest-path src-tauri/Cargo.toml` with a temp `CARGO_TARGET_DIR` when useful, run `npm run build`, and if practical run `npm run dev`. Use a temporary `HEIMGEIST_SETTINGS_FILE` when testing ordinary shared settings behavior; use a temporary `HOME` with a fake legacy settings file when testing first-run import, because `HEIMGEIST_SETTINGS_FILE` intentionally bypasses import.
 - API contract changes: verify both sides together. Update backend schemas/routes and renderer callers in the same change, then exercise the affected request path.
 - RAG, Whisper, Ollama, or SearXNG changes: note any external services or local models required for verification, and test graceful failure paths when those services are unavailable.
 
-## Future Tauri Migration Guidance
+## Tauri Guidance
 
-- Do not start a Tauri migration opportunistically.
-- Keep new renderer desktop calls behind `src/desktop/desktopApi.js`; do not spread Electron-specific assumptions through React components.
-- Keep Tauri renderer calls behind `src/desktop/desktopApi.js`; do not import Tauri APIs directly in React components.
-- When adding desktop capabilities, prefer method names and payloads that could map cleanly to either Electron IPC or Tauri commands.
-- Maintain Electron behavior while any Tauri work is incomplete. Electron remains the supported desktop shell until Tauri reaches feature parity for settings, file picking/opening, external links, update flow, window events, backend startup expectations, and packaging.
-- During migration, Tauri settings should import Electron settings only on first run when Tauri settings do not already exist. Preserve `HEIMGEIST_SETTINGS_FILE` as an explicit shared override and do not move or rewrite `backend/app.db` or `backend/libraries`.
+- Keep renderer desktop calls behind `src/desktop/desktopApi.js`; do not import Tauri APIs directly in React components.
+- When adding desktop capabilities, prefer method names and payloads that stay stable for renderer callers.
+- Preserve `HEIMGEIST_SETTINGS_FILE` as an explicit shared settings override.
+- Keep first-run legacy settings import available when Tauri settings do not already exist.
+- Do not move or rewrite `backend/app.db` or `backend/libraries`; the development backend must keep using the existing backend working directory.
+- Production-release work still needs backend sidecar packaging, signed updater/changelog parity, bundle metadata, signing/notarization, and installer behavior.
 - Avoid refactors that mix migration prep with unrelated feature work. Migration work should be explicit and reviewable.
 
 ## Coding and Refactor Guidelines
@@ -107,7 +96,7 @@ Avoid broad file operations that traverse these directories. Use ignore patterns
 
 ## Known Fragile Areas
 
-- The Electron bridge is intentionally narrow. Direct `window.electronAPI` use in renderer files will make Tauri migration harder.
+- The Tauri bridge is intentionally narrow. Direct `window.__TAURI__` use outside `src/desktop/desktopApi.js` makes desktop behavior harder to reason about.
 - `src/App.jsx`, `src/chatGeneration.js`, and backend chat routes share assumptions about streaming, regeneration, attachments, source metadata, and session state.
 - `backend/main.py` creates/migrates SQLite tables at import/startup. Schema changes need care because they run against local user data.
 - `backend/local_rag.py` coordinates asynchronous jobs, file registration, generated artifacts, and per-library locks. Avoid changes that can start duplicate jobs or corrupt `backend/libraries/`.

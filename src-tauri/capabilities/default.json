@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Default capability for the Heimgeist Tauri migration spike.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

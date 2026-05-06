@@ -31,10 +31,12 @@ export default function InterfaceSettings({
   useEffect(() => {
     desktopApi.getSettings().then(settings => {
       const schemeName = settings.colorScheme || 'Default'
+      const nextUiScale = normalizeUiScale(settings.uiScale)
       setSelectedColorScheme(schemeName)
-      setUiScale(normalizeUiScale(settings.uiScale))
+      setUiScale(nextUiScale)
       setOpenDevToolsOnStartup(settings.openDevToolsOnStartup === true)
       applyColorScheme(schemeName)
+      desktopApi.applyUiScale(nextUiScale)
     })
   }, [])
 
@@ -51,6 +53,7 @@ export default function InterfaceSettings({
   const persistUiScale = (value) => {
     const nextScale = normalizeUiScale(value)
     setUiScale(nextScale)
+    desktopApi.applyUiScale(nextScale)
     desktopApi.setSetting(UI_SCALE_KEY, nextScale)
   }
 

@@ -24,6 +24,10 @@ const DEFAULT_UPDATE_STATUS = Object.freeze({
   restartScheduled: false,
 })
 
+const DEFAULT_UI_SCALE = 1
+const MIN_UI_SCALE = 0.7
+const MAX_UI_SCALE = 1.3
+
 const hasWindow = () => typeof window !== 'undefined'
 const getElectronApi = () => (hasWindow() ? window.electronAPI : undefined)
 const getTauriCore = () => (hasWindow() ? window.__TAURI__?.core : undefined)
@@ -52,6 +56,32 @@ function fallbackPromise(value) {
 
 function defaultSettings() {
   return { ...DEFAULT_SETTINGS }
+}
+
+function normalizeUiScale(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return DEFAULT_UI_SCALE
+  }
+
+  return Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, Math.round(numericValue * 100) / 100))
+}
+
+function applyRendererUiScale(value) {
+  if (!hasWindow() || !window.document || getElectronApi()) {
+    return false
+  }
+
+  const scale = normalizeUiScale(value)
+  const root = window.document.documentElement
+  const body = window.document.body
+
+  root?.style?.setProperty('--heimgeist-ui-scale', String(scale))
+  if (body?.style) {
+    body.style.zoom = scale === DEFAULT_UI_SCALE ? '' : String(scale)
+  }
+
+  return true
 }
 
 function defaultUpdateStatus(message = DEFAULT_UPDATE_STATUS.message) {
@@ -110,6 +140,7 @@ const desktopApi = {
     callElectronApi('getSettings') ?? callTauriCommand('get_settings'),
     defaultSettings,
   ),
+  applyUiScale: (value) => applyRendererUiScale(value),
   getUpdateStatus: () => resultOrFallback(
     callElectronApi('getUpdateStatus') ?? callTauriCommand('get_update_status'),
     defaultUpdateStatus,

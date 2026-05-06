@@ -11,6 +11,7 @@ function Main() {
   useEffect(() => {
     desktopApi.getSettings().then(settings => {
       applyColorScheme(settings.colorScheme || 'Default')
+      desktopApi.applyUiScale(settings.uiScale)
     })
   }, [])
 

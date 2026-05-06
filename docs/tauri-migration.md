@@ -35,6 +35,13 @@ References checked during the spike:
 - `src-tauri/icons/icon.png` is a placeholder icon required by Tauri context generation.
 - `src/desktop/desktopApi.js` still prefers Electron. When Electron is absent and Tauri is present, it invokes matching Tauri commands. Without either desktop bridge, it falls back to safe defaults so the renderer can mount.
 
+## Running The Spike
+
+- Normal Electron development remains `npm run dev`.
+- After installing npm dependencies, Tauri development is `npm run dev:tauri`.
+- The Tauri config starts only the Vite renderer; start the FastAPI backend separately when testing chat flows.
+- If Vite is already running on `127.0.0.1:5173`, reuse it with `npm run tauri -- dev --config '{"build":{"beforeDevCommand":""}}'`.
+
 ## Intentional Non-Goals
 
 - No Electron files, scripts, or IPC behavior were removed.

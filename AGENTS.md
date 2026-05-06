@@ -1,0 +1,104 @@
+# AGENTS.md
+
+## Project Overview
+
+Heimgeist is a local desktop chat app for Ollama. It uses a React/Vite renderer, an Electron desktop shell, a FastAPI backend, SQLite chat storage, Whisper transcription, optional SearXNG web search, and local RAG libraries under the backend.
+
+A future migration to Tauri is planned, but do not begin that migration unless the task explicitly asks for it. Electron support must remain intact until Tauri reaches feature parity.
+
+## Important Directories and Entry Points
+
+- `src/` - React renderer code.
+  - `src/main.jsx` mounts the app.
+  - `src/App.jsx` owns most chat UI state, session flow, model startup checks, and library/sidebar orchestration.
+  - `src/chatApi.js`, `src/chatGeneration.js`, and `src/backendApi.js` contain backend request and streaming helpers.
+  - `src/desktop/desktopApi.js` is the renderer platform abstraction for desktop APIs.
+  - `src/styles.css` contains the main UI styling.
+- `electron/` - Electron desktop shell.
+  - `electron/main.cjs` creates windows, stores settings, handles updates, and implements IPC handlers.
+  - `electron/preload.cjs` exposes the Electron IPC surface as `window.electronAPI`.
+- `backend/` - FastAPI backend and local processing.
+  - `backend/main.py` defines chat, session, model, audio, Ollama, and web search routes.
+  - `backend/local_rag.py` defines library, file registration, job, and local context routes.
+  - `backend/schemas.py` and `backend/models.py` define API and database data shapes.
+  - `backend/rag/` contains corpus, enrichment, embedding, indexing, and retrieval helpers.
+  - `backend/database.py` points SQLite at `backend/app.db`.
+- `scripts/` - development wrappers used by npm scripts.
+  - `scripts/run-backend.cjs` starts Uvicorn from `backend/.venv`.
+  - `scripts/run-electron-dev.cjs` waits for Vite and FastAPI, then launches Electron.
+- `run.sh` - bootstrap script for local development dependencies and dev startup.
+- `vite.config.js` - Vite dev/build configuration. Dev server is fixed at `127.0.0.1:5173`.
+
+## Run and Build Commands
+
+- `./run.sh` - bootstrap/update Python and npm dependencies, then start the full dev stack.
+- `npm run dev` - start backend, Vite renderer, and Electron together.
+- `npm run dev:backend` - start FastAPI on `127.0.0.1:8000` with reload. Requires `backend/.venv`.
+- `npm run dev:renderer` - start Vite on `127.0.0.1:5173`.
+- `npm run dev:electron` - wait for Vite and backend health, then start Electron.
+- `npm run build` - build the renderer into `dist/`.
+- `npm start` - start Electron against the current app files.
+
+There are currently no npm `test` or `lint` scripts in `package.json`.
+
+## Architectural Boundaries
+
+- Renderer code should remain platform-neutral where practical. It may call backend HTTP APIs and may call `desktopApi`, but it should not call `window.electronAPI` directly.
+- `src/desktop/desktopApi.js` is the renderer's platform abstraction. Add desktop capabilities there first, then back them with Electron IPC. This keeps the future Tauri migration bounded.
+- `electron/preload.cjs` is the only file that should expose raw Electron IPC to the renderer.
+- `electron/main.cjs` owns desktop concerns: windows, dialogs, shell opening, settings persistence, update checks, and IPC implementations.
+- Backend code owns chat/session persistence, Ollama integration, Whisper transcription, web search enrichment, and RAG library processing.
+- Backend API contracts should stay stable unless intentionally coordinated with renderer changes. If a response/request shape changes in `backend/schemas.py` or route handlers, update the renderer callers in the same change.
+- Keep local RAG job orchestration and generated library state in the backend. Renderer code should use backend endpoints rather than reading library files directly.
+
+## Generated and Runtime Data
+
+Do not edit or commit generated/runtime data unless the task explicitly requires it:
+
+- `backend/app.db` and any `*.db` files - local SQLite runtime data.
+- `backend/libraries/` - local RAG library metadata, corpora, enrichment outputs, embeddings, indexes, and job state.
+- `backend/.venv/` and `.venv/` - Python virtual environments.
+- `node_modules/` - npm dependencies.
+- `dist/` - Vite build output.
+- `__pycache__/`, `*.pyc`, `.DS_Store`, and similar machine-generated files.
+- Local app settings files under the Electron user data directory or `HEIMGEIST_SETTINGS_FILE`.
+
+Avoid broad file operations that traverse these directories. Use ignore patterns with search tools when inspecting the repo.
+
+## Verification Expectations
+
+- Frontend changes: run `npm run build` at minimum. For UI or interaction changes, also run the dev stack and exercise the affected flow in Electron.
+- Backend changes: run a targeted syntax/import check such as `backend/.venv/bin/python -m py_compile backend/main.py backend/local_rag.py` for touched modules, then start `npm run dev:backend` or the full dev stack and check `GET /health`.
+- Desktop bridge/Electron changes: run the full dev stack with `npm run dev` and verify Electron launches, settings load/save, dialogs or shell actions work, and no renderer code bypasses `src/desktop/desktopApi.js`.
+- API contract changes: verify both sides together. Update backend schemas/routes and renderer callers in the same change, then exercise the affected request path.
+- RAG, Whisper, Ollama, or SearXNG changes: note any external services or local models required for verification, and test graceful failure paths when those services are unavailable.
+
+## Future Tauri Migration Guidance
+
+- Do not start a Tauri migration opportunistically.
+- Keep new renderer desktop calls behind `src/desktop/desktopApi.js`; do not spread Electron-specific assumptions through React components.
+- When adding desktop capabilities, prefer method names and payloads that could map cleanly to either Electron IPC or Tauri commands.
+- Maintain Electron behavior while any Tauri work is incomplete. Electron remains the supported desktop shell until Tauri reaches feature parity for settings, file picking/opening, external links, update flow, window events, backend startup expectations, and packaging.
+- Avoid refactors that mix migration prep with unrelated feature work. Migration work should be explicit and reviewable.
+
+## Coding and Refactor Guidelines
+
+- Keep changes scoped to the request. Do not refactor large files such as `src/App.jsx`, `src/styles.css`, `backend/main.py`, or `backend/local_rag.py` unless the task needs it.
+- Prefer existing helper modules and patterns over new abstractions.
+- Preserve stable backend contracts and persisted data compatibility. Add small migration helpers when changing database-backed fields.
+- Keep settings keys backward compatible where possible. Existing settings migrations live in Electron and backend settings helpers.
+- Use structured JSON/schema changes rather than ad hoc string parsing for API payloads.
+- Add comments only where they explain non-obvious control flow, concurrency, migration, or integration behavior.
+- Do not silently swallow errors in user-facing flows; surface useful messages while preserving graceful degradation for optional services.
+- Do not mix formatting churn with behavior changes.
+
+## Known Fragile Areas
+
+- The Electron bridge is intentionally narrow. Direct `window.electronAPI` use in renderer files will make Tauri migration harder.
+- `src/App.jsx`, `src/chatGeneration.js`, and backend chat routes share assumptions about streaming, regeneration, attachments, source metadata, and session state.
+- `backend/main.py` creates/migrates SQLite tables at import/startup. Schema changes need care because they run against local user data.
+- `backend/local_rag.py` coordinates asynchronous jobs, file registration, generated artifacts, and per-library locks. Avoid changes that can start duplicate jobs or corrupt `backend/libraries/`.
+- RAG builders under `backend/rag/` run heavier file processing and subprocess/threaded work. Test with small inputs before broader runs.
+- Whisper depends on ffmpeg/ffprobe paths supplied by the Node backend runner when available.
+- Web search depends on an optional SearXNG instance, usually `http://127.0.0.1:8888`; features should fail gracefully when it is absent.
+- Ollama availability, model names, embedding model choices, and vision capability checks are runtime-dependent. Keep related UI and backend paths tolerant of missing models.

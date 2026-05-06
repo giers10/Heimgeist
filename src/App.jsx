@@ -48,6 +48,7 @@ import {
 import { formatRecordingDuration, useAudioInput } from './useAudioInput'
 import { useChatLibrarySelection } from './useChatLibrarySelection'
 import { useChatScroll } from './useChatScroll'
+import desktopApi from './desktop/desktopApi'
 
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])

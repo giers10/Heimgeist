@@ -325,7 +325,7 @@ export default function App() {
 
   async function openFilePicker() {
     try {
-      const pickedPaths = await window.electronAPI?.pickPaths?.({
+      const pickedPaths = await desktopApi.pickPaths({
         title: 'Select files for chat',
         filters: CHAT_FILE_PICKER_FILTERS,
       })
@@ -608,7 +608,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
 
-    window.electronAPI.getSettings().then(settings => {
+    desktopApi.getSettings().then(settings => {
       if (cancelled) return
       setBackendApiUrl(resolveBackendApiUrl(settings));
       setColorScheme(settings.colorScheme || 'Default');
@@ -618,7 +618,7 @@ export default function App() {
       setStreamOutput(settings.streamOutput || false);
       setAudioInputEnabled(true);
       if (settings.audioInputEnabled !== true) {
-        window.electronAPI.setSetting('audioInputEnabled', true)
+        desktopApi.setSetting('audioInputEnabled', true)
       }
       setAudioInputDeviceId(typeof settings.audioInputDeviceId === 'string' ? settings.audioInputDeviceId : '');
       setAudioInputLanguage(typeof settings.audioInputLanguage === 'string' ? settings.audioInputLanguage : '');

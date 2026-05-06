@@ -141,7 +141,6 @@ export default function App() {
   })
   const [loading, setLoading] = useState(true); // Loading state for initial session fetch
   const [unreadSessions, setUnreadSessions] = useState([]); // Track unread messages
-  const [scrollPositions, setScrollPositions] = useState({}); // Store scroll positions for each session
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const canAttachImages = selectedChatModelSupportsVision || selectedVisionModelSupportsVision
   const imageAttachmentUnavailableReason = 'Image attachments require a vision-capable chat model or configured vision model.'

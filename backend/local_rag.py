@@ -213,11 +213,14 @@ def _source_signature(files: List[Dict[str, Any]]) -> Optional[str]:
             "path": entry.get("path") or "",
             "rel": entry.get("rel") or "",
             "size": int(entry.get("size") or 0),
-            "item_id": entry.get("item_id") or "",
-            "kind": entry.get("kind") or "file",
-            "title": entry.get("title") or entry.get("name") or "",
-            "url": entry.get("url") or "",
         }
+        if entry.get("managed") or entry.get("kind") in {"text", "website"}:
+            payload.update({
+                "item_id": entry.get("item_id") or "",
+                "kind": entry.get("kind") or "file",
+                "title": entry.get("title") or entry.get("name") or "",
+                "url": entry.get("url") or "",
+            })
         digest.update(json.dumps(payload, sort_keys=True).encode("utf-8"))
         digest.update(b"\n")
     return digest.hexdigest()

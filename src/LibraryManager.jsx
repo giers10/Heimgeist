@@ -75,6 +75,8 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
   const [textContent, setTextContent] = useState('')
   const [websiteTitle, setWebsiteTitle] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
+  const [expandedItemId, setExpandedItemId] = useState(null)
+  const [contentPreviews, setContentPreviews] = useState({})
   const toastTimeoutsRef = useRef(new Map())
   const toastIdRef = useRef(0)
   const previousLibraryStateRef = useRef(null)
@@ -120,6 +122,28 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
     setTextContent('')
     setWebsiteTitle('')
     setWebsiteUrl('')
+  }
+
+  async function toggleContentPreview(item) {
+    const itemId = item?.item_id
+    if (!library || !itemId) return
+    if (expandedItemId === itemId) {
+      setExpandedItemId(null)
+      return
+    }
+    setExpandedItemId(itemId)
+    if (contentPreviews[itemId]) return
+    setContentPreviews(current => ({ ...current, [itemId]: { loading: true } }))
+    try {
+      const response = await fetch(`${apiBase}/libraries/${library.slug}/items/${itemId}`)
+      const data = await expectJson(response)
+      setContentPreviews(current => ({ ...current, [itemId]: { data } }))
+    } catch (error) {
+      setContentPreviews(current => ({
+        ...current,
+        [itemId]: { error: String(error?.message || error) }
+      }))
+    }
   }
 
   async function runAction(fn, successMessage) {
@@ -372,8 +396,11 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
               const sync = itemSyncMeta(item)
               const label = kindLabel(item)
               const source = item.kind === 'website' ? item.url : item.kind === 'text' ? 'Written in Heimgeist' : item.path
+              const itemId = item.item_id || item.sha256 || item.rel
+              const isExpanded = expandedItemId === itemId
+              const preview = contentPreviews[itemId]
               return (
-                <article key={item.item_id || item.sha256 || item.rel} className={`library-content-card kind-${item.kind || 'file'}`}>
+                <article key={itemId} className={`library-content-card kind-${item.kind || 'file'} ${isExpanded ? 'expanded' : ''}`}>
                   <div className="library-content-card-header">
                     <span className="library-kind-badge">{label}</span>
                     <span className={`library-file-sync-label ${sync.status}`}>{sync.label}</span>
@@ -389,7 +416,25 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                       <div className="library-file-progress-bar" style={{ width: `${sync.progress}%` }} />
                     </div>
                   </div>
+                  {isExpanded && (
+                    <div className="library-content-preview">
+                      <div className="library-content-preview-label">
+                        {item.kind === 'website' ? 'Saved website text' : item.kind === 'text' ? 'Stored text' : 'Extracted text used by RAG'}
+                      </div>
+                      {preview?.loading && <div className="muted-copy">Loading content…</div>}
+                      {preview?.error && <div className="form-error">{preview.error}</div>}
+                      {preview?.data && (
+                        <>
+                          <pre>{preview.data.content || 'No readable text was extracted from this item.'}</pre>
+                          {preview.data.content_truncated && <div className="muted-copy">Preview shortened. The indexed source contains more text.</div>}
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="library-file-actions">
+                    <button className="button ghost" disabled={busy} onClick={() => toggleContentPreview(item)}>
+                      {isExpanded ? 'Hide Content' : 'View Content'}
+                    </button>
                     {item.kind === 'text' && <button className="button ghost" disabled={busy} onClick={() => editText(item)}>Edit</button>}
                     {item.kind === 'website' && <button className="button ghost" onClick={() => desktopApi.openExternalLink(item.url)}>Open</button>}
                     {item.kind === 'website' && <button className="button ghost" disabled={busy} onClick={() => refreshWebsite(item)}>Refresh</button>}

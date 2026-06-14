@@ -468,9 +468,60 @@ def _ensure_stage_link(slug: str, source_path: Path, rel: str) -> None:
 
 def _find_item(data: Dict[str, Any], item_id: str) -> Optional[Dict[str, Any]]:
     return next(
-        (entry for entry in data.get("files", []) if str(entry.get("item_id") or "") == item_id),
+        (
+            entry for entry in data.get("files", [])
+            if str(entry.get("item_id") or entry.get("sha256") or entry.get("rel") or "") == item_id
+        ),
         None,
     )
+
+
+def _read_indexed_file_text(slug: str, entry: Dict[str, Any], max_chars: int = 200_000) -> tuple[str, bool]:
+    corpus_path = _collect_library_paths(slug)["corpus"]
+    if not corpus_path.exists():
+        return "", False
+
+    raw_path = str(entry.get("path") or "")
+    try:
+        source_key = str(Path(raw_path).expanduser().resolve())
+    except Exception:
+        source_key = raw_path
+    item_id = str(entry.get("item_id") or entry.get("sha256") or entry.get("rel") or "")
+    parts: List[str] = []
+    total = 0
+    truncated = False
+
+    with corpus_path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except Exception:
+                continue
+            record_source = str(record.get("source_path") or "")
+            try:
+                record_source_key = str(Path(record_source).expanduser().resolve())
+            except Exception:
+                record_source_key = record_source
+            record_item_id = str((record.get("meta") or {}).get("item_id") or record.get("id") or "")
+            if record_source_key != source_key and (not item_id or record_item_id != item_id):
+                continue
+            text = str(record.get("text") or "").strip()
+            if not text:
+                continue
+            remaining = max_chars - total
+            if remaining <= 0:
+                truncated = True
+                break
+            if len(text) > remaining:
+                parts.append(text[:remaining].rstrip())
+                truncated = True
+                break
+            parts.append(text)
+            total += len(text) + 2
+
+    return "\n\n".join(parts), truncated
 
 
 def _mark_entry_pending(entry: Dict[str, Any]) -> None:
@@ -1266,9 +1317,16 @@ def get_library_item(slug: str, item_id: str):
         raise HTTPException(status_code=404, detail="Content item not found")
 
     payload = dict(entry)
-    if entry.get("kind") == "text":
+    if entry.get("kind") in {"text", "website"}:
         path = Path(str(entry.get("path") or ""))
         payload["content"] = path.read_text(encoding="utf-8") if path.exists() else ""
+        payload["content_origin"] = "stored_snapshot" if entry.get("kind") == "website" else "stored_text"
+        payload["content_truncated"] = False
+    else:
+        content, truncated = _read_indexed_file_text(slug, entry)
+        payload["content"] = content
+        payload["content_origin"] = "extracted_text"
+        payload["content_truncated"] = truncated
     return payload
 
 

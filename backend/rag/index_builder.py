@@ -110,10 +110,16 @@ def chunk_text(txt: str, target_chars: int = 2500, overlap_chars: int = 200) -> 
     paras = [p.strip() for p in (txt or "").split("\n\n") if p.strip()]
     if not paras:
         if txt.strip():
-            yield txt.strip()
+            yield from _split_oversized_text(txt.strip(), target_chars, overlap_chars)
         return
     buf, size = [], 0
     for p in paras:
+        if len(p) > target_chars:
+            if buf:
+                yield "\n\n".join(buf)
+                buf, size = [], 0
+            yield from _split_oversized_text(p, target_chars, overlap_chars)
+            continue
         if size + len(p) + 2 > target_chars and buf:
             chunk = "\n\n".join(buf)
             yield chunk
@@ -126,6 +132,26 @@ def chunk_text(txt: str, target_chars: int = 2500, overlap_chars: int = 200) -> 
         size += len(p) + 2
     if buf:
         yield "\n\n".join(buf)
+
+def _split_oversized_text(txt: str, target_chars: int, overlap_chars: int) -> Iterable[str]:
+    clean = (txt or "").strip()
+    target = max(400, int(target_chars))
+    overlap = min(max(0, int(overlap_chars)), target // 3)
+    start = 0
+    while start < len(clean):
+        limit = min(len(clean), start + target)
+        end = limit
+        if limit < len(clean):
+            search_from = start + max(1, target // 2)
+            whitespace = max(clean.rfind(" ", search_from, limit), clean.rfind("\n", search_from, limit))
+            if whitespace > start:
+                end = whitespace
+        chunk = clean[start:end].strip()
+        if chunk:
+            yield chunk
+        if end >= len(clean):
+            break
+        start = max(start + 1, end - overlap)
 
 def clamp_int(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))

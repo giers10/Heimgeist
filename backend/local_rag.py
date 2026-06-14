@@ -1388,6 +1388,8 @@ async def refresh_library_website(slug: str, item_id: str):
 
     source_path = Path(str(entry.get("path") or ""))
     previous_hash = str(entry.get("sha256") or "")
+    previous_title = str(entry.get("title") or "")
+    previous_url = str(entry.get("url") or "")
     _write_text_atomic(source_path, str(snapshot["text"]))
     next_hash = _sha256_file(source_path)
     entry.update({
@@ -1407,7 +1409,7 @@ async def refresh_library_website(slug: str, item_id: str):
         entry["name"] = title
 
     job_id = None
-    changed = next_hash != previous_hash
+    changed = next_hash != previous_hash or str(entry.get("title") or "") != previous_title or str(entry.get("url") or "") != previous_url
     if changed:
         _mark_entry_pending(entry)
         job_id = await _save_library_change(slug, data)

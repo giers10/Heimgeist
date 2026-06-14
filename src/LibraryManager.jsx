@@ -108,7 +108,10 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
     })
   }
 
-  useEffect(() => () => clearToasts(), [])
+  useEffect(() => () => {
+    toastTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId))
+    toastTimeoutsRef.current.clear()
+  }, [])
 
   function closeForm() {
     setFormMode(null)

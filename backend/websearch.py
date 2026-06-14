@@ -263,6 +263,9 @@ async def fetch_website_snapshot(url: str) -> Dict[str, Any]:
     text = clean_text(html)
     if len(text.strip()) < 80:
         raise ValueError("The website did not contain enough readable text to save.")
+    if not title:
+        first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+        title = re.sub(r"^[#>*_`\-\s]+", "", first_line).strip()[:240]
 
     return {
         "requested_url": requested_url,

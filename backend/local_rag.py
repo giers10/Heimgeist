@@ -25,6 +25,7 @@ from .app_settings import (
     get_ollama_api_url,
 )
 from .paths import library_root
+from .websearch import fetch_website_snapshot
 
 router = APIRouter(tags=["local-rag"])
 
@@ -53,6 +54,21 @@ class RenameLibraryRequest(BaseModel):
 
 class RegisterPathsRequest(BaseModel):
     paths: List[str]
+
+
+class CreateTextRequest(BaseModel):
+    title: str
+    content: str
+
+
+class UpdateTextRequest(BaseModel):
+    title: str
+    content: str
+
+
+class CreateWebsiteRequest(BaseModel):
+    url: str
+    title: Optional[str] = None
 
 
 class RemoveFileRequest(BaseModel):
@@ -114,6 +130,12 @@ def lib_json(slug: str) -> Path:
 
 def stage_dir(slug: str) -> Path:
     path = lib_dir(slug) / "stage"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def sources_dir(slug: str) -> Path:
+    path = lib_dir(slug) / "sources"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -190,6 +212,10 @@ def _source_signature(files: List[Dict[str, Any]]) -> Optional[str]:
             "path": entry.get("path") or "",
             "rel": entry.get("rel") or "",
             "size": int(entry.get("size") or 0),
+            "item_id": entry.get("item_id") or "",
+            "kind": entry.get("kind") or "file",
+            "title": entry.get("title") or entry.get("name") or "",
+            "url": entry.get("url") or "",
         }
         digest.update(json.dumps(payload, sort_keys=True).encode("utf-8"))
         digest.update(b"\n")
@@ -303,6 +329,9 @@ def _build_file_sync_payload(
 
     for entry in files:
         file_entry = dict(entry)
+        file_entry["item_id"] = str(file_entry.get("item_id") or file_entry.get("sha256") or file_entry.get("rel") or "")
+        file_entry["kind"] = str(file_entry.get("kind") or "file")
+        file_entry["title"] = str(file_entry.get("title") or file_entry.get("name") or "")
         file_entry["enrich_enabled"] = _file_enrich_enabled(file_entry)
         stored_status = str(file_entry.get("sync_status") or "pending")
         sync_status = stored_status
@@ -409,6 +438,96 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _write_text_atomic(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(path)
+
+
+def _managed_source_path(slug: str, item_id: str, suffix: str = ".md") -> Path:
+    return sources_dir(slug) / f"{item_id}{suffix}"
+
+
+def _managed_stage_rel(item_id: str, suffix: str = ".md") -> str:
+    return f"managed-{item_id}{suffix}"
+
+
+def _ensure_stage_link(slug: str, source_path: Path, rel: str) -> None:
+    staged = stage_dir(slug) / rel
+    if staged.is_symlink() or staged.exists():
+        staged.unlink()
+    staged.symlink_to(source_path)
+
+
+def _find_item(data: Dict[str, Any], item_id: str) -> Optional[Dict[str, Any]]:
+    return next(
+        (entry for entry in data.get("files", []) if str(entry.get("item_id") or "") == item_id),
+        None,
+    )
+
+
+def _mark_entry_pending(entry: Dict[str, Any]) -> None:
+    entry["sync_status"] = "pending"
+    entry.pop("sync_error", None)
+    entry.pop("synced_at", None)
+
+
+async def _save_library_change(slug: str, data: Dict[str, Any]) -> Optional[str]:
+    signature = _prepare_signature(data.get("files", []))
+    _set_pending_prepare_signature(data, signature)
+    write_library(slug, data)
+    if signature:
+        return await _ensure_prepare_job(slug)
+    _cleanup_generated_artifacts(slug)
+    return None
+
+
+def _apply_source_metadata(corpus_path: Path, files: List[Dict[str, Any]]) -> None:
+    if not corpus_path.exists():
+        return
+
+    by_path: Dict[str, Dict[str, Any]] = {}
+    for entry in files:
+        raw_path = str(entry.get("path") or "").strip()
+        if not raw_path:
+            continue
+        try:
+            by_path[str(Path(raw_path).expanduser().resolve())] = entry
+        except Exception:
+            by_path[raw_path] = entry
+
+    rewritten: List[str] = []
+    changed = False
+    with corpus_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            raw_source = str(rec.get("source_path") or "")
+            try:
+                source_key = str(Path(raw_source).expanduser().resolve())
+            except Exception:
+                source_key = raw_source
+            entry = by_path.get(source_key)
+            if entry and entry.get("item_id"):
+                item_id = str(entry["item_id"])
+                rec["id"] = item_id
+                rec["parent_id"] = None
+                rec["title"] = entry.get("title") or entry.get("name") or rec.get("title")
+                rec["url"] = entry.get("url") or rec.get("url")
+                rec["record_type"] = entry.get("kind") or rec.get("record_type")
+                meta = rec.get("meta") if isinstance(rec.get("meta"), dict) else {}
+                rec["meta"] = {**meta, "item_id": item_id, "source_kind": entry.get("kind") or "file"}
+                changed = True
+            rewritten.append(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    if changed:
+        tmp = corpus_path.with_suffix(".metadata.tmp")
+        tmp.write_text("".join(rewritten), encoding="utf-8")
+        tmp.replace(corpus_path)
 
 
 def _stage_name(sha: str, path: Path) -> str:
@@ -810,6 +929,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             emit="per-file",
             lang_detect=False,
         )
+        _apply_source_metadata(paths["corpus"], files)
         build_errors = list((results.get("build") or {}).get("errors") or [])
         if not paths["corpus"].exists() or _line_count(paths["corpus"]) == 0:
             if build_errors:
@@ -960,8 +1080,11 @@ def _build_local_context(prompt: str, results: Dict[str, Any], top_k: int = 5) -
         if len(snippet) > 1400:
             snippet = snippet[:1400].rstrip() + "..."
         raw_path = source.get("url") or source.get("doc_id") or ""
-        if raw_path and os.path.isabs(raw_path):
-            file_sources.append(_file_uri(raw_path))
+        if raw_path:
+            if os.path.isabs(raw_path):
+                file_sources.append(_file_uri(raw_path))
+            elif str(raw_path).startswith(("http://", "https://")):
+                file_sources.append(str(raw_path))
         blocks.append(f"[L{idx}] {title}\n{snippet}")
     blocks.append("</local_rag_context>")
     blocks.append(
@@ -1086,6 +1209,8 @@ async def register_paths(slug: str, req: RegisterPathsRequest):
             symlink_path.unlink()
         symlink_path.symlink_to(file_path)
         entry = {
+            "item_id": uuid.uuid4().hex,
+            "kind": "file",
             "sha256": sha,
             "path": str(file_path),
             "rel": stage_name,
@@ -1113,6 +1238,183 @@ async def register_paths(slug: str, req: RegisterPathsRequest):
     }
 
 
+@router.get("/libraries/{slug}/items/{item_id}")
+def get_library_item(slug: str, item_id: str):
+    data = read_library(slug)
+    entry = _find_item(data, item_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Content item not found")
+
+    payload = dict(entry)
+    if entry.get("kind") == "text":
+        path = Path(str(entry.get("path") or ""))
+        payload["content"] = path.read_text(encoding="utf-8") if path.exists() else ""
+    return payload
+
+
+@router.post("/libraries/{slug}/texts")
+async def create_library_text(slug: str, req: CreateTextRequest):
+    data = read_library(slug)
+    title = str(req.title or "").strip()
+    content = str(req.content or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Text title is required.")
+    if not content:
+        raise HTTPException(status_code=400, detail="Text content is required.")
+
+    item_id = uuid.uuid4().hex
+    source_path = _managed_source_path(slug, item_id)
+    rel = _managed_stage_rel(item_id)
+    _write_text_atomic(source_path, content)
+    _ensure_stage_link(slug, source_path, rel)
+    entry = {
+        "item_id": item_id,
+        "kind": "text",
+        "title": title[:240],
+        "name": title[:240],
+        "path": str(source_path),
+        "rel": rel,
+        "sha256": _sha256_file(source_path),
+        "size": source_path.stat().st_size,
+        "added_at": now_iso(),
+        "updated_at": now_iso(),
+        "sync_status": "pending",
+        "enrich_enabled": False,
+        "managed": True,
+    }
+    data.setdefault("files", []).append(entry)
+    job_id = await _save_library_change(slug, data)
+    return {"item": entry, "job_id": job_id, "library": library_payload(data)}
+
+
+@router.patch("/libraries/{slug}/texts/{item_id}")
+async def update_library_text(slug: str, item_id: str, req: UpdateTextRequest):
+    data = read_library(slug)
+    entry = _find_item(data, item_id)
+    if not entry or entry.get("kind") != "text":
+        raise HTTPException(status_code=404, detail="Text item not found")
+
+    title = str(req.title or "").strip()
+    content = str(req.content or "").strip()
+    if not title or not content:
+        raise HTTPException(status_code=400, detail="Text title and content are required.")
+
+    source_path = Path(str(entry.get("path") or ""))
+    _write_text_atomic(source_path, content)
+    _ensure_stage_link(slug, source_path, str(entry.get("rel") or _managed_stage_rel(item_id)))
+    entry.update({
+        "title": title[:240],
+        "name": title[:240],
+        "sha256": _sha256_file(source_path),
+        "size": source_path.stat().st_size,
+        "updated_at": now_iso(),
+    })
+    _mark_entry_pending(entry)
+    job_id = await _save_library_change(slug, data)
+    return {"item": entry, "job_id": job_id, "library": library_payload(data)}
+
+
+@router.post("/libraries/{slug}/websites")
+async def create_library_website(slug: str, req: CreateWebsiteRequest):
+    data = read_library(slug)
+    try:
+        snapshot = await fetch_website_snapshot(req.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=400, detail=f"Website returned HTTP {exc.response.status_code}.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not fetch website: {exc}") from exc
+
+    canonical_url = str(snapshot["url"])
+    duplicate = next(
+        (entry for entry in data.get("files", []) if entry.get("kind") == "website" and entry.get("url") == canonical_url),
+        None,
+    )
+    if duplicate:
+        raise HTTPException(status_code=409, detail="This website is already saved in the database.")
+
+    item_id = uuid.uuid4().hex
+    source_path = _managed_source_path(slug, item_id)
+    rel = _managed_stage_rel(item_id)
+    _write_text_atomic(source_path, str(snapshot["text"]))
+    _ensure_stage_link(slug, source_path, rel)
+    custom_title = str(req.title or "").strip()
+    title = custom_title or str(snapshot.get("title") or canonical_url)
+    entry = {
+        "item_id": item_id,
+        "kind": "website",
+        "title": title[:240],
+        "title_locked": bool(custom_title),
+        "name": title[:240],
+        "url": canonical_url,
+        "requested_url": str(snapshot.get("requested_url") or req.url),
+        "final_url": str(snapshot.get("final_url") or canonical_url),
+        "content_type": snapshot.get("content_type"),
+        "etag": snapshot.get("etag"),
+        "last_modified": snapshot.get("last_modified"),
+        "fetched_at": now_iso(),
+        "path": str(source_path),
+        "rel": rel,
+        "sha256": _sha256_file(source_path),
+        "size": source_path.stat().st_size,
+        "added_at": now_iso(),
+        "updated_at": now_iso(),
+        "sync_status": "pending",
+        "enrich_enabled": False,
+        "managed": True,
+    }
+    data.setdefault("files", []).append(entry)
+    job_id = await _save_library_change(slug, data)
+    return {"item": entry, "job_id": job_id, "library": library_payload(data)}
+
+
+@router.post("/libraries/{slug}/websites/{item_id}/refresh")
+async def refresh_library_website(slug: str, item_id: str):
+    data = read_library(slug)
+    entry = _find_item(data, item_id)
+    if not entry or entry.get("kind") != "website":
+        raise HTTPException(status_code=404, detail="Website item not found")
+
+    try:
+        snapshot = await fetch_website_snapshot(str(entry.get("url") or entry.get("requested_url") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=400, detail=f"Website returned HTTP {exc.response.status_code}.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not refresh website: {exc}") from exc
+
+    source_path = Path(str(entry.get("path") or ""))
+    previous_hash = str(entry.get("sha256") or "")
+    _write_text_atomic(source_path, str(snapshot["text"]))
+    next_hash = _sha256_file(source_path)
+    entry.update({
+        "url": str(snapshot.get("url") or entry.get("url") or ""),
+        "final_url": str(snapshot.get("final_url") or entry.get("final_url") or ""),
+        "content_type": snapshot.get("content_type"),
+        "etag": snapshot.get("etag"),
+        "last_modified": snapshot.get("last_modified"),
+        "fetched_at": now_iso(),
+        "size": source_path.stat().st_size,
+        "sha256": next_hash,
+        "updated_at": now_iso(),
+    })
+    if not entry.get("title_locked"):
+        title = str(snapshot.get("title") or entry.get("title") or entry.get("url") or "")[:240]
+        entry["title"] = title
+        entry["name"] = title
+
+    job_id = None
+    changed = next_hash != previous_hash
+    if changed:
+        _mark_entry_pending(entry)
+        job_id = await _save_library_change(slug, data)
+    else:
+        write_library(slug, data)
+    return {"changed": changed, "item": entry, "job_id": job_id, "library": library_payload(data)}
+
+
 @router.delete("/libraries/{slug}/files")
 async def remove_file(slug: str, req: RemoveFileRequest):
     data = read_library(slug)
@@ -1123,8 +1425,12 @@ async def remove_file(slug: str, req: RemoveFileRequest):
 
     data["files"] = [entry for entry in files if entry.get("rel") != req.rel]
     symlink_path = stage_dir(slug) / req.rel
-    if symlink_path.exists():
+    if symlink_path.is_symlink() or symlink_path.exists():
         symlink_path.unlink()
+    if removed.get("managed"):
+        managed_path = Path(str(removed.get("path") or ""))
+        if managed_path.exists() and managed_path.is_file():
+            managed_path.unlink()
 
     prepare_signature = _prepare_signature(data.get("files", []))
     _set_pending_prepare_signature(data, prepare_signature)

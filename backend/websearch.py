@@ -58,7 +58,7 @@ def render_recent_context(messages: Optional[List[Dict[str, str]]], char_limit: 
 
 # ----- SearXNG search & fetching -------------------------------------------------
 
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 import itertools
 
 # HTTP client tuning (keep-alive pool + HTTP/2)
@@ -198,6 +198,83 @@ async def fetch_page(client: httpx.AsyncClient, url: str) -> str:
     except Exception as e:
         print(f"[web] fetch_page error url={url}: {repr(e)}")
         return ""
+
+
+async def fetch_website_snapshot(url: str) -> Dict[str, Any]:
+    """Fetch one user-supplied web page and return a durable text snapshot."""
+    requested_url = str(url or "").strip()
+    parsed = urlparse(requested_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Enter a valid http:// or https:// website URL.")
+    if not _is_probably_html_url(requested_url):
+        raise ValueError("This URL does not appear to point to a web page.")
+
+    async with httpx.AsyncClient(
+        headers=DEFAULT_HEADERS,
+        follow_redirects=True,
+        http2=True,
+        limits=HTTP_LIMITS,
+        timeout=HTTP_TIMEOUT,
+    ) as client:
+        async with client.stream("GET", requested_url) as response:
+            response.raise_for_status()
+            content_type = (response.headers.get("content-type") or "").lower()
+            if content_type and not (
+                "text/html" in content_type
+                or "application/xhtml+xml" in content_type
+                or content_type.startswith("text/")
+            ):
+                raise ValueError(f"Unsupported website content type: {content_type.split(';', 1)[0]}")
+
+            payload = bytearray()
+            async for chunk in response.aiter_bytes():
+                if not chunk:
+                    continue
+                remaining = MAX_BYTES_PER_PAGE - len(payload)
+                if remaining <= 0:
+                    break
+                payload.extend(chunk[:remaining])
+
+            encoding = response.encoding or "utf-8"
+            html = bytes(payload).decode(encoding, errors="ignore")
+            final_url = str(response.url)
+
+    try:
+        soup = BeautifulSoup(html, "lxml")
+    except Exception:
+        soup = BeautifulSoup(html, "html.parser")
+
+    title = ""
+    if soup.title:
+        title = re.sub(r"\s+", " ", soup.title.get_text(" ", strip=True)).strip()
+    if not title:
+        heading = soup.find(["h1", "h2"])
+        if heading:
+            title = re.sub(r"\s+", " ", heading.get_text(" ", strip=True)).strip()
+
+    canonical_url = final_url
+    canonical = soup.find("link", rel=lambda value: value and "canonical" in str(value).lower())
+    if canonical and canonical.get("href"):
+        candidate = urljoin(final_url, str(canonical.get("href")).strip())
+        candidate_parsed = urlparse(candidate)
+        if candidate_parsed.scheme in {"http", "https"} and candidate_parsed.netloc:
+            canonical_url = candidate
+
+    text = clean_text(html)
+    if len(text.strip()) < 80:
+        raise ValueError("The website did not contain enough readable text to save.")
+
+    return {
+        "requested_url": requested_url,
+        "url": canonical_url,
+        "final_url": final_url,
+        "title": title or urlparse(final_url).netloc,
+        "text": text.strip(),
+        "html": html,
+        "content_type": content_type.split(";", 1)[0] or "text/html",
+        "etag": response.headers.get("etag"),
+        "last_modified": response.headers.get("last-modified"),
+    }
 
 async def gather_pages(
     client: httpx.AsyncClient,

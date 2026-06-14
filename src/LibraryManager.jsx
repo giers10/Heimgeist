@@ -84,6 +84,8 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
   useEffect(() => {
     setErrorMessage('')
     setSearch('')
+    setExpandedItemId(null)
+    setContentPreviews({})
     closeForm()
   }, [library?.slug, library?.name])
 

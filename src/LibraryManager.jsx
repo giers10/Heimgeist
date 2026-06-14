@@ -198,6 +198,14 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
         )
         return expectJson(response)
       }, editingItemId ? 'Text updated.' : 'Text added to the database.')
+      if (editingItemId) {
+        setContentPreviews(current => {
+          const next = { ...current }
+          delete next[editingItemId]
+          return next
+        })
+        setExpandedItemId(current => current === editingItemId ? null : current)
+      }
       closeForm()
     } catch {}
   }
@@ -245,6 +253,12 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
         })
         return expectJson(response)
       })
+      setContentPreviews(current => {
+        const next = { ...current }
+        delete next[item.item_id]
+        return next
+      })
+      setExpandedItemId(current => current === item.item_id ? null : current)
       queueToast(result?.changed ? 'Website changed and is being reindexed.' : 'Website checked. No text changes found.', 'success')
     } catch {}
   }

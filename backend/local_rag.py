@@ -700,7 +700,8 @@ async def _ensure_prepare_job(slug: str) -> Optional[str]:
 
         if not payload["states"].get("has_files") or not pending_signature:
             return None
-        if payload["states"].get("is_indexed") and payload.get("prepare_signature") == pending_signature:
+        if payload["states"].get("is_indexed"):
+            _mark_all_files_ready(slug)
             _clear_pending_prepare(slug)
             return None
 
@@ -722,9 +723,7 @@ async def _handle_post_job_state(slug: str, job_type: str, status: str) -> None:
         _cleanup_generated_artifacts(slug)
         return
 
-    if payload["states"].get("is_indexed") and (
-        pending_signature is None or payload.get("prepare_signature") == pending_signature
-    ):
+    if payload["states"].get("is_indexed"):
         _mark_all_files_ready(slug)
         _clear_pending_prepare(slug)
         return

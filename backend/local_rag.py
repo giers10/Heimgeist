@@ -1099,7 +1099,7 @@ def _build_local_context(prompt: str, results: Dict[str, Any], top_k: int = 5) -
 
 
 @router.get("/libraries")
-def list_libraries():
+async def list_libraries():
     libraries: List[Dict[str, Any]] = []
     for path in LIB_ROOT.iterdir():
         if not path.is_dir():
@@ -1108,7 +1108,10 @@ def list_libraries():
         if not meta.exists():
             continue
         try:
-            libraries.append(library_payload(_read_json(meta)))
+            data = _read_json(meta)
+            if _pipeline_meta(data).get("pending_prepare_signature") and not _has_active_job(data["slug"]):
+                await _ensure_prepare_job(data["slug"])
+            libraries.append(library_payload(read_library(data["slug"])))
         except Exception:
             continue
     libraries.sort(key=lambda item: item.get("created_at", ""), reverse=True)

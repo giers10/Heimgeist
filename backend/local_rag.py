@@ -1113,6 +1113,7 @@ async def list_libraries():
             continue
         try:
             data = _read_json(meta)
+            payload = library_payload(data)
             has_failed_item = any(
                 str(entry.get("sync_status") or "") == "failed"
                 for entry in data.get("files", [])
@@ -1120,7 +1121,7 @@ async def list_libraries():
             if (
                 _pipeline_meta(data).get("pending_prepare_signature")
                 and not _has_active_job(data["slug"])
-                and not has_failed_item
+                and (payload["states"].get("is_indexed") or not has_failed_item)
             ):
                 await _ensure_prepare_job(data["slug"])
             libraries.append(library_payload(read_library(data["slug"])))

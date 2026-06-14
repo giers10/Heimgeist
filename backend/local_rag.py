@@ -1078,6 +1078,7 @@ def _build_local_context(prompt: str, results: Dict[str, Any], top_k: int = 5) -
 
     blocks: List[str] = ["<local_rag_context>"]
     file_sources: List[str] = []
+    seen_sources: set[str] = set()
     for idx, source in enumerate(selected, start=1):
         title = (source.get("title") or Path(source.get("url") or source.get("doc_id") or f"Source {idx}").name).strip()
         snippet = re.sub(r"\s+", " ", (source.get("snippet") or "")).strip()
@@ -1085,10 +1086,14 @@ def _build_local_context(prompt: str, results: Dict[str, Any], top_k: int = 5) -
             snippet = snippet[:1400].rstrip() + "..."
         raw_path = source.get("url") or source.get("doc_id") or ""
         if raw_path:
+            source_uri = ""
             if os.path.isabs(raw_path):
-                file_sources.append(_file_uri(raw_path))
+                source_uri = _file_uri(raw_path)
             elif str(raw_path).startswith(("http://", "https://")):
-                file_sources.append(str(raw_path))
+                source_uri = str(raw_path)
+            if source_uri and source_uri not in seen_sources:
+                seen_sources.add(source_uri)
+                file_sources.append(source_uri)
         blocks.append(f"[L{idx}] {title}\n{snippet}")
     blocks.append("</local_rag_context>")
     blocks.append(

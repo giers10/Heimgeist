@@ -251,6 +251,66 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
   gap: 8px;
 }
 
+.library-content-form {
+  display: grid;
+  gap: 12px;
+}
+
+.library-content-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.library-content-form input,
+.library-content-form textarea,
+.library-search {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 72%, black);
+  color: var(--text);
+  font: inherit;
+  padding: 9px 11px;
+}
+
+.library-content-form textarea {
+  resize: vertical;
+  min-height: 180px;
+  line-height: 1.5;
+}
+
+.library-form-header,
+.library-form-actions,
+.library-content-heading,
+.library-content-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.library-content-heading {
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.library-content-heading h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.library-content-heading p {
+  margin: 0;
+}
+
+.library-search {
+  width: min(280px, 42%);
+  flex-shrink: 0;
+}
+
 .new-db-actions {
   display: flex;
   gap: 8px;
@@ -1712,25 +1772,40 @@ input:checked + .slider:before {
   background: color-mix(in srgb, var(--panel) 94%, black);
 }
 
-.library-files h2 {
-  margin: 0 0 12px;
-  font-size: 16px;
-}
-
-.library-file-list {
+.library-content-grid {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
 }
 
-.library-file-row {
+.library-content-card {
   display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 12px 14px;
-  border-radius: 12px;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 88%, black);
+}
+
+.library-content-card.kind-text {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+
+.library-content-card.kind-website {
+  border-color: color-mix(in srgb, #69c4a1 34%, var(--border));
+}
+
+.library-kind-badge {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .library-file-meta {
@@ -1771,8 +1846,10 @@ input:checked + .slider:before {
 
 .library-file-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 14px;
 }
 
 .library-file-sync {
@@ -1852,6 +1929,15 @@ input:checked + .slider:before {
 
   .library-file-row {
     flex-direction: column;
+  }
+
+  .library-content-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .library-search {
+    width: 100%;
   }
 
   .library-file-actions {

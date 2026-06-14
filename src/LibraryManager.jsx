@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import desktopApi from './desktop/desktopApi'
 
 const TOAST_DURATION_MS = {
@@ -7,13 +7,12 @@ const TOAST_DURATION_MS = {
   warning: 5600
 }
 
-function fileSyncMeta(file) {
-  const sync = file?.sync || {}
+function itemSyncMeta(item) {
+  const sync = item?.sync || {}
   const status = String(sync.status || 'pending')
   const progress = Math.max(0, Math.min(100, Number(sync.progress) || 0))
   const detail = String(sync.detail || '').trim()
-  const error = String(sync.error || '').trim()
-  const enrichEnabled = !!file?.enrich_enabled
+  const enrichEnabled = !!item?.enrich_enabled
 
   if (status === 'ready') {
     return {
@@ -23,25 +22,22 @@ function fileSyncMeta(file) {
       detail: detail || (enrichEnabled ? 'Ready in chat with enrichment enabled.' : 'Ready in chat with raw indexing only.')
     }
   }
-
   if (status === 'failed') {
     return {
       status,
       progress: 100,
       label: 'Sync failed',
-      detail: error || detail || 'Heimgeist could not finish syncing this file.'
+      detail: String(sync.error || '').trim() || detail || 'Heimgeist could not finish syncing this content.'
     }
   }
-
   if (status === 'syncing') {
     return {
       status,
       progress,
       label: progress > 0 ? `Syncing ${Math.round(progress)}%` : 'Syncing',
-      detail: detail || 'Rebuilding the corpus and indexes. Selected files may also be enriched.'
+      detail: detail || 'Rebuilding the database search indexes.'
     }
   }
-
   return {
     status: 'pending',
     progress: 6,
@@ -50,29 +46,49 @@ function fileSyncMeta(file) {
   }
 }
 
-export default function LibraryManager({
-  apiBase,
-  library,
-  jobs,
-  onRefresh
-}) {
+function kindLabel(item) {
+  if (item?.kind === 'text') return 'Text'
+  if (item?.kind === 'website') return 'Website'
+  return 'File'
+}
+
+async function expectJson(response) {
+  const raw = await response.text()
+  let data = null
+  try {
+    data = raw ? JSON.parse(raw) : null
+  } catch {}
+  if (!response.ok) {
+    throw new Error(data?.detail || raw || `HTTP ${response.status}`)
+  }
+  return data
+}
+
+export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
   const [busy, setBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [toasts, setToasts] = useState([])
+  const [search, setSearch] = useState('')
+  const [formMode, setFormMode] = useState(null)
+  const [editingItemId, setEditingItemId] = useState(null)
+  const [textTitle, setTextTitle] = useState('')
+  const [textContent, setTextContent] = useState('')
+  const [websiteTitle, setWebsiteTitle] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
   const toastTimeoutsRef = useRef(new Map())
   const toastIdRef = useRef(0)
   const previousLibraryStateRef = useRef(null)
 
   useEffect(() => {
     setErrorMessage('')
+    setSearch('')
+    closeForm()
   }, [library?.slug, library?.name])
 
   function dismissToast(id) {
     const timeoutId = toastTimeoutsRef.current.get(id)
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-      toastTimeoutsRef.current.delete(id)
-    }
+    if (timeoutId) clearTimeout(timeoutId)
+    toastTimeoutsRef.current.delete(id)
     setToasts(current => current.filter(toast => toast.id !== id))
   }
 
@@ -84,49 +100,39 @@ export default function LibraryManager({
 
   function queueToast(message, tone = 'info') {
     setToasts(current => {
-      if (current.some(toast => toast.message === message && toast.tone === tone)) {
-        return current
-      }
-
+      if (current.some(toast => toast.message === message && toast.tone === tone)) return current
       const id = `library-toast-${toastIdRef.current++}`
-      const next = [...current, { id, message, tone }].slice(-3)
       const timeoutId = window.setTimeout(() => dismissToast(id), TOAST_DURATION_MS[tone] || TOAST_DURATION_MS.info)
       toastTimeoutsRef.current.set(id, timeoutId)
-      return next
+      return [...current, { id, message, tone }].slice(-3)
     })
   }
 
-  useEffect(() => () => {
-    toastTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId))
-    toastTimeoutsRef.current.clear()
-  }, [])
+  useEffect(() => () => clearToasts(), [])
 
-  async function expectOk(response) {
-    if (response.ok) return response
-    const detail = await response.text()
-    throw new Error(detail || `HTTP ${response.status}`)
+  function closeForm() {
+    setFormMode(null)
+    setEditingItemId(null)
+    setTextTitle('')
+    setTextContent('')
+    setWebsiteTitle('')
+    setWebsiteUrl('')
   }
 
-  async function runAction(fn) {
+  async function runAction(fn, successMessage) {
     setBusy(true)
+    setErrorMessage('')
     try {
-      setErrorMessage('')
-      await fn()
+      const result = await fn()
+      if (successMessage) queueToast(successMessage, 'success')
+      return result
+    } catch (error) {
+      setErrorMessage(String(error?.message || error))
+      throw error
     } finally {
       setBusy(false)
       await onRefresh()
     }
-  }
-
-  async function registerPaths(paths) {
-    await runAction(async () => {
-      const response = await fetch(`${apiBase}/libraries/${library.slug}/files/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paths })
-      })
-      await expectOk(response)
-    })
   }
 
   async function addPaths() {
@@ -134,56 +140,122 @@ export default function LibraryManager({
     const paths = await desktopApi.pickPaths()
     if (!Array.isArray(paths) || paths.length === 0) return
     try {
-      await registerPaths(paths)
+      await runAction(async () => {
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/files/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths })
+        })
+        return expectJson(response)
+      }, 'Files added. Heimgeist is updating the database.')
+    } catch {}
+  }
+
+  async function submitText(event) {
+    event.preventDefault()
+    if (!library) return
+    try {
+      await runAction(async () => {
+        const editing = Boolean(editingItemId)
+        const response = await fetch(
+          editing
+            ? `${apiBase}/libraries/${library.slug}/texts/${editingItemId}`
+            : `${apiBase}/libraries/${library.slug}/texts`,
+          {
+            method: editing ? 'PATCH' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: textTitle, content: textContent })
+          }
+        )
+        return expectJson(response)
+      }, editingItemId ? 'Text updated.' : 'Text added to the database.')
+      closeForm()
+    } catch {}
+  }
+
+  async function editText(item) {
+    if (!library || !item?.item_id) return
+    setBusy(true)
+    setErrorMessage('')
+    try {
+      const response = await fetch(`${apiBase}/libraries/${library.slug}/items/${item.item_id}`)
+      const data = await expectJson(response)
+      setEditingItemId(item.item_id)
+      setTextTitle(data.title || item.title || item.name || '')
+      setTextContent(data.content || '')
+      setFormMode('text')
     } catch (error) {
       setErrorMessage(String(error?.message || error))
+    } finally {
+      setBusy(false)
     }
   }
 
-  async function removeFile(rel) {
+  async function submitWebsite(event) {
+    event.preventDefault()
+    if (!library) return
+    try {
+      await runAction(async () => {
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/websites`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: websiteUrl, title: websiteTitle || null })
+        })
+        return expectJson(response)
+      }, 'Website saved. Heimgeist is indexing its text.')
+      closeForm()
+    } catch {}
+  }
+
+  async function refreshWebsite(item) {
+    if (!library || !item?.item_id) return
+    try {
+      const result = await runAction(async () => {
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/websites/${item.item_id}/refresh`, {
+          method: 'POST'
+        })
+        return expectJson(response)
+      })
+      queueToast(result?.changed ? 'Website changed and is being reindexed.' : 'Website checked. No text changes found.', 'success')
+    } catch {}
+  }
+
+  async function removeItem(item) {
     if (!library) return
     try {
       await runAction(async () => {
         const response = await fetch(`${apiBase}/libraries/${library.slug}/files`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rel })
+          body: JSON.stringify({ rel: item.rel })
         })
-        await expectOk(response)
-      })
-    } catch (error) {
-      setErrorMessage(String(error?.message || error))
-    }
+        return expectJson(response)
+      }, `${kindLabel(item)} removed.`)
+    } catch {}
   }
 
-  async function updateFileEnrichment(rel, enabled) {
+  async function updateEnrichment(item, enabled) {
     if (!library) return
     try {
       await runAction(async () => {
         const response = await fetch(`${apiBase}/libraries/${library.slug}/files/enrichment`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rel, enabled })
+          body: JSON.stringify({ rel: item.rel, enabled })
         })
-        await expectOk(response)
+        return expectJson(response)
       })
-    } catch (error) {
-      setErrorMessage(String(error?.message || error))
-    }
+    } catch {}
   }
 
   async function retrySync() {
     if (!library) return
     try {
       await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/jobs/prepare`, {
-          method: 'POST'
-        })
-        await expectOk(response)
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/jobs/prepare`, { method: 'POST' })
+        return expectJson(response)
       })
-    } catch (error) {
-      setErrorMessage(String(error?.message || error))
-    }
+    } catch {}
   }
 
   const librarySlug = library?.slug || null
@@ -191,7 +263,14 @@ export default function LibraryManager({
     job => job.slug === librarySlug && (job.status === 'queued' || job.status === 'running')
   )
   const isReadyForChat = !!library?.states?.is_indexed
-  const hasFailedFiles = (library?.files || []).some(file => file?.sync?.status === 'failed')
+  const items = library?.files || []
+  const hasFailedItems = items.some(item => item?.sync?.status === 'failed')
+  const filteredItems = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    if (!term) return items
+    return items.filter(item => [item.title, item.name, item.path, item.url, item.kind]
+      .some(value => String(value || '').toLowerCase().includes(term)))
+  }, [items, search])
 
   useEffect(() => {
     if (!library?.slug) {
@@ -199,66 +278,29 @@ export default function LibraryManager({
       clearToasts()
       return
     }
-
     const nextState = {
       slug: library.slug,
-      hasFiles: !!library.files?.length,
+      hasItems: items.length > 0,
       isSyncing,
       isReadyForChat,
-      hasFailedFiles
+      hasFailedItems
     }
-
     const previousState = previousLibraryStateRef.current
     if (!previousState || previousState.slug !== nextState.slug) {
       previousLibraryStateRef.current = nextState
-      clearToasts()
       return
     }
-
     if (!previousState.isSyncing && nextState.isSyncing) {
-      queueToast(
-        'Syncing this database. Heimgeist is rebuilding the corpus and indexes automatically, and only selected files will run through enrichment.'
-      )
+      queueToast('Syncing this database. Heimgeist is rebuilding its search indexes.')
+    } else if (previousState.isSyncing && !nextState.isSyncing) {
+      if (nextState.hasFailedItems) queueToast('Some content did not finish syncing.', 'warning')
+      else if (nextState.isReadyForChat) queueToast('Sync complete. This database is ready in chat.', 'success')
     }
-
-    if (previousState.isSyncing && !nextState.isSyncing) {
-      if (nextState.hasFailedFiles) {
-        queueToast(
-          'Some files did not finish syncing. Their tiles show the failure state and error details.',
-          'warning'
-        )
-      } else if (nextState.isReadyForChat) {
-        queueToast(
-          'Sync complete. This database is ready in chat. Raw indexing stays on by default; enable enrichment only for files that need deeper recall.',
-          'success'
-        )
-      } else if (!nextState.hasFiles) {
-        queueToast('Add files to make this database available in chat.')
-      }
-    } else if (previousState.hasFiles && !nextState.hasFiles && !nextState.isSyncing) {
-      queueToast('All files were removed. Add files to make this database available in chat.')
-    } else if (!previousState.hasFailedFiles && nextState.hasFailedFiles && !nextState.isSyncing) {
-      queueToast(
-        'Some files did not finish syncing. Their tiles show the failure state and error details.',
-        'warning'
-      )
-    }
-
     previousLibraryStateRef.current = nextState
-  }, [
-    library?.slug,
-    library?.files?.length,
-    hasFailedFiles,
-    isReadyForChat,
-    isSyncing
-  ])
+  }, [library?.slug, items.length, hasFailedItems, isReadyForChat, isSyncing])
 
   if (!library) {
-    return (
-      <div className="placeholder-view">
-        <p>Create a database and add files. Heimgeist will raw-index them automatically, and you can opt specific files into enrichment.</p>
-      </div>
-    )
+    return <div className="placeholder-view"><p>Create a database, then add files, your own texts, or websites.</p></div>
   }
 
   return (
@@ -266,64 +308,108 @@ export default function LibraryManager({
       <div className="library-panel-scroll">
         {errorMessage && <div className="form-error">{errorMessage}</div>}
 
-        <div className="library-files">
-          <h2>Files</h2>
-          {library.files?.length ? (
-            <div className="library-file-list">
-              {library.files.map(file => {
-                const sync = fileSyncMeta(file)
-                return (
-                  <div key={file.sha256 || file.rel} className="library-file-row">
-                    <div className="library-file-meta">
-                      <div className="library-file-name">{file.name || file.path}</div>
-                      <div className="library-file-path">{file.path}</div>
-                      <div className={`library-file-mode ${file.enrich_enabled ? 'enabled' : ''}`}>
-                        {file.enrich_enabled ? 'Enrichment on' : 'Raw only'}
-                      </div>
-                      <div className="library-file-sync">
-                        <div className="library-file-sync-row">
-                          <span className={`library-file-sync-label ${sync.status}`}>{sync.label}</span>
-                          <span className="library-file-sync-detail">{sync.detail}</span>
-                        </div>
-                        <div
-                          className={`library-file-progress ${sync.status}`}
-                          role="progressbar"
-                          aria-valuemin="0"
-                          aria-valuemax="100"
-                          aria-valuenow={Math.round(sync.progress)}
-                          aria-label={`${file.name || file.path} sync progress`}
-                        >
-                          <div
-                            className="library-file-progress-bar"
-                            style={{ width: `${sync.progress}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="library-file-actions">
-                      <button
-                        className="button ghost"
-                        disabled={busy || isSyncing}
-                        onClick={() => updateFileEnrichment(file.rel, !file.enrich_enabled)}
-                      >
-                        {file.enrich_enabled ? 'Use Raw Only' : 'Enable Enrich'}
-                      </button>
-                      <button className="button ghost" onClick={() => desktopApi.openPath(file.path)}>Open</button>
-                      <button className="button ghost" disabled={busy || isSyncing} onClick={() => removeFile(file.rel)}>Remove</button>
+        {formMode === 'text' && (
+          <form className="library-inline-form library-content-form" onSubmit={submitText}>
+            <div className="library-form-header">
+              <strong>{editingItemId ? 'Edit text' : 'Add text'}</strong>
+              <button type="button" className="button ghost" onClick={closeForm}>Cancel</button>
+            </div>
+            <label>
+              Title
+              <input value={textTitle} onChange={event => setTextTitle(event.target.value)} autoFocus required />
+            </label>
+            <label>
+              Text
+              <textarea value={textContent} onChange={event => setTextContent(event.target.value)} rows={12} required />
+            </label>
+            <div className="library-form-actions">
+              <button className="button" type="submit" disabled={busy}>{editingItemId ? 'Save Changes' : 'Add Text'}</button>
+            </div>
+          </form>
+        )}
+
+        {formMode === 'website' && (
+          <form className="library-inline-form library-content-form" onSubmit={submitWebsite}>
+            <div className="library-form-header">
+              <strong>Add website</strong>
+              <button type="button" className="button ghost" onClick={closeForm}>Cancel</button>
+            </div>
+            <label>
+              Website URL
+              <input type="url" value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)} placeholder="https://example.com/article" autoFocus required />
+            </label>
+            <label>
+              Custom title <span className="muted-copy">(optional)</span>
+              <input value={websiteTitle} onChange={event => setWebsiteTitle(event.target.value)} />
+            </label>
+            <p className="muted-copy">Heimgeist saves a local text snapshot of this page. It will not crawl linked pages.</p>
+            <div className="library-form-actions">
+              <button className="button" type="submit" disabled={busy}>{busy ? 'Fetching…' : 'Save Website'}</button>
+            </div>
+          </form>
+        )}
+
+        <div className="library-content-heading">
+          <div>
+            <h2>Contents</h2>
+            <p className="muted-copy">Files, texts, and website snapshots are searched together when this database is selected.</p>
+          </div>
+          <input
+            className="library-search"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+            placeholder="Search contents"
+            aria-label="Search database contents"
+          />
+        </div>
+
+        {filteredItems.length ? (
+          <div className="library-content-grid">
+            {filteredItems.map(item => {
+              const sync = itemSyncMeta(item)
+              const label = kindLabel(item)
+              const source = item.kind === 'website' ? item.url : item.kind === 'text' ? 'Written in Heimgeist' : item.path
+              return (
+                <article key={item.item_id || item.sha256 || item.rel} className={`library-content-card kind-${item.kind || 'file'}`}>
+                  <div className="library-content-card-header">
+                    <span className="library-kind-badge">{label}</span>
+                    <span className={`library-file-sync-label ${sync.status}`}>{sync.label}</span>
+                  </div>
+                  <div className="library-file-name">{item.title || item.name || item.path}</div>
+                  <div className="library-file-path">{source}</div>
+                  <div className={`library-file-mode ${item.enrich_enabled ? 'enabled' : ''}`}>
+                    {item.enrich_enabled ? 'Enrichment on' : 'Raw only'}
+                  </div>
+                  <div className="library-file-sync">
+                    <div className="library-file-sync-detail">{sync.detail}</div>
+                    <div className={`library-file-progress ${sync.status}`} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(sync.progress)}>
+                      <div className="library-file-progress-bar" style={{ width: `${sync.progress}%` }} />
                     </div>
                   </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="muted-copy">No files registered yet.</p>
-          )}
-        </div>
+                  <div className="library-file-actions">
+                    {item.kind === 'text' && <button className="button ghost" disabled={busy} onClick={() => editText(item)}>Edit</button>}
+                    {item.kind === 'website' && <button className="button ghost" onClick={() => desktopApi.openExternalLink(item.url)}>Open</button>}
+                    {item.kind === 'website' && <button className="button ghost" disabled={busy} onClick={() => refreshWebsite(item)}>Refresh</button>}
+                    {(!item.kind || item.kind === 'file') && <button className="button ghost" onClick={() => desktopApi.openPath(item.path)}>Open</button>}
+                    <button className="button ghost" disabled={busy || isSyncing} onClick={() => updateEnrichment(item, !item.enrich_enabled)}>
+                      {item.enrich_enabled ? 'Use Raw Only' : 'Enable Enrich'}
+                    </button>
+                    <button className="button ghost" disabled={busy || isSyncing} onClick={() => removeItem(item)}>Remove</button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="muted-copy">{items.length ? 'No matching contents.' : 'No content added yet.'}</p>
+        )}
       </div>
 
       <div className="library-footer-actions">
         <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
-        {library.files?.length > 0 && !isSyncing && !isReadyForChat && (
+        <button className="button" disabled={busy} onClick={() => { closeForm(); setFormMode('text') }}>Add Text</button>
+        <button className="button" disabled={busy} onClick={() => { closeForm(); setFormMode('website') }}>Add Website</button>
+        {items.length > 0 && !isSyncing && !isReadyForChat && (
           <button className="button ghost" disabled={busy} onClick={retrySync}>Retry Sync</button>
         )}
       </div>
@@ -331,11 +417,7 @@ export default function LibraryManager({
       {toasts.length > 0 && (
         <div className="library-toast-stack" aria-live="polite">
           {toasts.map(toast => (
-            <div
-              key={toast.id}
-              className={`library-toast ${toast.tone}`}
-              role={toast.tone === 'warning' ? 'alert' : 'status'}
-            >
+            <div key={toast.id} className={`library-toast ${toast.tone}`} role={toast.tone === 'warning' ? 'alert' : 'status'}>
               {toast.message}
             </div>
           ))}

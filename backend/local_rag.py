@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 

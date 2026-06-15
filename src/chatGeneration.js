@@ -9,6 +9,7 @@ import {
   requestGeneratedTitle,
 } from './chatApi'
 import { sanitizeChatTitle } from './chatText'
+import { createWorkflowRun, streamWorkflowEvents } from './workflows/workflowApi'
 
 function messageHasImageAttachments(message) {
   return Array.isArray(message?.attachments) && message.attachments.some(attachmentIsImage)
@@ -51,6 +52,7 @@ export function createChatGenerationHandlers({
   activeSessionId,
   activeSessionIdRef,
   backendApiUrl,
+  attachWorkflowRunToRequest,
   beginCancelableRequest,
   canAttachImages,
   chatSessions,
@@ -58,11 +60,13 @@ export function createChatGenerationHandlers({
   createNewChat,
   finishCancelableRequest,
   getChatLibraryForSession,
+  getChatWorkflowForSession,
   imageAttachmentUnavailableReason,
   input,
   isSending,
   model,
   onMessagesPersisted,
+  onWorkflowRunEvent,
   restoredForRef,
   scrollMessageToTop,
   scrollToBottom,
@@ -338,6 +342,93 @@ export function createChatGenerationHandlers({
 
     const requestController = beginCancelableRequest(targetSessionId)
     try {
+      if (getChatWorkflowForSession) {
+        const selection = getChatWorkflowForSession(targetSessionId) || { mode: 'direct', workflowId: null }
+        const selectedLibrary = getChatLibraryForSession(targetSessionId)
+        const created = await createWorkflowRun(backendApiUrl, {
+          session_id: targetSessionId,
+          message: userMsg.content,
+          model,
+          selection_mode: selection.mode,
+          workflow_id: selection.workflowId || null,
+          library_slug: selectedLibrary?.slug || null,
+          web_search_enabled: selection.mode === 'direct' ? webSearchEnabled : false,
+          searx_url: searxUrl || null,
+          searx_engines: searxEngines || [],
+          attachments: outgoingAttachments,
+          vision_model: visionModel || null,
+          transcription_model: transcriptionModel || null,
+          stream: true,
+        }, requestController.signal)
+        attachWorkflowRunToRequest?.(requestController, created.run_id)
+        const assistantMsgId = `workflow-${created.run_id}`
+        let fullReply = ''
+        let finalOutput = null
+        setChatSessions(prevSessions => prevSessions.map(session =>
+          session.session_id === targetSessionId
+            ? { ...session, messages: [...(session.messages || []), {
+                role: 'assistant', content: '', id: assistantMsgId, sources: [],
+                workflow_id: created.workflow?.id, workflow_run_id: created.run_id,
+              }] }
+            : session
+        ))
+        onWorkflowRunEvent?.(targetSessionId, {
+          type: 'client_run_started',
+          run_id: created.run_id,
+          payload: { workflow: created.workflow },
+          timestamp: new Date().toISOString(),
+        })
+        await streamWorkflowEvents(backendApiUrl, created.run_id, {
+          signal: requestController.signal,
+          onEvent: event => {
+            onWorkflowRunEvent?.(targetSessionId, event)
+            if (event.type === 'model_token') {
+              fullReply += event.payload?.text || ''
+              setAssistantMessageContent(setChatSessions, targetSessionId, assistantMsgId, fullReply)
+            } else if (event.type === 'run_completed') {
+              finalOutput = event.payload?.output || null
+              const content = finalOutput?.content || fullReply
+              setChatSessions(prevSessions => prevSessions.map(session => {
+                if (session.session_id !== targetSessionId) return session
+                return {
+                  ...session,
+                  messages: (session.messages || []).map(message => message.id === assistantMsgId
+                    ? { ...message, content, sources: finalOutput?.sources || message.sources || [] }
+                    : message),
+                }
+              }))
+            } else if (event.type === 'run_failed') {
+              const message = event.payload?.message || 'Workflow execution failed.'
+              setAssistantMessageContent(setChatSessions, targetSessionId, assistantMsgId, `Error: ${message}`)
+            } else if (event.type === 'run_cancelled') {
+              setAssistantMessageContent(setChatSessions, targetSessionId, assistantMsgId, fullReply, { removeIfEmpty: true })
+            }
+          },
+        })
+        if (onMessagesPersisted) await onMessagesPersisted(targetSessionId)
+        if (activeSessionIdRef.current !== targetSessionId) {
+          setUnreadSessions(prev => [...new Set([...prev, targetSessionId])])
+        } else if (!userScrolledUpRef.current[targetSessionId]) {
+          requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId))
+        }
+        if (isNewChat) {
+          requestGeneratedTitle({
+            apiBase: backendApiUrl,
+            message: buildAttachmentTitleSeed(userMsg.content, outgoingAttachments),
+            model,
+            sessionId: targetSessionId,
+          })
+            .then(r => r.json())
+            .then(data => {
+              const sanitizedTitle = sanitizeChatTitle(data.title)
+              setChatSessions(prevSessions => prevSessions.map(session =>
+                session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session
+              ))
+            })
+        }
+        return
+      }
+
       let historyForSearch = []
       if (userMsg.content) try {
         const existing = (chatSessions.find(s => s.session_id === targetSessionId)?.messages) || []

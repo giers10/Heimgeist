@@ -380,13 +380,13 @@ def library_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     prepare_signature = _prepare_signature(files)
     enrichment_enabled_files = sum(1 for entry in files if _file_enrich_enabled(entry))
     has_corpus = bool(corpus_signature) and pipeline.get("corpus_signature") == corpus_signature and paths["corpus"].exists()
-    is_enriched = (
-        enrichment_enabled_files > 0
-        and bool(prepare_signature)
+    has_metadata = (
+        bool(prepare_signature)
         and pipeline.get("enriched_signature") == prepare_signature
         and paths["enhanced"].exists()
         and paths["shadow_partial"].exists()
     )
+    is_enriched = has_metadata and enrichment_enabled_files > 0
     is_indexed = (
         bool(prepare_signature)
         and pipeline.get("indexed_signature") == prepare_signature
@@ -398,6 +398,7 @@ def library_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     stages = {
         "has_files": len(files) > 0,
         "has_corpus": has_corpus,
+        "has_metadata": has_metadata,
         "is_enriched": is_enriched,
         "is_indexed": is_indexed,
         "is_ready_for_chat": is_indexed,
@@ -406,8 +407,8 @@ def library_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     }
     artifacts = {
         "corpus_records": _line_count(paths["corpus"]) if has_corpus else 0,
-        "enhanced_records": _line_count(paths["enhanced"]) if is_enriched else 0,
-        "shadow_records": _line_count(paths["shadow_partial"]) if is_enriched else 0,
+        "enhanced_records": _line_count(paths["enhanced"]) if has_metadata else 0,
+        "shadow_records": _line_count(paths["shadow_partial"]) if has_metadata else 0,
     }
     return {
         **data,
@@ -1322,6 +1323,7 @@ async def register_paths(slug: str, req: RegisterPathsRequest):
             "added_at": now_iso(),
             "sync_status": "pending",
             "enrich_enabled": False,
+            "metadata": {"status": "pending"},
         }
         data.setdefault("files", []).append(entry)
         added.append(entry)
@@ -1390,6 +1392,7 @@ async def create_library_text(slug: str, req: CreateTextRequest):
         "updated_at": now_iso(),
         "sync_status": "pending",
         "enrich_enabled": False,
+        "metadata": {"status": "pending"},
         "managed": True,
     }
     data.setdefault("files", []).append(entry)
@@ -1472,6 +1475,7 @@ async def create_library_website(slug: str, req: CreateWebsiteRequest):
         "updated_at": now_iso(),
         "sync_status": "pending",
         "enrich_enabled": False,
+        "metadata": {"status": "pending"},
         "managed": True,
     }
     data.setdefault("files", []).append(entry)

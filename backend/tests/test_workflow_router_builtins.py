@@ -66,6 +66,23 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["inputs"]["web_search_query"], "Iran news today")
             mocked.assert_awaited()
 
+        direct = db.query(WorkflowDefinition).filter_by(slug="input-output").one()
+        with patch(
+            "backend.agent.router.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({
+                "workflow_id": direct.id,
+                "confidence": 0.95,
+                "reason": "bad router choice",
+                "inputs": {},
+            }))),
+        ):
+            result = await select_workflow(
+                db, message="what happened in Iran today", recent_messages=[], attachments=[],
+                library_slug=None, router_model=None, chat_model="model", web_search_enabled=True,
+            )
+            self.assertEqual(result["workflow_slug"], "web-answer")
+            self.assertEqual(result["inputs"]["web_search_query"], "what happened in Iran today")
+
         with patch(
             "backend.agent.router.chat_typed",
             new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({

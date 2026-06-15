@@ -440,28 +440,32 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
         {formMode === 'website' && (
           <form className="library-inline-form library-content-form" onSubmit={submitWebsite}>
             <div className="library-form-header">
-              <strong>Add website</strong>
+              <strong>Add website or video</strong>
               <button type="button" className="button ghost" onClick={closeForm}>Cancel</button>
             </div>
+            <p className="muted-copy library-video-help">
+              Supported video links are detected automatically, downloaded temporarily, transcribed with Whisper, and summarized locally. Video and audio files are discarded afterwards.
+            </p>
             <label>
-              Website URL
-              <input type="url" value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)} placeholder="https://example.com/article" autoFocus required />
+              Website or video URL
+              <input type="url" value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)} placeholder="https://example.com/article-or-video" autoFocus required />
             </label>
             <label>
               Custom title <span className="muted-copy">(optional)</span>
               <input value={websiteTitle} onChange={event => setWebsiteTitle(event.target.value)} />
             </label>
-            <p className="muted-copy">Heimgeist saves a local text snapshot of this page. It will not crawl linked pages.</p>
+            <p className="muted-copy">Normal webpages are saved as one local text snapshot. Heimgeist will not crawl linked pages.</p>
             <div className="library-form-actions">
-              <button className="button" type="submit" disabled={busy}>{busy ? 'Fetching…' : 'Save Website'}</button>
+              <button className="button" type="submit" disabled={busy}>{websiteProcessing ? 'Processing content...' : 'Add Content'}</button>
             </div>
+            {websiteProcessing && <div className="library-video-processing">Video processing can take several minutes. Heimgeist is downloading audio, transcribing it, and generating a local summary.</div>}
           </form>
         )}
 
         <div className="library-content-heading">
           <div>
             <h2>Contents</h2>
-            <p className="muted-copy">Files, texts, and website snapshots are searched together when this database is selected.</p>
+            <p className="muted-copy">Files, texts, website snapshots, videos, and saved chat messages are searched together when this database is selected.</p>
           </div>
           <input
             className="library-search"
@@ -479,6 +483,8 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
               const label = kindLabel(item)
               const source = item.kind === 'website'
                 ? item.url
+                : item.kind === 'video'
+                  ? `${item.channel ? `${item.channel} · ` : ''}${item.duration_text || item.url}`
                 : item.kind === 'text'
                   ? 'Written in Heimgeist'
                   : item.kind === 'chat_message'
@@ -503,6 +509,18 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
                   <div className={`library-file-mode ${item.enrich_enabled ? 'enabled' : ''}`}>
                     {item.enrich_enabled ? 'Deep enrichment' : 'Standard'}
                   </div>
+                  {item.kind === 'video' && item.video_summary && (
+                    <div className="library-video-summary">
+                      <div className="library-metadata-label">Video summary</div>
+                      <p>{item.video_summary}</p>
+                      <div className="library-metadata-details">
+                        {item.transcription_model && <span>Whisper: {item.transcription_model}</span>}
+                        {item.transcription_workers && <span>Workers: {item.transcription_workers}</span>}
+                        {item.summary_model && <span>Summary: {item.summary_model}</span>}
+                        {item.yt_dlp_version && <span>yt-dlp: {item.yt_dlp_version}</span>}
+                      </div>
+                    </div>
+                  )}
                   <div className={`library-item-metadata status-${metadata.status || 'missing'}`}>
                     {metadata.headline && <h3>{metadata.headline}</h3>}
                     {metadata.summary ? (
@@ -555,7 +573,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
                   {isExpanded && (
                     <div className="library-content-preview">
                       <div className="library-content-preview-label">
-                        {item.kind === 'website' ? 'Saved website text' : item.kind === 'chat_message' ? 'Stored chat knowledge' : item.kind === 'text' ? 'Stored text' : 'Extracted text used by RAG'}
+                        {item.kind === 'website' ? 'Saved website text' : item.kind === 'video' ? 'Video summary and transcript' : item.kind === 'chat_message' ? 'Stored chat knowledge' : item.kind === 'text' ? 'Stored text' : 'Extracted text used by RAG'}
                       </div>
                       {preview?.loading && <div className="muted-copy">Loading content…</div>}
                       {preview?.error && <div className="form-error">{preview.error}</div>}
@@ -575,6 +593,8 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
                     {item.kind === 'chat_message' && <button className="button ghost" onClick={() => onOpenChatMessage?.(item)}>Open Chat</button>}
                     {item.kind === 'website' && <button className="button ghost" onClick={() => desktopApi.openExternalLink(item.url)}>Open</button>}
                     {item.kind === 'website' && <button className="button ghost" disabled={busy} onClick={() => refreshWebsite(item)}>Refresh</button>}
+                    {item.kind === 'video' && <button className="button ghost" onClick={() => desktopApi.openExternalLink(item.url)}>Open</button>}
+                    {item.kind === 'video' && <button className="button ghost" disabled={busy} onClick={() => refreshVideo(item)}>Reprocess</button>}
                     {(!item.kind || item.kind === 'file') && <button className="button ghost" onClick={() => desktopApi.openPath(item.path)}>Open</button>}
                     <button className="button ghost" disabled={busy || isSyncing} onClick={() => updateEnrichment(item, !item.enrich_enabled)}>
                       {item.enrich_enabled ? 'Use Standard' : 'Enable Deep'}

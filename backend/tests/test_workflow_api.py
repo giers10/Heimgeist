@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+from datetime import datetime
 import json
 import tempfile
 import unittest
@@ -132,3 +133,30 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run_values["web_search_query"], "Iran news today")
         self.assertEqual(run_values["web_search_queries"], ["Iran news today", "Iran latest news"])
         db.close()
+
+    async def test_interrupted_run_event_stream_emits_terminal_event(self):
+        db = self.Session()
+        workflow = db.query(WorkflowDefinition).filter_by(slug="research").one()
+        run = WorkflowRun(
+            workflow_id=workflow.id,
+            workflow_revision_id=workflow.current_revision_id,
+            status="interrupted",
+            selection_mode="automatic",
+            inputs_json=json.dumps({"input": {"prompt": "x"}, "run": {}}),
+            error_json=json.dumps({"message": "Backend restarted before the workflow completed."}),
+            finished_at=datetime.utcnow(),
+        )
+        db.add(run)
+        db.commit()
+        run_id = run.id
+        db.close()
+
+        with patch.object(api, "SessionLocal", self.Session):
+            response = api.get_workflow_events(run_id)
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk.encode("utf-8") if isinstance(chunk, str) else chunk
+
+        events = [json.loads(line) for line in body.decode("utf-8").splitlines() if line.strip()]
+        interrupted = next(event for event in events if event["type"] == "run_interrupted")
+        self.assertEqual(interrupted["payload"]["message"], "Backend restarted before the workflow completed.")

@@ -1,0 +1,491 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime
+import hashlib
+import json
+import re
+import uuid
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
+from .. import models as chat_models
+from ..database import Base, SessionLocal, engine
+from .events import EventWriter
+from .models import (
+    WorkflowConfirmation,
+    WorkflowDefinition,
+    WorkflowEvent,
+    WorkflowNodeRun,
+    WorkflowRevision,
+    WorkflowRun,
+)
+from .registry import NativeToolProvider
+from .router import select_workflow
+from .runtime import WorkflowRuntime
+from .schemas import (
+    ConfirmationResponseRequest,
+    RouterSelectRequest,
+    WorkflowCreateRequest,
+    WorkflowRevisionRequest,
+    WorkflowRunRequest,
+    WorkflowUpdateRequest,
+    WorkflowValidateRequest,
+)
+from .tools import register_native_tools
+from .validation import validate_workflow_graph
+from .workflows import seed_builtin_workflows
+
+
+router = APIRouter(tags=["agent-workflows"])
+registry = NativeToolProvider()
+register_native_tools(registry)
+runtime = WorkflowRuntime(registry, SessionLocal)
+
+
+def _json(value: Optional[str], fallback: Any) -> Any:
+    try:
+        return json.loads(value) if value else fallback
+    except Exception:
+        return fallback
+
+
+def _checksum(graph: Dict[str, Any]) -> str:
+    canonical = json.dumps(graph, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+    return slug[:90] or f"workflow-{uuid.uuid4().hex[:8]}"
+
+
+def initialize_agent_system() -> None:
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        db.query(WorkflowRun).filter(WorkflowRun.status.in_(["queued", "running", "waiting_confirmation"])).update(
+            {
+                WorkflowRun.status: "interrupted",
+                WorkflowRun.error_json: json.dumps({"message": "Backend restarted before the workflow completed."}),
+                WorkflowRun.finished_at: datetime.utcnow(),
+            },
+            synchronize_session=False,
+        )
+        db.commit()
+        seed_builtin_workflows(db)
+    finally:
+        db.close()
+
+
+def _workflow_payload(workflow: WorkflowDefinition, db: Session, *, include_graph: bool = False) -> Dict[str, Any]:
+    revision = None
+    if workflow.current_revision_id:
+        revision = db.query(WorkflowRevision).filter(WorkflowRevision.id == workflow.current_revision_id).first()
+    payload = {
+        "id": workflow.id,
+        "slug": workflow.slug,
+        "name": workflow.name,
+        "description": workflow.description,
+        "current_revision_id": workflow.current_revision_id,
+        "current_version": revision.version if revision else None,
+        "built_in": workflow.built_in,
+        "enabled": workflow.enabled,
+        "routing_description": workflow.routing_description,
+        "routing_examples": _json(workflow.routing_examples_json, []),
+        "estimated_cost_class": workflow.estimated_cost_class,
+        "required_capabilities": _json(workflow.required_capabilities_json, []),
+        "created_at": workflow.created_at.isoformat() if workflow.created_at else None,
+        "updated_at": workflow.updated_at.isoformat() if workflow.updated_at else None,
+    }
+    if include_graph:
+        payload["graph"] = _json(revision.graph_json if revision else None, {})
+        payload["revisions"] = [
+            {
+                "id": item.id, "version": item.version, "created_at": item.created_at.isoformat(),
+                "created_by": item.created_by, "trusted": item.trusted, "checksum": item.checksum,
+            }
+            for item in db.query(WorkflowRevision).filter(WorkflowRevision.workflow_id == workflow.id).order_by(WorkflowRevision.version.desc()).all()
+        ]
+    return payload
+
+
+def _find_workflow(db: Session, workflow_id: str) -> WorkflowDefinition:
+    workflow = db.query(WorkflowDefinition).filter(
+        (WorkflowDefinition.id == workflow_id) | (WorkflowDefinition.slug == workflow_id)
+    ).first()
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="Workflow not found.")
+    return workflow
+
+
+def _run_payload(run: WorkflowRun, db: Session) -> Dict[str, Any]:
+    node_runs = db.query(WorkflowNodeRun).filter(WorkflowNodeRun.workflow_run_id == run.id).order_by(WorkflowNodeRun.started_at.asc()).all()
+    confirmations = db.query(WorkflowConfirmation).filter(WorkflowConfirmation.workflow_run_id == run.id).order_by(WorkflowConfirmation.created_at.asc()).all()
+    return {
+        "id": run.id, "workflow_id": run.workflow_id, "workflow_revision_id": run.workflow_revision_id,
+        "session_id": run.session_id, "user_message_id": run.user_message_id, "status": run.status,
+        "selection_mode": run.selection_mode, "inputs": _json(run.inputs_json, {}), "outputs": _json(run.outputs_json, None),
+        "error": _json(run.error_json, None), "metrics": _json(run.metrics_json, {}),
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "cancellation_requested": run.cancellation_requested,
+        "node_runs": [{
+            "id": item.id, "node_id": item.node_id, "attempt": item.attempt, "status": item.status,
+            "resolved_inputs": _json(item.resolved_inputs_json, None), "outputs": _json(item.outputs_json, None),
+            "error": _json(item.error_json, None), "metrics": _json(item.metrics_json, {}),
+            "started_at": item.started_at.isoformat() if item.started_at else None,
+            "finished_at": item.finished_at.isoformat() if item.finished_at else None,
+        } for item in node_runs],
+        "confirmations": [{
+            "id": item.id, "node_id": item.node_id, "tool_name": item.tool_name, "status": item.status,
+            "request": _json(item.request_json, {}), "response": _json(item.response_json, None),
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None,
+        } for item in confirmations],
+    }
+
+
+@router.get("/tools")
+def list_tools():
+    return {"tools": list(registry.list_tools())}
+
+
+@router.get("/workflows")
+def list_workflows():
+    db = SessionLocal()
+    try:
+        workflows = db.query(WorkflowDefinition).order_by(WorkflowDefinition.built_in.desc(), WorkflowDefinition.name.asc()).all()
+        return {"workflows": [_workflow_payload(item, db) for item in workflows]}
+    finally:
+        db.close()
+
+
+@router.post("/workflows")
+def create_workflow(request: WorkflowCreateRequest):
+    validation = validate_workflow_graph(request.graph, registry)
+    if not validation.valid:
+        raise HTTPException(status_code=422, detail={"message": "Invalid workflow graph.", "errors": [item.model_dump() for item in validation.errors]})
+    db = SessionLocal()
+    try:
+        slug = _slugify(request.slug or request.name)
+        if db.query(WorkflowDefinition).filter(WorkflowDefinition.slug == slug).first():
+            slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+        workflow = WorkflowDefinition(
+            slug=slug, name=request.name.strip() or "Untitled Workflow", description=request.description,
+            built_in=False, enabled=request.enabled, routing_description=request.routing_description,
+            routing_examples_json=json.dumps(request.routing_examples),
+        )
+        db.add(workflow)
+        db.flush()
+        revision = WorkflowRevision(
+            workflow_id=workflow.id, version=1, graph_json=json.dumps(request.graph, ensure_ascii=False),
+            created_by="user", trusted=False, checksum=_checksum(request.graph),
+        )
+        db.add(revision)
+        db.flush()
+        workflow.current_revision_id = revision.id
+        db.commit()
+        db.refresh(workflow)
+        return _workflow_payload(workflow, db, include_graph=True)
+    finally:
+        db.close()
+
+
+@router.get("/workflows/{workflow_id}")
+def get_workflow(workflow_id: str):
+    db = SessionLocal()
+    try:
+        return _workflow_payload(_find_workflow(db, workflow_id), db, include_graph=True)
+    finally:
+        db.close()
+
+
+@router.post("/workflows/{workflow_id}/duplicate")
+def duplicate_workflow(workflow_id: str):
+    db = SessionLocal()
+    try:
+        source = _find_workflow(db, workflow_id)
+        revision = db.query(WorkflowRevision).filter(WorkflowRevision.id == source.current_revision_id).first()
+        workflow = WorkflowDefinition(
+            slug=f"{_slugify(source.slug)}-copy-{uuid.uuid4().hex[:6]}", name=f"{source.name} Copy",
+            description=source.description, built_in=False, enabled=True,
+            routing_description=source.routing_description, routing_examples_json=source.routing_examples_json,
+            estimated_cost_class=source.estimated_cost_class, required_capabilities_json=source.required_capabilities_json,
+        )
+        db.add(workflow)
+        db.flush()
+        copy_revision = WorkflowRevision(
+            workflow_id=workflow.id, version=1, graph_json=revision.graph_json, created_by="user",
+            trusted=False, checksum=revision.checksum,
+        )
+        db.add(copy_revision)
+        db.flush()
+        workflow.current_revision_id = copy_revision.id
+        db.commit()
+        return _workflow_payload(workflow, db, include_graph=True)
+    finally:
+        db.close()
+
+
+@router.put("/workflows/{workflow_id}")
+def update_workflow(workflow_id: str, request: WorkflowUpdateRequest):
+    db = SessionLocal()
+    try:
+        workflow = _find_workflow(db, workflow_id)
+        updates = request.model_dump(exclude_unset=True)
+        if "name" in updates:
+            workflow.name = updates["name"].strip() or workflow.name
+        if "description" in updates: workflow.description = updates["description"]
+        if "routing_description" in updates: workflow.routing_description = updates["routing_description"]
+        if "routing_examples" in updates: workflow.routing_examples_json = json.dumps(updates["routing_examples"])
+        if "enabled" in updates: workflow.enabled = bool(updates["enabled"])
+        workflow.updated_at = datetime.utcnow()
+        db.commit()
+        return _workflow_payload(workflow, db, include_graph=True)
+    finally:
+        db.close()
+
+
+@router.post("/workflows/{workflow_id}/revisions")
+def create_revision(workflow_id: str, request: WorkflowRevisionRequest):
+    validation = validate_workflow_graph(request.graph, registry)
+    if not validation.valid:
+        raise HTTPException(status_code=422, detail={"message": "Invalid workflow graph.", "errors": [item.model_dump() for item in validation.errors]})
+    db = SessionLocal()
+    try:
+        workflow = _find_workflow(db, workflow_id)
+        if workflow.built_in:
+            raise HTTPException(status_code=409, detail="Built-in workflows are read-only. Duplicate the workflow first.")
+        latest = db.query(WorkflowRevision).filter(WorkflowRevision.workflow_id == workflow.id).order_by(WorkflowRevision.version.desc()).first()
+        revision = WorkflowRevision(
+            workflow_id=workflow.id, version=(latest.version + 1) if latest else 1,
+            graph_json=json.dumps(request.graph, ensure_ascii=False), created_by=request.created_by,
+            trusted=False, checksum=_checksum(request.graph),
+        )
+        db.add(revision)
+        db.flush()
+        workflow.current_revision_id = revision.id
+        workflow.updated_at = datetime.utcnow()
+        db.commit()
+        return _workflow_payload(workflow, db, include_graph=True)
+    finally:
+        db.close()
+
+
+@router.post("/workflows/validate")
+def validate_workflow(request: WorkflowValidateRequest):
+    return validate_workflow_graph(request.graph, registry).model_dump()
+
+
+@router.delete("/workflows/{workflow_id}")
+def delete_workflow(workflow_id: str):
+    db = SessionLocal()
+    try:
+        workflow = _find_workflow(db, workflow_id)
+        if workflow.built_in:
+            raise HTTPException(status_code=409, detail="Built-in workflows cannot be deleted.")
+        db.delete(workflow)
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+async def _select_for_run(db: Session, request: WorkflowRunRequest) -> tuple[WorkflowDefinition, Optional[Dict[str, Any]]]:
+    router_result = None
+    if request.selection_mode == "automatic":
+        recent_messages = []
+        if request.session_id:
+            session = db.query(chat_models.ChatSession).filter(chat_models.ChatSession.session_id == request.session_id).first()
+            if session:
+                rows = db.query(chat_models.ChatMessage).filter(chat_models.ChatMessage.session_pk == session.id).order_by(chat_models.ChatMessage.id.desc()).limit(4).all()
+                recent_messages = [{"role": row.role, "content": row.content} for row in reversed(rows)]
+        router_result = await select_workflow(
+            db, message=request.message, recent_messages=recent_messages, attachments=request.attachments,
+            library_slug=request.library_slug, router_model=request.router_model, chat_model=request.model,
+        )
+        workflow = _find_workflow(db, router_result["workflow_id"])
+    elif request.selection_mode == "explicit":
+        if not request.workflow_id:
+            raise HTTPException(status_code=422, detail="Explicit workflow mode requires workflow_id.")
+        workflow = _find_workflow(db, request.workflow_id)
+        if not workflow.enabled:
+            raise HTTPException(status_code=409, detail="The selected workflow is disabled.")
+    else:
+        workflow = _find_workflow(db, "input-output")
+    return workflow, router_result
+
+
+@router.post("/workflow-runs")
+async def create_workflow_run(request: WorkflowRunRequest):
+    db = SessionLocal()
+    try:
+        workflow, router_result = await _select_for_run(db, request)
+        revision_id = request.workflow_revision_id or workflow.current_revision_id
+        if request.workflow_revision_id and request.workflow_revision_id != workflow.current_revision_id:
+            raise HTTPException(status_code=409, detail="The requested workflow revision is stale.")
+        revision = db.query(WorkflowRevision).filter(WorkflowRevision.id == revision_id).first()
+        if revision is None:
+            raise HTTPException(status_code=409, detail="The selected workflow has no current revision.")
+        graph = _json(revision.graph_json, {})
+        validation = validate_workflow_graph(graph, registry)
+        if not validation.valid:
+            raise HTTPException(status_code=422, detail={"message": "Invalid workflow graph.", "errors": [item.model_dump() for item in validation.errors]})
+
+        session = None
+        user_message = None
+        if request.session_id:
+            session = db.query(chat_models.ChatSession).filter(chat_models.ChatSession.session_id == request.session_id).first()
+            if session is None:
+                session = chat_models.ChatSession(session_id=request.session_id)
+                db.add(session)
+                db.flush()
+            from .. import main as main_module
+            attachments = [main_module._normalize_chat_attachment_or_raise(item, include_text=True) for item in request.attachments]
+            user_message = chat_models.ChatMessage(
+                session_pk=session.id, role="user", content=request.message,
+                attachments_json=json.dumps(attachments, ensure_ascii=False),
+            )
+            db.add(user_message)
+            db.flush()
+
+        messages = []
+        if session:
+            rows = db.query(chat_models.ChatMessage).filter(chat_models.ChatMessage.session_pk == session.id).order_by(chat_models.ChatMessage.id.asc()).all()[-20:]
+            messages = [{"role": row.role, "content": row.content} for row in rows]
+        else:
+            messages = [{"role": "user", "content": request.message}]
+        sample_inputs = dict(request.sample_inputs)
+        sample_inputs.setdefault("prompt", request.message)
+        sample_inputs.setdefault("session_id", request.session_id)
+        run_values = {
+            "session_id": request.session_id,
+            "chat_model": request.model,
+            "router_model": request.router_model or request.model,
+            "vision_model": request.vision_model,
+            "transcription_model": request.transcription_model,
+            "library_slug": request.library_slug,
+            "searx_url": request.searx_url,
+            "searx_engines": request.searx_engines,
+            "messages": messages,
+            "attachments": request.attachments,
+            "generation_options": request.generation_options,
+            "context_blocks": [],
+            "manual_library_enabled": bool(request.library_slug),
+            "web_search_enabled": request.web_search_enabled,
+            "show_thinking": request.show_thinking,
+            "target_message_id": sample_inputs.get("target_message_id") or sample_inputs.get("message_id"),
+            "target_url": sample_inputs.get("target_url") or sample_inputs.get("url"),
+        }
+        run = WorkflowRun(
+            workflow_id=workflow.id, workflow_revision_id=revision.id, session_id=request.session_id,
+            user_message_id=user_message.message_id if user_message else None, selection_mode=request.selection_mode,
+            inputs_json=json.dumps({"input": sample_inputs, "run": run_values, "explicit_user_action": request.explicit_user_action}, ensure_ascii=False),
+        )
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+        run_id = run.id
+        workflow_payload = {"id": workflow.id, "slug": workflow.slug, "name": workflow.name, "revision_id": revision.id}
+    finally:
+        db.close()
+
+    writer = EventWriter(run_id, workflow_payload["id"], SessionLocal)
+    if router_result:
+        await writer.emit("router_completed", router_result)
+    await writer.emit("workflow_selected", workflow_payload)
+    runtime.start(run_id)
+    return {"run_id": run_id, "status": "queued", "workflow": workflow_payload, "router": router_result}
+
+
+@router.get("/workflow-runs/{run_id}")
+def get_workflow_run(run_id: str):
+    db = SessionLocal()
+    try:
+        run = db.query(WorkflowRun).filter(WorkflowRun.id == run_id).first()
+        if not run:
+            raise HTTPException(status_code=404, detail="Workflow run not found.")
+        return _run_payload(run, db)
+    finally:
+        db.close()
+
+
+@router.get("/workflow-runs/{run_id}/events")
+def get_workflow_events(run_id: str, after_sequence: int = Query(0, ge=0), follow: bool = True):
+    async def stream():
+        sequence = after_sequence
+        idle_after_terminal = 0
+        while True:
+            db = SessionLocal()
+            try:
+                events = db.query(WorkflowEvent).filter(
+                    WorkflowEvent.workflow_run_id == run_id,
+                    WorkflowEvent.sequence > sequence,
+                ).order_by(WorkflowEvent.sequence.asc()).all()
+                run = db.query(WorkflowRun).filter(WorkflowRun.id == run_id).first()
+                if run is None:
+                    yield json.dumps({"type": "error", "payload": {"message": "Workflow run not found."}}) + "\n"
+                    return
+                for item in events:
+                    sequence = item.sequence
+                    yield json.dumps({
+                        "run_id": item.workflow_run_id, "workflow_id": item.workflow_id, "node_id": item.node_id,
+                        "sequence": item.sequence, "timestamp": item.timestamp.isoformat(), "type": item.event_type,
+                        "payload": _json(item.payload_json, {}),
+                    }, ensure_ascii=False) + "\n"
+                terminal = run.status in {"completed", "failed", "cancelled", "interrupted"}
+            finally:
+                db.close()
+            if not follow:
+                return
+            if terminal:
+                idle_after_terminal += 1
+                if idle_after_terminal >= 2:
+                    return
+            else:
+                idle_after_terminal = 0
+            await asyncio.sleep(0.15)
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
+
+
+@router.post("/workflow-runs/{run_id}/cancel")
+def cancel_workflow_run(run_id: str):
+    if not runtime.cancel(run_id):
+        raise HTTPException(status_code=404, detail="Workflow run not found.")
+    return {"ok": True}
+
+
+@router.post("/workflow-runs/{run_id}/confirmations/{confirmation_id}")
+def respond_to_confirmation(run_id: str, confirmation_id: str, request: ConfirmationResponseRequest):
+    db = SessionLocal()
+    try:
+        confirmation = db.query(WorkflowConfirmation).filter(
+            WorkflowConfirmation.id == confirmation_id,
+            WorkflowConfirmation.workflow_run_id == run_id,
+        ).first()
+        if not confirmation:
+            raise HTTPException(status_code=404, detail="Confirmation request not found.")
+        if confirmation.status != "pending":
+            raise HTTPException(status_code=409, detail="Confirmation has already been resolved.")
+    finally:
+        db.close()
+    if not runtime.resolve_confirmation(confirmation_id, request.approved):
+        raise HTTPException(status_code=409, detail="The workflow is no longer waiting for this confirmation.")
+    return {"ok": True, "approved": request.approved}
+
+
+@router.post("/workflow-router/select")
+async def route_workflow(request: RouterSelectRequest):
+    db = SessionLocal()
+    try:
+        return await select_workflow(
+            db, message=request.message, recent_messages=request.recent_messages[-4:], attachments=request.attachments,
+            library_slug=request.library_slug, router_model=request.model, chat_model=request.chat_model,
+            confidence_threshold=request.confidence_threshold,
+        )
+    finally:
+        db.close()

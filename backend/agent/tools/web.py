@@ -67,6 +67,10 @@ GENERIC_QUERY_TERMS = {
     "for",
     "from",
     "got",
+    "happen",
+    "happened",
+    "happening",
+    "happens",
     "heute",
     "headline",
     "headlines",
@@ -122,6 +126,10 @@ CURRENT_LOOKUP_TERMS = {
     "breaking",
     "current",
     "forecast",
+    "happen",
+    "happened",
+    "happening",
+    "happens",
     "headline",
     "headlines",
     "heute",
@@ -249,10 +257,11 @@ def _fallback_queries(prompt: str) -> List[str]:
     cleaned_prompt = " ".join(str(prompt or "").split()).strip()
     terms = _topic_terms(cleaned_prompt)
     topic = " ".join(terms[:4])
+    tokens = set(_word_tokens(cleaned_prompt))
     queries: List[str] = []
-    if topic and any(token in set(_word_tokens(cleaned_prompt)) for token in {"news", "nachrichten", "headlines"}):
+    if topic and (tokens & CURRENT_LOOKUP_TERMS or tokens & {"news", "nachrichten", "headlines"}):
         queries.extend([f"{topic} news today", f"{topic} latest news", f"{topic} current events"])
-    elif topic and any(token in set(_word_tokens(cleaned_prompt)) for token in {"weather", "forecast"}):
+    elif topic and tokens & {"weather", "forecast"}:
         queries.extend([f"{topic} weather today", f"{topic} current weather", f"{topic} weather forecast"])
     if cleaned_prompt:
         queries.append(cleaned_prompt)
@@ -272,7 +281,9 @@ def _query_is_too_generic(query: str, prompt: str) -> bool:
 def _clean_queries(prompt: str, generated: List[Any]) -> List[str]:
     cleaned: List[str] = []
     seen = set()
-    for query in [*generated, *_fallback_queries(prompt)]:
+    fallback = _fallback_queries(prompt)
+    ordered = [*fallback, *generated] if _is_current_lookup(prompt) else [*generated, *fallback]
+    for query in ordered:
         text = " ".join(str(query or "").split()).strip()
         if not text or _query_is_too_generic(text, prompt):
             continue

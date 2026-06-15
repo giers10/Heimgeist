@@ -1965,12 +1965,14 @@ async function createNewChat() {
                   libraries={libraries}
                   setChatLibraryForSession={setChatLibraryForSession}
                 />
-                <WorkflowSelector
-                  disabled={isSending}
-                  selection={chatWorkflowSelection}
-                  workflows={workflows}
-                  onChange={(nextSelection) => setChatWorkflowForSession(activeSessionId, nextSelection)}
-                />
+                {workflowSelectionMode === 'manual' && (
+                  <WorkflowSelector
+                    disabled={isSending}
+                    selection={chatWorkflowSelection}
+                    workflows={workflows}
+                    onChange={(nextSelection) => setChatWorkflowForSession(activeSessionId, nextSelection)}
+                  />
+                )}
                   <div className="footer-tool-group" ref={attachmentMenuRef}>
                     <button
                       type="button"

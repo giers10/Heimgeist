@@ -173,12 +173,16 @@ class WorkflowRuntime:
                 raise RuntimeError("Workflow exceeded maximum_llm_calls.")
 
         try:
-            if selection_mode == "direct":
+            if (
+                selection_mode == "direct"
+                or run_values.get("compatibility_rag_enabled")
+                or run_values.get("compatibility_web_enabled")
+            ):
                 existing_context_blocks = list(run_values.get("context_blocks") or [])
                 compatibility_context_blocks = await self._prepare_compatibility_context(
                     run_id, workflow_id, run_values, workflow_inputs, writer, cancellation_event, counters, consume_llm_call
                 )
-                run_values["context_blocks"] = [*existing_context_blocks, *compatibility_context_blocks]
+                run_values["context_blocks"] = [*compatibility_context_blocks, *existing_context_blocks]
             await asyncio.wait_for(
                 self._execute_graph(
                     run_id, workflow_id, session_id, selection_mode, graph, values, node_outputs,

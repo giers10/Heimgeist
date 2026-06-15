@@ -484,7 +484,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
               const source = item.kind === 'website'
                 ? item.url
                 : item.kind === 'video'
-                  ? `${item.channel ? `${item.channel} · ` : ''}${item.duration_text || item.url}`
+                  ? `${item.channel ? `${item.channel} · ` : ''}${item.duration_text || 'Saved video'}`
                 : item.kind === 'text'
                   ? 'Written in Heimgeist'
                   : item.kind === 'chat_message'
@@ -514,11 +514,19 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
                       <div className="library-metadata-label">Video summary</div>
                       <p>{item.video_summary}</p>
                       <div className="library-metadata-details">
+                        {item.extractor && <span>Provider: {item.extractor}</span>}
+                        {item.video_id && <span>Video ID: {item.video_id}</span>}
+                        {item.upload_date && <span>Uploaded: {item.upload_date}</span>}
                         {item.transcription_model && <span>Whisper: {item.transcription_model}</span>}
                         {item.transcription_workers && <span>Workers: {item.transcription_workers}</span>}
+                        {item.transcription_slices && <span>Audio slices: {item.transcription_slices}</span>}
+                        {item.transcript_chars && <span>Transcript: {Number(item.transcript_chars).toLocaleString()} characters</span>}
                         {item.summary_model && <span>Summary: {item.summary_model}</span>}
                         {item.yt_dlp_version && <span>yt-dlp: {item.yt_dlp_version}</span>}
+                        {item.fetched_at && <span>Processed: {new Date(item.fetched_at).toLocaleString()}</span>}
                       </div>
+                      {item.url && <div className="library-video-source">Source: {item.url}</div>}
+                      {item.thumbnail_url && <button type="button" className="button ghost library-video-thumbnail" onClick={() => desktopApi.openExternalLink(item.thumbnail_url)}>Open thumbnail</button>}
                     </div>
                   )}
                   <div className={`library-item-metadata status-${metadata.status || 'missing'}`}>
@@ -613,7 +621,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
       <div className="library-footer-actions">
         <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
         <button className="button" disabled={busy} onClick={() => { closeForm(); setFormMode('text') }}>Add Text</button>
-        <button className="button" disabled={busy} onClick={() => { closeForm(); setFormMode('website') }}>Add Website</button>
+        <button className="button" disabled={busy} onClick={() => { closeForm(); setFormMode('website') }}>Add Website / Video</button>
         {items.length > 0 && hasMissingMetadata && !isSyncing && isReadyForChat && (
           <button className="button ghost" disabled={busy} onClick={generateMetadata}>Generate Metadata</button>
         )}

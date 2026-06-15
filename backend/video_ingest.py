@@ -351,7 +351,8 @@ async def _summarize(title: str, transcript: str, model_name: str) -> str:
         ],
         options={"num_ctx": _choose_num_ctx(prompt)},
     )
-    clean = str(summary or "").strip()
+    clean = re.sub(r"<think>.*?</think>", "", str(summary or ""), flags=re.DOTALL | re.IGNORECASE).strip()
+    clean = re.sub(r"^\s*Summary:\s*", "", clean, flags=re.IGNORECASE).strip()
     if not clean:
         raise RuntimeError("Ollama returned an empty video summary.")
     return clean

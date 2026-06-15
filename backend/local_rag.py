@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -1599,6 +1599,9 @@ async def update_library_text(slug: str, item_id: str, req: UpdateTextRequest):
 @router.post("/libraries/{slug}/websites")
 async def create_library_website(slug: str, req: CreateWebsiteRequest):
     requested_url = str(req.url or "").strip()
+    parsed_url = urlparse(requested_url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        raise HTTPException(status_code=400, detail="Enter a valid HTTP or HTTPS URL.")
     try:
         video_metadata = await asyncio.to_thread(probe_video_url, requested_url)
     except UnsupportedVideoUrl:

@@ -91,7 +91,7 @@ except Exception:
 # Constants & helpers
 # -------------------------
 
-PROMPT_VERSION = "v4.0-standard-deep"
+PROMPT_VERSION = "v4.1-standard-deep"
 
 ENTITY_CANON = {
     "PERSON": "PERSON",
@@ -301,8 +301,7 @@ def ollama_generate_json(
                 return json_loads(m.group(0))
             except Exception:
                 pass
-        # last resort minimal structure
-        return {"headline": "", "summary": raw, "keywords": [], "entities": [], "qa": []}
+        raise ValueError("Ollama returned incomplete or invalid JSON.")
 
 def ollama_generate_text(
     host: str,
@@ -378,6 +377,25 @@ def build_user_main(text: str, summary_lang: str, doc_hint: str, want_qa: int, *
         "- Be terse and informative; no filler.\n\n"
         "TEXT:\n" + text
     )
+
+
+def unwrap_enrichment_response(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("Enrichment response is not a JSON object.")
+    nested = value.get("summary")
+    if not value.get("headline") and isinstance(nested, str) and nested.lstrip().startswith("{"):
+        try:
+            decoded = json_loads(nested)
+        except Exception as exc:
+            raise ValueError("Enrichment response contains truncated nested JSON.") from exc
+        if isinstance(decoded, dict):
+            value = decoded
+    if not isinstance(value.get("summary"), str) or not str(value.get("summary") or "").strip():
+        raise ValueError("Enrichment response is missing a summary.")
+    for field in ("keywords", "entities", "qa"):
+        if field in value and not isinstance(value[field], list):
+            raise ValueError(f"Enrichment response field '{field}' must be a list.")
+    return value
 
 def build_user_qa_topup(text: str, summary_lang: str, need: int) -> str:
     need = max(1, min(3, int(need)))
@@ -786,7 +804,7 @@ def enrich_one(
         "temperature": 0.2,
         "repeat_penalty": 1.1,
         "top_p": 0.9,
-        "num_predict": 360 if include_qa else 240,
+        "num_predict": 1000 if include_qa else 700,
     }
 
     with sem:
@@ -795,33 +813,31 @@ def enrich_one(
             try:
                 out = ollama_generate_json(args.ollama, args.model, system, user,
                                            keep_alive=args.keep_alive, timeout=args.timeout, options=options)
+                out = unwrap_enrichment_response(out)
                 # sanitize + normalize structure
-                if not isinstance(out, dict):
-                    out = {"headline": "", "summary": sanitize_text(str(out)), "keywords": [], "entities": [], "qa": []}
-                else:
-                    for k in ("headline", "summary"):
-                        if k in out and isinstance(out[k], str):
-                            out[k] = sanitize_text(out[k])
+                for k in ("headline", "summary"):
+                    if k in out and isinstance(out[k], str):
+                        out[k] = sanitize_text(out[k])
 
-                    # normalize arrays to expected types
-                    out["keywords"] = [sanitize_text(str(x)) for x in out.get("keywords", []) if str(x).strip()]
-                    ents = []
-                    for e in out.get("entities", []) or []:
-                        if isinstance(e, dict):
-                            name = sanitize_text(str(e.get("name", "")))
-                            typ = sanitize_text(str(e.get("type", "OTHER")))
-                            if name:
-                                ents.append({"name": name, "type": typ})
-                    out["entities"] = ents
+                # normalize arrays to expected types
+                out["keywords"] = [sanitize_text(str(x)) for x in out.get("keywords", []) if str(x).strip()]
+                ents = []
+                for e in out.get("entities", []) or []:
+                    if isinstance(e, dict):
+                        name = sanitize_text(str(e.get("name", "")))
+                        typ = sanitize_text(str(e.get("type", "OTHER")))
+                        if name:
+                            ents.append({"name": name, "type": typ})
+                out["entities"] = ents
 
-                    qas = []
-                    for qa in out.get("qa", []) or []:
-                        if isinstance(qa, dict):
-                            q = sanitize_text(str(qa.get("q", "")))
-                            a = sanitize_text(str(qa.get("a", "")))
-                            if q and a:
-                                qas.append({"q": q, "a": a})
-                    out["qa"] = qas
+                qas = []
+                for qa in out.get("qa", []) or []:
+                    if isinstance(qa, dict):
+                        q = sanitize_text(str(qa.get("q", "")))
+                        a = sanitize_text(str(qa.get("a", "")))
+                        if q and a:
+                            qas.append({"q": q, "a": a})
+                out["qa"] = qas
 
                 # post-enforce schema + language
                 fixed = enforce_schema_and_language(

@@ -164,9 +164,9 @@ async def select_workflow(
     recent_messages: List[Dict[str, Any]],
     attachments: List[Dict[str, Any]],
     library_slug: Optional[str],
-    web_search_enabled: bool = False,
     router_model: Optional[str],
     chat_model: Optional[str],
+    web_search_enabled: bool = False,
     confidence_threshold: float = 0.55,
 ) -> Dict[str, Any]:
     fallback = db.query(WorkflowDefinition).filter(WorkflowDefinition.slug == "input-output").first()

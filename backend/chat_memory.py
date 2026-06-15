@@ -90,7 +90,8 @@ def _attachment_summary(raw_value: Any) -> str:
     except Exception:
         return ""
     labels: List[str] = []
-    for item in items if isinstance(items, list) else []:
+    iterable = items if isinstance(items, list) else []
+    for item in iterable:
         if not isinstance(item, dict):
             continue
         name = str(item.get("name") or item.get("source_path") or "").strip()

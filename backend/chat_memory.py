@@ -539,11 +539,13 @@ def _trim(value: Any, limit: int) -> str:
     return text_value[:limit].rstrip() + "..."
 
 
-def _dedupe_hits(candidates: Sequence[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
+def _dedupe_hits(candidates: Sequence[Dict[str, Any]], top_k: int, *, minimum_score: float) -> List[Dict[str, Any]]:
     seen = set()
     ordered = sorted(candidates, key=lambda item: (float(item.get("_score") or 0), int(item.get("assistant_message_row_id") or 0)), reverse=True)
     hits: List[Dict[str, Any]] = []
     for item in ordered:
+        if float(item.get("_score") or 0) < minimum_score:
+            continue
         key = item.get("turn_key") or (item.get("session_id"), item.get("assistant_message_id"))
         if key in seen:
             continue

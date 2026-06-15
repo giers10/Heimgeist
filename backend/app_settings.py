@@ -15,6 +15,7 @@ DEFAULT_RERANK_MODEL = DEFAULT_EMBED_MODEL
 DEFAULT_ENRICHMENT_MODEL = "qwen3:4b"
 DEFAULT_TRANSCRIPTION_MODEL = "base"
 DEFAULT_WORKFLOW_ROUTER_MODEL = ""
+DEFAULT_WORKFLOW_SELECTION_MODE = "auto"
 DEFAULT_AUTO_DEEP_ENRICHMENT = True
 BGE_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_SETTINGS: Dict[str, Any] = {
@@ -27,6 +28,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "enrichmentModel": DEFAULT_ENRICHMENT_MODEL,
     "transcriptionModel": DEFAULT_TRANSCRIPTION_MODEL,
     "workflowRouterModel": DEFAULT_WORKFLOW_ROUTER_MODEL,
+    "workflowSelectionMode": DEFAULT_WORKFLOW_SELECTION_MODE,
     "autoDeepEnrichment": DEFAULT_AUTO_DEEP_ENRICHMENT,
 }
 
@@ -98,6 +100,12 @@ def normalize_model_name(value: Any, fallback: str = "") -> str:
     return trimmed or fallback
 
 
+def normalize_workflow_selection_mode(value: Any) -> str:
+    if isinstance(value, str) and value.strip().lower() == "manual":
+        return "manual"
+    return DEFAULT_WORKFLOW_SELECTION_MODE
+
+
 def normalize_transcription_model(value: Any) -> str:
     return normalize_model_name(value, DEFAULT_TRANSCRIPTION_MODEL)
 
@@ -151,6 +159,7 @@ def load_app_settings() -> Dict[str, Any]:
     settings["visionModel"] = normalize_model_name(settings.get("visionModel"))
     settings["transcriptionModel"] = normalize_transcription_model(settings.get("transcriptionModel"))
     settings["workflowRouterModel"] = normalize_model_name(settings.get("workflowRouterModel"))
+    settings["workflowSelectionMode"] = normalize_workflow_selection_mode(settings.get("workflowSelectionMode"))
     settings["autoDeepEnrichment"] = normalize_boolean(
         settings.get("autoDeepEnrichment"),
         DEFAULT_AUTO_DEEP_ENRICHMENT,

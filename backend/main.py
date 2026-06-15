@@ -936,7 +936,12 @@ async def generate_title(req: schemas.GenerateTitleRequest, db: Session = Depend
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    prompt = f"Generate a very short, concise title (5 words or less) for a chat conversation that begins with this user message: \"{req.message}\". Do not use quotation marks in the title."
+    prompt = (
+        "Generate a short chat title from the concrete subject of the user's first message.\n"
+        "Return only the title text, 2 to 5 words.\n"
+        "Do not use quotation marks. Do not use meta words such as chat, conversation, query, inquiry, request, or question.\n\n"
+        f"First user message: {req.message}"
+    )
     
     try:
         title = await ollama_chat(req.model, [{"role": "user", "content": prompt}])

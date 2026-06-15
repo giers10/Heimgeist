@@ -122,6 +122,25 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(statuses["no"], "skipped")
         db.close()
 
+    async def test_limit_preserves_sources_from_merged_context(self):
+        value = graph(
+            [
+                node("input", "input"),
+                node("a", "tool", {"tool": "test.echo", "arguments": {"text": "a" * 2000, "sources": [{"url": "https://a.example", "snippet": "a" * 500}]}}),
+                node("b", "tool", {"tool": "test.echo", "arguments": {"text": "b" * 2000, "sources": [{"url": "https://b.example", "snippet": "b" * 500}]}}),
+                node("merge", "merge", {"values": [{"$ref": "nodes.a.output"}, {"$ref": "nodes.b.output"}], "deduplicate_by": "url"}),
+                node("limit", "limit", {"value": {"$ref": "nodes.merge.output"}, "maximum_chars": 80}),
+                node("output", "output", {"value": {"content": "done", "sources": {"$ref": "nodes.limit.output.sources"}}}),
+            ],
+            [edge("input", "a"), edge("a", "b"), edge("b", "merge"), edge("merge", "limit"), edge("limit", "output")],
+        )
+        run = await self.execute(self.create_run(value))
+        self.assertEqual(run.status, "completed")
+        db = self.Session()
+        assistant = db.query(ChatMessage).filter(ChatMessage.role == "assistant").one()
+        self.assertEqual([item["url"] for item in json.loads(assistant.sources_json)], ["https://a.example", "https://b.example"])
+        db.close()
+
     async def test_failure_cancellation_and_tool_limit(self):
         failing = graph(
             [node("input", "input"), node("bad", "tool", {"tool": "test.echo", "arguments": {"text": "x", "fail": True}}), node("output", "output", {"value": {"$ref": "nodes.bad.output"}})],

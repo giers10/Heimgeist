@@ -121,13 +121,15 @@ def _fast_path(
         if vision:
             return _workflow_result(vision, confidence=1.0, reason="The request includes attachments.")
 
-    lowered = text.lower()
     mentions_knowledge = bool(_KNOWLEDGE_RE.search(text))
 
     if _REMEMBER_RE.search(text):
         remember = _manifest_by_slug(manifests, "remember-this")
         if remember:
             return _workflow_result(remember, confidence=1.0, reason="The user explicitly asked Heimgeist to remember or save this.")
+
+    if web_search_enabled:
+        return None
 
     if library_slug and mentions_knowledge:
         knowledge = _manifest_by_slug(manifests, "knowledge-answer")

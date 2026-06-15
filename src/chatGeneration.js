@@ -87,6 +87,102 @@ export function createChatGenerationHandlers({
   webSearchEnabled,
   workflowRouterModel,
 }) {
+  async function executeWorkflowRun({
+    sessionId,
+    userMessage,
+    attachments,
+    requestController,
+    selection,
+    workflowRevisionId = null,
+    regenerateIndex = null,
+    isNewChat = false,
+  }) {
+    const selectedLibrary = getChatLibraryForSession(sessionId)
+    const created = await createWorkflowRun(backendApiUrl, {
+      session_id: sessionId,
+      message: userMessage.content,
+      model,
+      selection_mode: selection.mode,
+      workflow_id: selection.workflowId || null,
+      workflow_revision_id: workflowRevisionId,
+      library_slug: selectedLibrary?.slug || null,
+      web_search_enabled: selection.mode === 'direct' ? webSearchEnabled : false,
+      searx_url: searxUrl || null,
+      searx_engines: searxEngines || [],
+      attachments,
+      vision_model: visionModel || null,
+      transcription_model: transcriptionModel || null,
+      router_model: workflowRouterModel || null,
+      regenerate_index: regenerateIndex,
+      stream: true,
+    }, requestController.signal)
+    attachWorkflowRunToRequest?.(requestController, created.run_id)
+    const assistantMsgId = `workflow-${created.run_id}`
+    let fullReply = ''
+    setChatSessions(previous => previous.map(session => session.session_id === sessionId
+      ? { ...session, messages: [...(session.messages || []), {
+          role: 'assistant', content: '', id: assistantMsgId, sources: [],
+          workflow_id: created.workflow?.id,
+          workflow_revision_id: created.workflow?.revision_id,
+          workflow_run_id: created.run_id,
+        }] }
+      : session))
+    onWorkflowRunEvent?.(sessionId, {
+      type: 'client_run_started',
+      run_id: created.run_id,
+      payload: { workflow: created.workflow },
+      timestamp: new Date().toISOString(),
+    })
+    await streamWorkflowEvents(backendApiUrl, created.run_id, {
+      signal: requestController.signal,
+      onEvent: event => {
+        onWorkflowRunEvent?.(sessionId, event)
+        if (event.type === 'model_token') {
+          fullReply += event.payload?.text || ''
+          setAssistantMessageContent(setChatSessions, sessionId, assistantMsgId, fullReply)
+        } else if (event.type === 'run_completed') {
+          const finalOutput = event.payload?.output || null
+          const content = finalOutput?.content || fullReply
+          setChatSessions(previous => previous.map(session => {
+            if (session.session_id !== sessionId) return session
+            return {
+              ...session,
+              messages: (session.messages || []).map(message => message.id === assistantMsgId
+                ? { ...message, content, sources: finalOutput?.sources || message.sources || [] }
+                : message),
+            }
+          }))
+        } else if (event.type === 'run_failed') {
+          const message = event.payload?.message || 'Workflow execution failed.'
+          setAssistantMessageContent(setChatSessions, sessionId, assistantMsgId, `Error: ${message}`)
+        } else if (event.type === 'run_cancelled') {
+          setAssistantMessageContent(setChatSessions, sessionId, assistantMsgId, fullReply, { removeIfEmpty: true })
+        }
+      },
+    })
+    if (onMessagesPersisted) await onMessagesPersisted(sessionId)
+    if (activeSessionIdRef.current !== sessionId) {
+      setUnreadSessions(previous => [...new Set([...previous, sessionId])])
+    } else if (!userScrolledUpRef.current[sessionId]) {
+      requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', sessionId))
+    }
+    if (isNewChat) {
+      requestGeneratedTitle({
+        apiBase: backendApiUrl,
+        message: buildAttachmentTitleSeed(userMessage.content, attachments),
+        model,
+        sessionId,
+      })
+        .then(response => response.json())
+        .then(data => {
+          const sanitizedTitle = sanitizeChatTitle(data.title)
+          setChatSessions(previous => previous.map(session =>
+            session.session_id === sessionId ? { ...session, name: sanitizedTitle } : session
+          ))
+        })
+    }
+  }
+
   async function regenerateFromIndex(index, overrideUserText = null) {
     const sessionId = activeSessionId
     if (isSending || !sessionId || typeof index !== 'number') return
@@ -116,6 +212,42 @@ export function createChatGenerationHandlers({
     }
 
     const requestController = beginCancelableRequest(sessionId)
+
+    if (getChatWorkflowForSession) {
+      try {
+        const currentSelection = getChatWorkflowForSession(sessionId) || { mode: 'direct', workflowId: null }
+        const originalAssistant = msgs.slice(lastUserIdx + 1).find(message => message?.role === 'assistant')
+        const originalWorkflowId = originalAssistant?.workflow_id || null
+        let selection = currentSelection
+        let workflowRevisionId = null
+        if (currentSelection.mode === 'automatic' && originalWorkflowId) {
+          selection = { mode: 'explicit', workflowId: originalWorkflowId }
+          workflowRevisionId = originalAssistant?.workflow_revision_id || null
+        } else if (
+          originalWorkflowId
+          && (
+            (currentSelection.mode === 'explicit' && currentSelection.workflowId === originalWorkflowId)
+            || (currentSelection.mode === 'direct' && originalWorkflowId === 'input-output')
+          )
+        ) {
+          workflowRevisionId = originalAssistant?.workflow_revision_id || null
+        }
+        await executeWorkflowRun({
+          sessionId,
+          userMessage: { ...msgs[lastUserIdx], content: overrideUserText ?? msgs[lastUserIdx]?.content ?? '' },
+          attachments: msgs[lastUserIdx]?.attachments || [],
+          requestController,
+          selection,
+          workflowRevisionId,
+          regenerateIndex: lastUserIdx,
+        })
+      } catch (error) {
+        if (!isAbortError(error)) console.error('Failed to regenerate workflow response:', error)
+      } finally {
+        finishCancelableRequest(requestController)
+      }
+      return
+    }
 
     let enrichedPrompt = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
     let citationSources = []
@@ -345,89 +477,14 @@ export function createChatGenerationHandlers({
     try {
       if (getChatWorkflowForSession) {
         const selection = getChatWorkflowForSession(targetSessionId) || { mode: 'direct', workflowId: null }
-        const selectedLibrary = getChatLibraryForSession(targetSessionId)
-        const created = await createWorkflowRun(backendApiUrl, {
-          session_id: targetSessionId,
-          message: userMsg.content,
-          model,
-          selection_mode: selection.mode,
-          workflow_id: selection.workflowId || null,
-          library_slug: selectedLibrary?.slug || null,
-          web_search_enabled: selection.mode === 'direct' ? webSearchEnabled : false,
-          searx_url: searxUrl || null,
-          searx_engines: searxEngines || [],
+        await executeWorkflowRun({
+          sessionId: targetSessionId,
+          userMessage: userMsg,
           attachments: outgoingAttachments,
-          vision_model: visionModel || null,
-          transcription_model: transcriptionModel || null,
-          router_model: workflowRouterModel || null,
-          stream: true,
-        }, requestController.signal)
-        attachWorkflowRunToRequest?.(requestController, created.run_id)
-        const assistantMsgId = `workflow-${created.run_id}`
-        let fullReply = ''
-        let finalOutput = null
-        setChatSessions(prevSessions => prevSessions.map(session =>
-          session.session_id === targetSessionId
-            ? { ...session, messages: [...(session.messages || []), {
-                role: 'assistant', content: '', id: assistantMsgId, sources: [],
-                workflow_id: created.workflow?.id, workflow_run_id: created.run_id,
-              }] }
-            : session
-        ))
-        onWorkflowRunEvent?.(targetSessionId, {
-          type: 'client_run_started',
-          run_id: created.run_id,
-          payload: { workflow: created.workflow },
-          timestamp: new Date().toISOString(),
+          requestController,
+          selection,
+          isNewChat,
         })
-        await streamWorkflowEvents(backendApiUrl, created.run_id, {
-          signal: requestController.signal,
-          onEvent: event => {
-            onWorkflowRunEvent?.(targetSessionId, event)
-            if (event.type === 'model_token') {
-              fullReply += event.payload?.text || ''
-              setAssistantMessageContent(setChatSessions, targetSessionId, assistantMsgId, fullReply)
-            } else if (event.type === 'run_completed') {
-              finalOutput = event.payload?.output || null
-              const content = finalOutput?.content || fullReply
-              setChatSessions(prevSessions => prevSessions.map(session => {
-                if (session.session_id !== targetSessionId) return session
-                return {
-                  ...session,
-                  messages: (session.messages || []).map(message => message.id === assistantMsgId
-                    ? { ...message, content, sources: finalOutput?.sources || message.sources || [] }
-                    : message),
-                }
-              }))
-            } else if (event.type === 'run_failed') {
-              const message = event.payload?.message || 'Workflow execution failed.'
-              setAssistantMessageContent(setChatSessions, targetSessionId, assistantMsgId, `Error: ${message}`)
-            } else if (event.type === 'run_cancelled') {
-              setAssistantMessageContent(setChatSessions, targetSessionId, assistantMsgId, fullReply, { removeIfEmpty: true })
-            }
-          },
-        })
-        if (onMessagesPersisted) await onMessagesPersisted(targetSessionId)
-        if (activeSessionIdRef.current !== targetSessionId) {
-          setUnreadSessions(prev => [...new Set([...prev, targetSessionId])])
-        } else if (!userScrolledUpRef.current[targetSessionId]) {
-          requestAnimationFrame(() => scrollMessageToTop(assistantMsgId, 'smooth', targetSessionId))
-        }
-        if (isNewChat) {
-          requestGeneratedTitle({
-            apiBase: backendApiUrl,
-            message: buildAttachmentTitleSeed(userMsg.content, outgoingAttachments),
-            model,
-            sessionId: targetSessionId,
-          })
-            .then(r => r.json())
-            .then(data => {
-              const sanitizedTitle = sanitizeChatTitle(data.title)
-              setChatSessions(prevSessions => prevSessions.map(session =>
-                session.session_id === targetSessionId ? { ...session, name: sanitizedTitle } : session
-              ))
-            })
-        }
         return
       }
 

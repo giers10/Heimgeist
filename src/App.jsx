@@ -692,13 +692,42 @@ export default function App() {
     };
   }, []);
 
+  async function refreshWorkflows(preferredId = null) {
+    if (!backendApiUrl) return
+    try {
+      const [workflowData, toolData] = await Promise.all([
+        fetchWorkflows(backendApiUrl),
+        fetchTools(backendApiUrl),
+      ])
+      const nextWorkflows = Array.isArray(workflowData.workflows) ? workflowData.workflows : []
+      const nextTools = Array.isArray(toolData.tools) ? toolData.tools : []
+      const fallbackId = activeWorkflowId && nextWorkflows.some(workflow => workflow.id === activeWorkflowId)
+        ? activeWorkflowId
+        : nextWorkflows[0]?.id || null
+      const nextId = preferredId && nextWorkflows.some(workflow => workflow.id === preferredId)
+        ? preferredId
+        : fallbackId
+
+      setWorkflows(nextWorkflows)
+      setWorkflowTools(nextTools)
+      setActiveWorkflowId(nextId)
+      setActiveWorkflow(nextId ? await fetchWorkflow(backendApiUrl, nextId) : null)
+      setWorkflowError('')
+    } catch (error) {
+      console.warn('Failed to load workflows', error)
+      setWorkflowError(String(error?.message || error))
+    }
+  }
+
   useEffect(() => {
-    let cancelled = false
-    if (!backendApiUrl) return () => {}
-    fetchWorkflows(backendApiUrl)
-      .then(data => { if (!cancelled) setWorkflows(Array.isArray(data.workflows) ? data.workflows : []) })
-      .catch(error => { if (!cancelled) console.warn('Failed to load workflows', error) })
-    return () => { cancelled = true }
+    if (!backendApiUrl) {
+      setWorkflows([])
+      setWorkflowTools([])
+      setActiveWorkflowId(null)
+      setActiveWorkflow(null)
+      return
+    }
+    refreshWorkflows()
   }, [backendApiUrl])
 
   useEffect(() => {

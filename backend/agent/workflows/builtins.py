@@ -95,11 +95,8 @@ def web_graph() -> Dict[str, Any]:
     return graph(
         [
             node("input", "input", 0, 100),
-            node("queries", "tool", 240, 20, {"tool": "heimgeist.web_generate_queries", "arguments": {
-                "prompt": {"$ref": "input.prompt"}, "model": {"$ref": "run.chat_model"}, "messages": {"$ref": "run.messages"},
-            }}),
-            node("search", "tool", 500, 20, {"tool": "heimgeist.web_search", "arguments": {
-                "query": None, "queries": {"$ref": "nodes.queries.output.queries"}, "engines": {"$ref": "run.searx_engines"},
+            node("search", "tool", 300, 20, {"tool": "heimgeist.web_search", "arguments": {
+                "query": {"$ref": "run.web_search_query"}, "queries": {"$ref": "run.web_search_queries"}, "engines": {"$ref": "run.searx_engines"},
                 "maximum_results": 16, "searx_url": {"$ref": "run.searx_url"},
             }}),
             node("fetch", "tool", 760, 20, {"tool": "heimgeist.web_fetch", "arguments": {
@@ -112,7 +109,7 @@ def web_graph() -> Dict[str, Any]:
             node("chat", "tool", 1260, 100, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.rerank.output"}], EVIDENCE_FIRST_SYSTEM_PROMPT)}),
             node("output", "output", 1540, 100, {"value": {"$ref": "nodes.chat.output"}}),
         ],
-        [edge("input", "queries"), edge("queries", "search"), edge("search", "fetch"), edge("fetch", "rerank"), edge("rerank", "chat"), edge("chat", "output")],
+        [edge("input", "search"), edge("search", "fetch"), edge("fetch", "rerank"), edge("rerank", "chat"), edge("chat", "output")],
     )
 
 
@@ -137,11 +134,8 @@ KNOWLEDGE_WEB = graph(
             "prompt": {"$ref": "input.prompt"}, "library_slug": {"$ref": "run.library_slug"}, "top_k": 5,
             "context_character_budget": 10000, "embedding_model": None,
         }}),
-        node("queries", "tool", 260, 240, {"tool": "heimgeist.web_generate_queries", "arguments": {
-            "prompt": {"$ref": "input.prompt"}, "model": {"$ref": "run.chat_model"}, "messages": {"$ref": "run.messages"},
-        }}),
         node("search", "tool", 520, 240, {"tool": "heimgeist.web_search", "arguments": {
-            "query": None, "queries": {"$ref": "nodes.queries.output.queries"}, "engines": {"$ref": "run.searx_engines"},
+            "query": {"$ref": "run.web_search_query"}, "queries": {"$ref": "run.web_search_queries"}, "engines": {"$ref": "run.searx_engines"},
             "maximum_results": 12, "searx_url": {"$ref": "run.searx_url"},
         }}),
         node("fetch", "tool", 780, 240, {"tool": "heimgeist.web_fetch", "arguments": {"url": None, "urls": {"$ref": "nodes.search.output.results"}, "maximum_pages": 5}}),
@@ -155,7 +149,7 @@ KNOWLEDGE_WEB = graph(
         node("output", "output", 2040, 130, {"value": {"$ref": "nodes.chat.output"}}),
     ],
     [
-        edge("input", "knowledge"), edge("input", "queries"), edge("queries", "search"), edge("search", "fetch"), edge("fetch", "rerank"),
+        edge("input", "knowledge"), edge("input", "search"), edge("search", "fetch"), edge("fetch", "rerank"),
         edge("knowledge", "merge"), edge("rerank", "merge"), edge("merge", "limit"), edge("limit", "chat"), edge("chat", "output"),
     ],
 )
@@ -201,23 +195,8 @@ SAVE_SOURCE = graph(
 RESEARCH = graph(
     [
         node("input", "input", 0, 180),
-        node("analyze", "prompt", 220, 180, {
-            "model_source": "chat_model",
-            "system_template": (
-                "Rewrite the user's current request as one concrete web research question. "
-                "Resolve follow-ups, pronouns, and phrases like 'that agreement' using the recent conversation. "
-                "If the request follows a current-news answer, preserve the current-news entities and claims from that answer. "
-                "Do not introduce historical topics or named agreements unless they appear in the current request or recent conversation. "
-                "Return one concise search-ready question only."
-            ),
-            "user_template": "Current request:\n{{input.prompt}}\n\nRecent conversation:\n{{run.messages}}",
-            "output_mode": "text", "temperature": 0.1,
-        }),
-        node("queries1", "tool", 470, 80, {"tool": "heimgeist.web_generate_queries", "arguments": {
-            "prompt": {"$ref": "nodes.analyze.output.content"}, "model": {"$ref": "run.chat_model"}, "messages": {"$ref": "run.messages"},
-        }}),
         node("search1", "tool", 710, 80, {"tool": "heimgeist.web_search", "arguments": {
-            "query": None, "queries": {"$ref": "nodes.queries1.output.queries"}, "engines": {"$ref": "run.searx_engines"},
+            "query": {"$ref": "run.web_search_query"}, "queries": {"$ref": "run.web_search_queries"}, "engines": {"$ref": "run.searx_engines"},
             "maximum_results": 18, "searx_url": {"$ref": "run.searx_url"},
         }}),
         node("fetch1", "tool", 950, 80, {"tool": "heimgeist.web_fetch", "arguments": {"url": None, "urls": {"$ref": "nodes.search1.output.results"}, "maximum_pages": 7}}),
@@ -249,7 +228,7 @@ RESEARCH = graph(
         node("output", "output", 3520, 80, {"value": {"$ref": "nodes.chat.output"}}),
     ],
     [
-        edge("input", "analyze"), edge("analyze", "queries1"), edge("queries1", "search1"), edge("search1", "fetch1"), edge("fetch1", "rank1"),
+        edge("input", "search1"), edge("search1", "fetch1"), edge("fetch1", "rank1"),
         edge("rank1", "evaluate"), edge("evaluate", "sufficient"), edge("sufficient", "empty2", "true", "-true"), edge("sufficient", "queries2", "false", "-false"),
         edge("queries2", "search2"), edge("search2", "fetch2"), edge("fetch2", "rank2"), edge("rank1", "merge"), edge("rank2", "merge"), edge("empty2", "merge"),
         edge("merge", "limit"), edge("limit", "chat"), edge("chat", "output"),

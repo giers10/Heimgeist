@@ -48,13 +48,19 @@ import {
 } from './websearchEngines'
 import { formatRecordingDuration, useAudioInput } from './useAudioInput'
 import { useChatLibrarySelection } from './useChatLibrarySelection'
+import { useChatWorkflowSelection } from './useChatWorkflowSelection'
 import { useChatScroll } from './useChatScroll'
 import desktopApi from './desktop/desktopApi'
+import WorkflowsArea from './workflows/WorkflowsArea'
+import WorkflowConfirmationDialog from './workflows/WorkflowConfirmationDialog'
+import WorkflowExecutionPanel from './workflows/WorkflowExecutionPanel'
+import WorkflowSelector from './workflows/WorkflowSelector'
+import { cancelWorkflowRun, fetchWorkflows, respondToConfirmation } from './workflows/workflowApi'
 
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
-  const [activeSidebarMode, setActiveSidebarMode] = useState('chats') // 'chats', 'dbs', 'settings'
+  const [activeSidebarMode, setActiveSidebarMode] = useState('chats') // 'chats', 'dbs', 'workflows', 'settings'
   const activeSidebarModeRef = useRef(activeSidebarMode)
   const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('General');
   const [editingSessionId, setEditingSessionId] = useState(null); // ID of the session being edited
@@ -84,6 +90,7 @@ export default function App() {
   const [model, setModel] = useState('')
   const [visionModel, setVisionModel] = useState('')
   const [transcriptionModel, setTranscriptionModel] = useState('base')
+  const [workflowRouterModel, setWorkflowRouterModel] = useState('')
   const [selectedChatModelSupportsVision, setSelectedChatModelSupportsVision] = useState(false)
   const [selectedVisionModelSupportsVision, setSelectedVisionModelSupportsVision] = useState(false)
   const [input, setInput] = useState('')
@@ -123,6 +130,9 @@ export default function App() {
   }, [searxEngines]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [workflows, setWorkflows] = useState([])
+  const [workflowExecutions, setWorkflowExecutions] = useState({})
+  const [pendingWorkflowConfirmation, setPendingWorkflowConfirmation] = useState(null)
   const {
     audioInputRuntimeMessage,
     audioInputRuntimeReady,

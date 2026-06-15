@@ -536,8 +536,7 @@ class WorkflowRuntime:
             result = dict(value)
             if "context_block" in result:
                 result["context_block"] = str(result["context_block"])[:maximum]
-            while json_size(result) > maximum and isinstance(result.get("sources"), list) and result["sources"]:
-                result["sources"].pop()
+            result.pop("items", None)
             return result
         if isinstance(value, list):
             result = []

@@ -113,7 +113,7 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
             "fallback": False,
         }
         request = WorkflowRunRequest(
-            session_id="router-chat",
+            session_id=None,
             message="what happened in iran today",
             model="test-model",
             selection_mode="automatic",

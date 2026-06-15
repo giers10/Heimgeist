@@ -282,8 +282,7 @@ fn normalize_settings(settings: &mut SettingsMap) {
         settings.get("transcriptionModel"),
         DEFAULT_TRANSCRIPTION_MODEL,
     );
-    let auto_deep_enrichment =
-        normalize_boolean_setting(settings.get("autoDeepEnrichment"));
+    let auto_deep_enrichment = normalize_boolean_setting(settings.get("autoDeepEnrichment"));
     let ui_scale = normalize_ui_scale(settings.get("uiScale"));
     let open_devtools_on_startup = normalize_boolean_setting(settings.get("openDevToolsOnStartup"));
     let audio_input_enabled = normalize_boolean_setting(settings.get("audioInputEnabled"));

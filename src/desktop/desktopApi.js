@@ -1,5 +1,7 @@
+import { DEFAULT_BACKEND_API_URL } from '../appConfig'
+
 const DEFAULT_SETTINGS = Object.freeze({
-  backendApiUrl: 'http://127.0.0.1:8000',
+  backendApiUrl: DEFAULT_BACKEND_API_URL,
   ollamaApiUrl: 'http://127.0.0.1:11434',
   chatModel: 'llama3',
   visionModel: '',

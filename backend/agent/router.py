@@ -222,8 +222,8 @@ def _format_workflow_choices(manifests: List[Dict[str, Any]]) -> str:
         suffix = f" Examples: {examples}." if examples else ""
         rows.append(
             f"- {item['name']} ({item['slug']}, id: {item['workflow_id']}): "
-            f"{item.get('routing_description') or 'No description.'} "
-            f"Capabilities: {capabilities or 'none'}.{suffix}"
+            f"Capabilities: {capabilities or 'none'}. "
+            f"Routing contract: {item.get('routing_description') or 'No description.'}{suffix}"
         )
     return "\n".join(rows)
 
@@ -241,18 +241,17 @@ def _router_prompt(
     history_chars = 300 if len(message_excerpt) > 1000 else 500
     attachment_line = "No attachments." if not attachments else f"{len(attachments)} attachment(s) are present."
     return (
-        "You are Heimgeist's workflow router. Your job is to understand the current user message in the context of the recent conversation, choose exactly one allowed workflow, and provide any inputs that workflow needs.\n\n"
-        "Workflow choice rules:\n"
-        "- Input -> Output is only for conversation, writing, reasoning, or stable knowledge that does not require fresh external information.\n"
-        "- Never choose Input -> Output for weather, news, politics today, recent events, latest information, current prices, schedules, or anything the user expects to be up to date.\n"
-        "- Web Answer is for straightforward current lookups: weather today, news today, latest facts, simple online questions, or follow-up questions about current web information.\n"
-        "- Research is for explicit deeper investigation, comparing sources, multi-step synthesis, disputed claims, or broad research requests. Do not choose Research for a simple weather/news lookup.\n\n"
-        "Important context rules:\n"
-        "- Treat short follow-ups as continuing the topic from recent messages unless the user clearly changes topic.\n"
-        "- Words like 'and', 'also', 'what about', 'politically', 'there', 'that', or 'it' usually inherit the previous entity, location, source, or subject.\n"
-        "- If the previous turn asked about a place or entity and the current turn asks for another aspect, carry that place or entity into the resolved request.\n"
-        "- For web workflows, write search queries for the resolved factual request, not the literal conversational fragment.\n"
-        "- Example: previous user asked 'what is the weather in Iran today' and current user asks 'and what is the news politically?' -> search for 'Iran political news today'.\n\n"
+        "You are Heimgeist's workflow router. Choose exactly one allowed workflow for the current user message.\n\n"
+        "Decision method:\n"
+        "1. Resolve the current message into a standalone request using recent conversation. Do this before choosing a workflow.\n"
+        "2. Identify which capabilities are required to answer faithfully: ordinary chat, local knowledge retrieval, web evidence, attachment analysis, or saving knowledge.\n"
+        "3. Choose the lowest-complexity allowed workflow whose capabilities cover the required work. Do not choose a workflow because an example sounds similar; use the routing contract and capabilities.\n"
+        "4. Choose a direct chat workflow only when the answer can be produced from the conversation, stable model knowledge, writing/reasoning ability, or already-supplied context. If the request needs information from outside those sources, choose a workflow with the needed capability.\n"
+        "5. Choose a web workflow when the request needs external facts, source grounding, or information that may have changed since the model was trained. Choose the research workflow only when the user needs deeper investigation, comparison, validation, or multi-step synthesis beyond one search-and-answer pass.\n\n"
+        "Context resolution rules:\n"
+        "- Short follow-ups usually inherit the previous subject, place, entity, file, source, or task unless the user clearly changes topic.\n"
+        "- Resolve pronouns and fragments such as 'that', 'it', 'there', 'also', 'and', 'politically', or 'what about' into the standalone request.\n"
+        "- For web workflows, write search queries for the standalone factual request, not the literal fragment the user typed.\n\n"
         f"Recent conversation:\n{_format_recent_messages(recent_messages, char_limit=history_chars)}\n\n"
         f"Current user message:\n{message_excerpt}\n\n"
         f"Attachments:\n{attachment_line}\n\n"

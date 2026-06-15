@@ -15,6 +15,13 @@ from pathlib import Path
 from . import models, schemas
 from .agent import models as agent_models
 from .agent.api import initialize_agent_system, router as agent_router
+from .chat_memory import (
+    build_chat_memory_context,
+    ensure_chat_memory_schema,
+    safe_backfill_chat_memory,
+    safe_delete_chat_memory_for_session,
+    safe_sync_chat_memory_for_session,
+)
 from .database import Base, engine, SessionLocal, ensure_sources_column
 from .local_rag import router as local_rag_router, save_chat_message_snapshot
 from .ollama_admin import inspect_ollama_startup, prepare_startup_models, pull_local_model, start_local_ollama
@@ -31,6 +38,7 @@ from .websearch import enrich_prompt
 # Create tables + ensure migration
 Base.metadata.create_all(bind=engine)
 ensure_sources_column(engine)
+ensure_chat_memory_schema(engine)
 initialize_agent_system()
 
 app = FastAPI(title="LLM Desktop Backend", version="0.1.0" )
@@ -62,6 +70,11 @@ app.add_middleware(
 )
 app.include_router(local_rag_router)
 app.include_router(agent_router)
+
+
+@app.on_event("startup")
+async def backfill_chat_memory_on_startup():
+    asyncio.create_task(asyncio.to_thread(safe_backfill_chat_memory, SessionLocal))
 
 _IMAGE_DATA_URL_RE = re.compile(r"^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$", re.IGNORECASE)
 _CHAT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".heic", ".avif"}

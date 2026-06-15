@@ -46,6 +46,7 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
         db.commit()
         self.user_message_id = user.message_id
         self.assistant_message_id = assistant.message_id
+        self.direct_workflow_id = direct.id
         self.direct_revision_id = direct.current_revision_id
         db.close()
 
@@ -78,17 +79,13 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
         db.close()
 
     async def test_run_resolves_previous_assistant_and_message_url_targets(self):
-        db = self.Session()
-        remember = db.query(WorkflowDefinition).filter_by(slug="remember-this").one()
-        remember_id = remember.id
-        db.close()
         fake_runtime = SimpleNamespace(start=lambda _run_id: None)
         request = WorkflowRunRequest(
             session_id="regenerate-chat",
             message="Save https://example.com/source for later.",
             model="test-model",
             selection_mode="explicit",
-            workflow_id=remember_id,
+            workflow_id=self.direct_workflow_id,
         )
         with patch.object(api, "SessionLocal", self.Session), patch.object(api, "runtime", fake_runtime):
             response = await api.create_workflow_run(request)

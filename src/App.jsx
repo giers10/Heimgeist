@@ -1637,7 +1637,14 @@ async function createNewChat() {
             />
           )}
           {activeSidebarMode === 'workflows' && (
-            <div className="empty-list-message">Create, validate, and test native workflows in the editor.</div>
+            <WorkflowList
+              activeId={activeWorkflowId}
+              onCreate={handleCreateWorkflow}
+              onDelete={handleDeleteWorkflow}
+              onDuplicate={handleDuplicateWorkflow}
+              onSelect={handleSelectWorkflow}
+              workflows={workflows}
+            />
           )}
         </div>
         {(activeSidebarMode === 'chats' || activeSidebarMode === 'dbs') && (
@@ -2126,8 +2133,11 @@ async function createNewChat() {
         {activeSidebarMode === 'workflows' && (
           <WorkflowsArea
             apiBase={backendApiUrl}
+            error={workflowError}
             model={model}
-            onWorkflowsChanged={setWorkflows}
+            onChanged={refreshWorkflows}
+            tools={workflowTools}
+            workflow={activeWorkflow}
           />
         )}
         {knowledgeSaveTarget && (

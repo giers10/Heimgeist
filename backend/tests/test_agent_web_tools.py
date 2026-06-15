@@ -91,6 +91,24 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("US Iran deal Lebanon ceasefire", result["queries"])
 
+    async def test_generate_queries_turns_what_happened_today_into_news_queries(self):
+        registry = NativeToolProvider()
+        register_web_tools(registry)
+
+        result_payload = {"queries": ["what happened in iran today"]}
+        with patch(
+            "backend.agent.tools.web.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps(result_payload))),
+        ):
+            result = await registry.call_tool(
+                "heimgeist.web_generate_queries",
+                {"prompt": "what happened in iran today", "model": "model", "messages": []},
+                context(registry),
+            )
+
+        self.assertEqual(result["queries"][0], "iran news today")
+        self.assertIn("iran latest news", result["queries"])
+
     async def test_search_filters_dictionary_noise_for_current_lookup(self):
         registry = NativeToolProvider()
         register_web_tools(registry)
@@ -117,6 +135,32 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
 
         urls = [item["url"] for item in result["results"]]
         self.assertEqual(urls, ["https://www.reuters.com/world/middle-east/iran-example"])
+
+    async def test_search_does_not_require_generic_happened_term(self):
+        registry = NativeToolProvider()
+        register_web_tools(registry)
+
+        async def fake_search(_client, _query, **_kwargs):
+            return [
+                {"url": "https://www.aljazeera.com/where/iran/", "title": "Iran news", "engine": "bing"},
+                {"url": "https://www.bbc.com/news/world-middle-east", "title": "Middle East latest", "engine": "bing"},
+            ]
+
+        with patch("backend.agent.tools.web.searx_search", new=AsyncMock(side_effect=fake_search)):
+            result = await registry.call_tool(
+                "heimgeist.web_search",
+                {
+                    "query": None,
+                    "queries": ["what happened in iran today"],
+                    "engines": [],
+                    "maximum_results": 8,
+                    "searx_url": "http://127.0.0.1:8888",
+                },
+                context(registry),
+            )
+
+        urls = [item["url"] for item in result["results"]]
+        self.assertEqual(urls, ["https://www.aljazeera.com/where/iran/"])
 
     async def test_fetch_accepts_search_result_batches_and_caps_page_text(self):
         registry = NativeToolProvider()

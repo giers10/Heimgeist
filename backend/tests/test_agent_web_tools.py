@@ -24,11 +24,11 @@ def context(registry):
 
 
 class WebToolTests(unittest.IsolatedAsyncioTestCase):
-    async def test_generate_queries_keeps_topic_and_filters_generic_terms(self):
+    async def test_generate_queries_returns_llm_queries_without_topic_parser(self):
         registry = NativeToolProvider()
         register_web_tools(registry)
 
-        result_payload = {"queries": ["latest", "top stories", "latest Iran news headlines"]}
+        result_payload = {"queries": [" latest ", "top stories", "latest Iran news headlines", "latest"]}
         with patch(
             "backend.agent.tools.web.chat_typed",
             new=AsyncMock(return_value=OllamaChatResult(content=json.dumps(result_payload))),
@@ -40,74 +40,7 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
             )
 
         queries = result["queries"]
-        self.assertNotIn("latest", queries)
-        self.assertNotIn("top stories", queries)
-        self.assertTrue(queries)
-        self.assertTrue(all("iran" in query.lower() for query in queries))
-
-    async def test_generate_queries_filters_followup_filler_and_keeps_quoted_topic(self):
-        registry = NativeToolProvider()
-        register_web_tools(registry)
-
-        prompt = (
-            "nah i mean what you got from the news, you said\n"
-            "```7. The Iranian government describes ending the war in Lebanon as "
-            "\"inseparable\" from this broader Iran-US agreement, while Hezbollah also issued a statement.```"
-        )
-        result_payload = {
-            "queries": [
-                "nah mean you got latest news",
-                "Iranian government Lebanon Iran-US agreement Hezbollah statement",
-            ]
-        }
-        with patch(
-            "backend.agent.tools.web.chat_typed",
-            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps(result_payload))),
-        ):
-            result = await registry.call_tool(
-                "heimgeist.web_generate_queries",
-                {"prompt": prompt, "model": "model", "messages": []},
-                context(registry),
-            )
-
-        queries = result["queries"]
-        self.assertNotIn("nah mean you got latest news", queries)
-        self.assertTrue(any("iran" in query.lower() and "lebanon" in query.lower() for query in queries))
-
-    async def test_generate_queries_accepts_followup_synonyms_and_libanon_spelling(self):
-        registry = NativeToolProvider()
-        register_web_tools(registry)
-
-        result_payload = {"queries": ["US Iran deal Lebanon ceasefire"]}
-        with patch(
-            "backend.agent.tools.web.chat_typed",
-            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps(result_payload))),
-        ):
-            result = await registry.call_tool(
-                "heimgeist.web_generate_queries",
-                {"prompt": "tell me more about the agreement to end war in libanon", "model": "model", "messages": []},
-                context(registry),
-            )
-
-        self.assertIn("US Iran deal Lebanon ceasefire", result["queries"])
-
-    async def test_generate_queries_turns_what_happened_today_into_news_queries(self):
-        registry = NativeToolProvider()
-        register_web_tools(registry)
-
-        result_payload = {"queries": ["what happened in iran today"]}
-        with patch(
-            "backend.agent.tools.web.chat_typed",
-            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps(result_payload))),
-        ):
-            result = await registry.call_tool(
-                "heimgeist.web_generate_queries",
-                {"prompt": "what happened in iran today", "model": "model", "messages": []},
-                context(registry),
-            )
-
-        self.assertEqual(result["queries"][0], "iran news today")
-        self.assertIn("iran latest news", result["queries"])
+        self.assertEqual(queries, ["latest", "top stories", "latest Iran news headlines"])
 
     async def test_search_filters_dictionary_noise_for_current_lookup(self):
         registry = NativeToolProvider()
@@ -136,7 +69,7 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
         urls = [item["url"] for item in result["results"]]
         self.assertEqual(urls, ["https://www.reuters.com/world/middle-east/iran-example"])
 
-    async def test_search_does_not_require_generic_happened_term(self):
+    async def test_search_does_not_require_parsed_topic_terms(self):
         registry = NativeToolProvider()
         register_web_tools(registry)
 
@@ -160,7 +93,7 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
             )
 
         urls = [item["url"] for item in result["results"]]
-        self.assertEqual(urls, ["https://www.aljazeera.com/where/iran/"])
+        self.assertEqual(urls, ["https://www.aljazeera.com/where/iran/", "https://www.bbc.com/news/world-middle-east"])
 
     async def test_fetch_accepts_search_result_batches_and_caps_page_text(self):
         registry = NativeToolProvider()

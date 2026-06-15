@@ -28,6 +28,8 @@ QUERY_FORMAT = {
     "additionalProperties": False,
 }
 
+FETCH_TEXT_LIMIT = 12_000
+
 
 async def generate_queries_handler(arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
     recent = render_recent_context(arguments.get("messages") or [], char_limit=1600)
@@ -114,14 +116,15 @@ async def web_fetch_handler(arguments: Dict[str, Any], _context: ToolExecutionCo
         try:
             async with semaphore:
                 snapshot = await fetch_website_snapshot(url)
-            text = str(snapshot.get("text") or "")
+            full_text = str(snapshot.get("text") or "")
+            text = full_text[:FETCH_TEXT_LIMIT]
             return {
                 "requested_url": snapshot.get("requested_url") or url,
                 "canonical_url": snapshot.get("url") or snapshot.get("final_url") or url,
                 "title": snapshot.get("title") or "",
                 "cleaned_text": text,
                 "fetch_timestamp": datetime.now(timezone.utc).isoformat(),
-                "content_hash": hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest(),
+                "content_hash": hashlib.sha256(full_text.encode("utf-8", errors="ignore")).hexdigest(),
                 "error": None,
             }
         except Exception as exc:
@@ -230,7 +233,7 @@ def register_web_tools(registry: NativeToolProvider) -> None:
             "type": "object",
             "properties": {
                 "url": {"type": ["string", "null"]},
-                "urls": {"type": "array", "maxItems": 12},
+                "urls": {"type": "array", "maxItems": 32},
                 "maximum_pages": {"type": "integer", "minimum": 1, "maximum": 12},
             },
             "additionalProperties": False,

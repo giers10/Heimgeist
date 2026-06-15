@@ -1014,6 +1014,7 @@ async def generate_title(req: schemas.GenerateTitleRequest, db: Session = Depend
 
     session.name = cleaned_title
     db.commit()
+    safe_sync_chat_memory_for_session(db, req.session_id)
 
     return {"title": cleaned_title}
 
@@ -1022,6 +1023,8 @@ def delete_session(session_id: str, db: Session = Depends(get_db)):
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    safe_delete_chat_memory_for_session(db, session_id)
 
     # Delete associated messages
     db.query(models.ChatMessage).filter(models.ChatMessage.session_pk == session.id).delete()
@@ -1038,6 +1041,7 @@ def rename_session(session_id: str, req: schemas.GenerateTitleResponse, db: Sess
 
     session.name = sanitize_chat_title(req.title)
     db.commit()
+    safe_sync_chat_memory_for_session(db, session_id)
     return {"ok": True}
 
 @app.put("/sessions/{session_id}/messages/{index}")
@@ -1068,6 +1072,7 @@ def update_user_message(session_id: str, index: int, req: schemas.EditMessageReq
         db.delete(m)
 
     db.commit()
+    safe_sync_chat_memory_for_session(db, session_id)
     return {"ok": True}
 
 # ADD or REPLACE this whole function

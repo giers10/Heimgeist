@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -94,7 +95,7 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
 
         db = self.Session()
         run = db.query(WorkflowRun).filter_by(id=response["run_id"]).one()
-        run_values = __import__("json").loads(run.inputs_json)["run"]
+        run_values = json.loads(run.inputs_json)["run"]
         self.assertEqual(run_values["target_message_id"], self.assistant_message_id)
         self.assertEqual(run_values["target_url"], "https://example.com/source")
         db.close()

@@ -79,7 +79,7 @@ class ChatMemoryTests(unittest.TestCase):
     def test_resync_removes_stale_turn_content(self):
         db = self.Session()
         try:
-            session = self._turn(db, "past", "Old Decision", "backend sidecar", "Keep using the old sidecar plan.")
+            session = self._turn(db, "past", "Old Decision", "deployment detail", "Keep using the banana corridor plan.")
             db.commit()
             sync_all_chat_memory(db)
 
@@ -88,7 +88,7 @@ class ChatMemoryTests(unittest.TestCase):
             db.commit()
             sync_chat_memory_for_session(db, session.session_id)
 
-            context = build_chat_memory_context(db, "old sidecar plan")
+            context = build_chat_memory_context(db, "banana corridor plan")
         finally:
             db.close()
 

@@ -214,13 +214,26 @@ class NativeToolProvider:
             raise asyncio.CancelledError()
         if definition.llm_call and context.consume_llm_call:
             context.consume_llm_call()
+        handler_task = asyncio.create_task(definition.handler(arguments, context))
+        cancellation_task = asyncio.create_task(context.cancellation_event.wait())
         try:
-            result = await asyncio.wait_for(
-                definition.handler(arguments, context),
+            done, _pending = await asyncio.wait(
+                {handler_task, cancellation_task},
                 timeout=definition.timeout_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
             )
-        except asyncio.TimeoutError as exc:
-            raise TimeoutError(f"Tool {name} exceeded {definition.timeout_seconds:g}s") from exc
+            if cancellation_task in done and cancellation_task.result():
+                handler_task.cancel()
+                await asyncio.gather(handler_task, return_exceptions=True)
+                raise asyncio.CancelledError()
+            if handler_task not in done:
+                handler_task.cancel()
+                await asyncio.gather(handler_task, return_exceptions=True)
+                raise TimeoutError(f"Tool {name} exceeded {definition.timeout_seconds:g}s")
+            result = handler_task.result()
+        finally:
+            cancellation_task.cancel()
+            await asyncio.gather(cancellation_task, return_exceptions=True)
         validate_json_schema(result, definition.output_schema)
         size = len(json.dumps(result, ensure_ascii=False, default=str))
         if size > definition.result_size_limit:

@@ -83,7 +83,7 @@ def _is_noise_result(url: str, title: str = "") -> bool:
 def _clean_queries(generated: List[Any], fallback: str) -> List[str]:
     cleaned: List[str] = []
     seen = set()
-    for query in [*generated, fallback]:
+    for query in generated:
         text = " ".join(str(query or "").split()).strip()
         if not text:
             continue
@@ -94,8 +94,10 @@ def _clean_queries(generated: List[Any], fallback: str) -> List[str]:
         cleaned.append(text[:300])
         if len(cleaned) >= 5:
             break
+    if cleaned:
+        return cleaned
     fallback_text = " ".join(str(fallback or "").split()).strip()
-    return cleaned or ([fallback_text[:300]] if fallback_text else [])
+    return [fallback_text[:300]] if fallback_text else []
 
 
 async def generate_queries_handler(arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:

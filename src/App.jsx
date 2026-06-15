@@ -71,6 +71,7 @@ export default function App() {
   const [isCreatingLibrary, setIsCreatingLibrary] = useState(false)
   const [newLibraryName, setNewLibraryName] = useState('')
   const [libraryCreateError, setLibraryCreateError] = useState('')
+  const [workflows, setWorkflows] = useState([])
   const {
     chatLibrary,
     chatLibrarySlug,
@@ -136,7 +137,6 @@ export default function App() {
   }, [searxEngines]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [workflows, setWorkflows] = useState([])
   const [workflowExecutions, setWorkflowExecutions] = useState({})
   const [pendingWorkflowConfirmation, setPendingWorkflowConfirmation] = useState(null)
   const {

@@ -97,10 +97,6 @@ _REMEMBER_RE = re.compile(
     r"\b(remember\s+(this|that)|save\s+(this|that)|merk\s+dir\s+(das|:)?|speicher(e)?\s+(das|dies|diese|diesen)?)\b",
     re.IGNORECASE,
 )
-_WEB_RE = re.compile(
-    r"\b(web|internet|online|search|look\s+up|google|latest|current|today|news|recent|heute|aktuell|neueste|nachrichten|suche|recherchier)\b",
-    re.IGNORECASE,
-)
 _KNOWLEDGE_RE = re.compile(
     r"\b(my\s+(notes|documents|files|database|knowledge)|meine[nr]?\s+(notizen|dokumente|dateien|datenbank|daten)|rag|knowledge\s+base|datenbank)\b",
     re.IGNORECASE,
@@ -127,32 +123,11 @@ def _fast_path(
 
     lowered = text.lower()
     mentions_knowledge = bool(_KNOWLEDGE_RE.search(text))
-    mentions_web = bool(_WEB_RE.search(text))
 
     if _REMEMBER_RE.search(text):
         remember = _manifest_by_slug(manifests, "remember-this")
         if remember:
             return _workflow_result(remember, confidence=1.0, reason="The user explicitly asked Heimgeist to remember or save this.")
-
-    if web_search_enabled and library_slug:
-        combined = _manifest_by_slug(manifests, "knowledge-web-answer")
-        if combined:
-            return _workflow_result(combined, confidence=1.0, reason="Web search is explicitly enabled; using it together with the selected knowledge database.")
-
-    if web_search_enabled:
-        web = _manifest_by_slug(manifests, "web-answer")
-        if web:
-            return _workflow_result(web, confidence=1.0, reason="Web search is explicitly enabled for this chat.")
-
-    if library_slug and mentions_web and mentions_knowledge:
-        combined = _manifest_by_slug(manifests, "knowledge-web-answer")
-        if combined:
-            return _workflow_result(combined, confidence=0.95, reason="The request asks to combine selected knowledge with current web information.")
-
-    if mentions_web:
-        web = _manifest_by_slug(manifests, "web-answer")
-        if web:
-            return _workflow_result(web, confidence=0.95, reason="The request asks for current or web information.")
 
     if library_slug and mentions_knowledge:
         knowledge = _manifest_by_slug(manifests, "knowledge-answer")
@@ -165,6 +140,46 @@ def _fast_path(
             return _workflow_result(direct, confidence=1.0, reason="Simple conversational prompt.")
 
     return None
+
+
+def _clean_router_queries(raw: Any, fallback: str) -> List[str]:
+    values = raw if isinstance(raw, list) else [raw]
+    cleaned: List[str] = []
+    seen = set()
+    for item in values:
+        text = " ".join(str(item or "").split()).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text[:300])
+        if len(cleaned) >= 5:
+            break
+    fallback_text = " ".join(str(fallback or "").split()).strip()
+    if fallback_text and not cleaned:
+        cleaned.append(fallback_text[:300])
+    return cleaned
+
+
+def _normalize_router_inputs(selected: Dict[str, Any], inputs: Any, message: str) -> Dict[str, Any]:
+    normalized = dict(inputs) if isinstance(inputs, dict) else {}
+    if "web" not in (selected.get("required_capabilities") or []):
+        return normalized
+    raw_queries = normalized.get("web_search_queries")
+    if raw_queries is None:
+        raw_queries = normalized.get("search_queries")
+    raw_query = normalized.get("web_search_query") or normalized.get("search_query")
+    queries = _clean_router_queries(raw_queries if raw_queries is not None else raw_query, message)
+    if raw_query:
+        raw_query_text = " ".join(str(raw_query).split()).strip()
+        if raw_query_text and raw_query_text.casefold() not in {item.casefold() for item in queries}:
+            queries.insert(0, raw_query_text[:300])
+    queries = queries[:5]
+    normalized["web_search_query"] = queries[0] if queries else str(message or "")[:300]
+    normalized["web_search_queries"] = queries or [normalized["web_search_query"]]
+    return normalized
 
 
 async def select_workflow(
@@ -231,6 +246,7 @@ async def select_workflow(
         f"Selected knowledge database: {library_slug or 'none'}\n"
         f"Web search mode: {'forced' if web_search_enabled else 'automatic'}\n"
         "Web workflows are available in automatic mode even when not forced. If web search mode is forced, select a web-capable workflow unless a higher-priority write or attachment workflow is required. Knowledge workflows still require a selected database; vision workflows still require attachments.\n"
+        "When selecting any workflow with the web capability, inputs MUST include web_search_query and web_search_queries. These must be concise search-engine queries, resolved from recent conversation when the current request is a follow-up. Do not copy conversational filler; search for the factual topic.\n"
         f"Enabled workflows: {json.dumps(manifests, ensure_ascii=False)}"
     )
     try:
@@ -248,12 +264,13 @@ async def select_workflow(
             return fallback_result
         if "rag" in selected["required_capabilities"] and not library_slug:
             return fallback_result
+        inputs = _normalize_router_inputs(selected, parsed.get("inputs"), message)
         return {
             "workflow_id": selected["workflow_id"],
             "workflow_slug": selected["slug"],
             "confidence": max(0.0, min(confidence, 1.0)),
             "reason": str(parsed.get("reason") or ""),
-            "inputs": parsed.get("inputs") if isinstance(parsed.get("inputs"), dict) else {},
+            "inputs": inputs,
             "fallback": False,
             "model": model,
         }

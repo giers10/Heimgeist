@@ -639,22 +639,18 @@ def _load_previous_session_hits(
     current_created_at = None
     if exclude_session_id:
         try:
-            current_created_at = db.execute(
-                text("SELECT created_at FROM chat_sessions WHERE session_id = :session_id"),
-                {"session_id": exclude_session_id},
-            ).scalar()
+            current_session = db.query(models.ChatSession).filter(models.ChatSession.session_id == exclude_session_id).first()
+            current_created_at = current_session.created_at if current_session else None
         except Exception:
             current_created_at = None
 
     try:
-        sessions = (
-            db.query(models.ChatSession)
-            .filter(models.ChatSession.session_id != exclude_session_id if exclude_session_id else text("1=1"))
-            .filter(models.ChatSession.created_at < current_created_at if current_created_at else text("1=1"))
-            .order_by(models.ChatSession.created_at.desc(), models.ChatSession.id.desc())
-            .limit(20)
-            .all()
-        )
+        query = db.query(models.ChatSession)
+        if exclude_session_id:
+            query = query.filter(models.ChatSession.session_id != exclude_session_id)
+        if current_created_at:
+            query = query.filter(models.ChatSession.created_at < current_created_at)
+        sessions = query.order_by(models.ChatSession.created_at.desc(), models.ChatSession.id.desc()).limit(20).all()
     except Exception:
         return []
 

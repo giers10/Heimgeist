@@ -21,7 +21,7 @@ HOST_LIMITS = {
 RUN_REFERENCE_FIELDS = {
     "session_id", "chat_model", "router_model", "vision_model", "transcription_model",
     "library_slug", "searx_url", "searx_engines", "messages", "attachments",
-    "generation_options", "context_blocks", "target_message_id", "target_url",
+    "generation_options", "context_blocks", "target_message_id", "target_message_content", "target_url",
 }
 
 

@@ -33,7 +33,7 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
         db = self.Session()
         web = db.query(WorkflowDefinition).filter_by(slug="web-answer").one()
         with patch("backend.agent.router.chat_typed", new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({"workflow_id": web.id, "confidence": 0.9, "reason": "current", "inputs": {}})))):
-            result = await select_workflow(db, message="what changed recently?", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model", web_search_enabled=True)
+            result = await select_workflow(db, message="tell me something useful", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model", web_search_enabled=True)
             self.assertEqual(result["workflow_slug"], "web-answer")
         with patch("backend.agent.router.chat_typed", new=AsyncMock(return_value=OllamaChatResult(content="not json"))):
             self.assertEqual((await select_workflow(db, message="x", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model"))["workflow_slug"], "input-output")

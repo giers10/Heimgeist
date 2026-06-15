@@ -133,7 +133,7 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
         with patch("backend.agent.tools.web.fetch_website_snapshot", new=AsyncMock(side_effect=fake_fetch)):
             result = await registry.call_tool(
                 "heimgeist.web_fetch",
-                {"url": None, "urls": [{"url": "https://news.google.com/topics/iran"}], "maximum_pages": 1},
+                {"url": None, "urls": [{"url": "https://example.test/iran"}], "maximum_pages": 1},
                 context(registry),
             )
 

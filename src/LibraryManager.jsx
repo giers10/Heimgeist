@@ -54,6 +54,7 @@ function itemSyncMeta(item) {
 function kindLabel(item) {
   if (item?.kind === 'text') return 'Text'
   if (item?.kind === 'website') return 'Website'
+  if (item?.kind === 'video') return 'Video'
   if (item?.kind === 'chat_message') return 'Chat Message'
   return 'File'
 }
@@ -81,6 +82,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
   const [textContent, setTextContent] = useState('')
   const [websiteTitle, setWebsiteTitle] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
+  const [websiteProcessing, setWebsiteProcessing] = useState(false)
   const [expandedItemId, setExpandedItemId] = useState(null)
   const [contentPreviews, setContentPreviews] = useState({})
   const toastTimeoutsRef = useRef(new Map())
@@ -237,17 +239,27 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
   async function submitWebsite(event) {
     event.preventDefault()
     if (!library) return
+    setWebsiteProcessing(true)
     try {
-      await runAction(async () => {
+      const result = await runAction(async () => {
         const response = await fetch(`${apiBase}/libraries/${library.slug}/websites`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: websiteUrl, title: websiteTitle || null })
         })
         return expectJson(response)
-      }, 'Website saved. Heimgeist is indexing its text.')
+      })
+      queueToast(
+        result?.content_kind === 'video'
+          ? 'Video transcribed and summarized. Heimgeist is indexing it.'
+          : 'Website saved. Heimgeist is indexing its text.',
+        'success'
+      )
       closeForm()
-    } catch {}
+    } catch {
+    } finally {
+      setWebsiteProcessing(false)
+    }
   }
 
   async function refreshWebsite(item) {
@@ -267,6 +279,29 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
       setExpandedItemId(current => current === item.item_id ? null : current)
       queueToast(result?.changed ? 'Website changed and is being reindexed.' : 'Website checked. No text changes found.', 'success')
     } catch {}
+  }
+
+  async function refreshVideo(item) {
+    if (!library || !item?.item_id) return
+    setWebsiteProcessing(true)
+    try {
+      const result = await runAction(async () => {
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/videos/${item.item_id}/refresh`, {
+          method: 'POST'
+        })
+        return expectJson(response)
+      })
+      setContentPreviews(current => {
+        const next = { ...current }
+        delete next[item.item_id]
+        return next
+      })
+      setExpandedItemId(current => current === item.item_id ? null : current)
+      queueToast(result?.changed ? 'Video reprocessed and changed.' : 'Video reprocessed. Transcript content is unchanged.', 'success')
+    } catch {
+    } finally {
+      setWebsiteProcessing(false)
+    }
   }
 
   async function removeItem(item) {
@@ -335,6 +370,8 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
       item.kind,
       item.source_session_title,
       item.source_role,
+      item.channel,
+      item.video_summary,
       item.metadata?.headline,
       item.metadata?.summary,
       ...(item.metadata?.keywords || []),

@@ -33,7 +33,7 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
         db = self.Session()
         web = db.query(WorkflowDefinition).filter_by(slug="web-answer").one()
         with patch("backend.agent.router.chat_typed", new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({"workflow_id": web.id, "confidence": 0.9, "reason": "current", "inputs": {}})))):
-            result = await select_workflow(db, message="tell me something useful", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model", web_search_enabled=True)
+            result = await select_workflow(db, message="tell me something useful", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model")
             self.assertEqual(result["workflow_slug"], "web-answer")
         with patch("backend.agent.router.chat_typed", new=AsyncMock(return_value=OllamaChatResult(content="not json"))):
             self.assertEqual((await select_workflow(db, message="x", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model"))["workflow_slug"], "input-output")
@@ -42,14 +42,14 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await select_workflow(db, message="x", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model"))["workflow_slug"], "input-output")
         web.enabled = True; db.commit()
         with patch("backend.agent.router.chat_typed", new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({"workflow_id": web.id, "confidence": 0.2, "reason": "x", "inputs": {}})))):
-            self.assertEqual((await select_workflow(db, message="x", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model", web_search_enabled=True))["workflow_slug"], "input-output")
+            self.assertEqual((await select_workflow(db, message="x", recent_messages=[], attachments=[], library_slug=None, router_model=None, chat_model="model"))["workflow_slug"], "input-output")
         db.close()
 
-    async def test_fast_paths_respect_permissions(self):
+    async def test_fast_paths_auto_select_or_force_web(self):
         db = self.Session()
         with patch("backend.agent.router.chat_typed", new=AsyncMock()) as mocked:
             result = await select_workflow(
-                db, message="latest news today", recent_messages=[], attachments=[],
+                db, message="hello", recent_messages=[], attachments=[],
                 library_slug=None, router_model=None, chat_model="model", web_search_enabled=True,
             )
             self.assertEqual(result["workflow_slug"], "web-answer")
@@ -57,6 +57,12 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
 
             result = await select_workflow(
                 db, message="latest news today", recent_messages=[], attachments=[],
+                library_slug=None, router_model=None, chat_model="model", web_search_enabled=False,
+            )
+            self.assertEqual(result["workflow_slug"], "web-answer")
+
+            result = await select_workflow(
+                db, message="hello", recent_messages=[], attachments=[],
                 library_slug=None, router_model=None, chat_model="model", web_search_enabled=False,
             )
             self.assertEqual(result["workflow_slug"], "input-output")

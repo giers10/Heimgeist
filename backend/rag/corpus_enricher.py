@@ -345,11 +345,15 @@ def build_system(summary_lang: str) -> str:
 
 def build_user_main(text: str, summary_lang: str, doc_hint: str, want_qa: int, *, include_qa: bool) -> str:
     want_qa = max(2, min(4, int(want_qa))) if include_qa else 0
+    qa_style = "Also produce 2–4 useful QA pairs." if include_qa else "Set qa to an empty list."
+    qa_constraint = (
+        "- Q&A must be answerable ONLY from the TEXT; keep questions <= 16 words; answers concise (<= ~80 words).\n"
+        if include_qa else "- Return an empty qa list.\n"
+    )
     # Fixed internal instruction for style/tone
     fixed_instruction = (
         "Produce concise headlines (≤12 words) and 2–4 sentence summaries; "
-        "5–12 normalized keywords (kebab-case) and named entities with types. "
-        + ("Also produce 2–4 useful QA pairs. " if include_qa else "Set qa to an empty list. ")
+        f"5–12 normalized keywords (kebab-case) and named entities with types. {qa_style} "
         "Keep strictly grounded in the source."
     )
     return (
@@ -370,7 +374,7 @@ def build_user_main(text: str, summary_lang: str, doc_hint: str, want_qa: int, *
         f"Constraints:\n"
         f"- Headline and summary MUST be in {summary_lang}.\n"
         "- Extract proper nouns and salient terms as entities; deduplicate by name.\n"
-        + ("- Q&A must be answerable ONLY from the TEXT; keep questions <= 16 words; answers concise (<= ~80 words).\n" if include_qa else "- Return an empty qa list.\n")
+        f"{qa_constraint}"
         "- Be terse and informative; no filler.\n\n"
         "TEXT:\n" + text
     )
@@ -653,6 +657,7 @@ def enrich_one(
     except Exception:
         source_key = source_path
     include_qa = source_key in args.deep_source_paths
+    level = "deep" if include_qa else "standard"
 
     is_short = len(base_text) < args.min_chars
     sampled = base_text if len(base_text) <= args.max_text else head_mid_tail_sample(base_text, args.max_text)
@@ -673,6 +678,7 @@ def enrich_one(
             "prompt_version": PROMPT_VERSION,
             "cached": True,
             "strategy": "short-fastpath",
+            "level": level,
         }
         enr = dict(rec)
         enr.update({
@@ -686,6 +692,7 @@ def enrich_one(
                 "prompt_version": PROMPT_VERSION,
                 "cached": True,
                 "strategy": "short-fastpath",
+                "level": level,
                 "ok": True,
                 "error": None,
             }
@@ -700,7 +707,6 @@ def enrich_one(
         doc_hint += " The TEXT appears noisy/garbled (possibly OCR). Summarize what the document likely conveys and any clearly legible details; avoid copying garbled strings."
 
     # caching
-    level = "deep" if include_qa else "standard"
     key = stable_hash(sampled, args.model, target_lang, rec_id, f"{rec_type}:{level}")
     if not args.force:
         hit = cache_main.get(key)

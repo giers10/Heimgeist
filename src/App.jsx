@@ -544,13 +544,23 @@ export default function App() {
     setIsSending(false)
   }, [])
 
+  const attachWorkflowRunToRequest = React.useCallback((controller, runId) => {
+    if (activeRequestRef.current?.controller !== controller) return
+    activeRequestRef.current.runId = runId
+  }, [])
+
   const cancelActiveRequest = React.useCallback(() => {
     const activeRequest = activeRequestRef.current
     if (!activeRequest) return
     activeRequestRef.current = null
+    if (activeRequest.runId) {
+      cancelWorkflowRun(backendApiUrl, activeRequest.runId).catch(error => {
+        console.warn('Workflow cancellation failed', error)
+      })
+    }
     activeRequest.controller.abort()
     setIsSending(false)
-  }, [])
+  }, [backendApiUrl])
 
   useEffect(() => {
     return () => {

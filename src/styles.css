@@ -2358,6 +2358,17 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 
+.workflow-list-item > div:first-child {
+  min-width: 0;
+}
+
+.workflow-list-item strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar .workflow-list-item {
   margin: 8px 8px 0;
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);

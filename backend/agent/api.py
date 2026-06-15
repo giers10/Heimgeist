@@ -380,8 +380,6 @@ async def _select_for_run(
             if session:
                 rows = db.query(chat_models.ChatMessage).filter(chat_models.ChatMessage.session_pk == session.id).order_by(chat_models.ChatMessage.id.desc()).limit(4).all()
                 recent_messages = [{"role": row.role, "content": row.content} for row in reversed(rows)]
-        if memory_context and memory_context.get("context_block"):
-            recent_messages.append({"role": "system", "content": memory_context["context_block"]})
         router_result = await select_workflow(
             db, message=request.message, recent_messages=recent_messages, attachments=request.attachments,
             library_slug=request.library_slug, router_model=request.router_model, chat_model=request.model,
@@ -499,6 +497,10 @@ async def create_workflow_run(request: WorkflowRunRequest):
         sample_inputs.setdefault("session_id", request.session_id)
         web_search_query, web_search_queries = _resolve_web_search_inputs(sample_inputs, request.message)
         memory_blocks = [memory_context] if memory_context.get("context_block") else []
+        try:
+            required_capabilities = set(json.loads(workflow.required_capabilities_json or "[]"))
+        except Exception:
+            required_capabilities = set()
         run_values = {
             "session_id": request.session_id,
             "chat_model": request.model,
@@ -514,6 +516,8 @@ async def create_workflow_run(request: WorkflowRunRequest):
             "context_blocks": memory_blocks,
             "manual_library_enabled": bool(request.library_slug),
             "web_search_enabled": request.web_search_enabled,
+            "compatibility_rag_enabled": bool(request.library_slug and "rag" not in required_capabilities),
+            "compatibility_web_enabled": bool(request.web_search_enabled and "web" not in required_capabilities),
             "web_search_query": web_search_query,
             "web_search_queries": web_search_queries,
             "show_thinking": request.show_thinking,

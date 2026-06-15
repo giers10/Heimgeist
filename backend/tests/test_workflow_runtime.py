@@ -98,6 +98,9 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(db.query(WorkflowEvent).filter(WorkflowEvent.event_type == "source_found").count())
         db.close()
 
+        test_run = await self.execute(self.create_run(value, session=False))
+        self.assertEqual(test_run.status, "completed")
+
     async def test_concurrent_nodes_and_condition_branch(self):
         value = graph(
             [

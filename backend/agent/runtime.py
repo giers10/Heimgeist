@@ -162,6 +162,7 @@ class WorkflowRuntime:
         counter_lock = asyncio.Lock()
         node_outputs: Dict[str, Any] = {}
         run_values = dict(inputs.get("run") or {})
+        run_values["maximum_tool_calls_override"] = graph.limits.maximum_tool_calls
         workflow_inputs = dict(inputs.get("input") or {})
         values = {"input": workflow_inputs, "run": run_values, "nodes": {}}
 

@@ -24,6 +24,15 @@ ROUTER_FORMAT = {
 }
 
 
+MESSAGE_DIGEST_THRESHOLD = 2600
+MESSAGE_DIGEST_HEAD_CHARS = 900
+MESSAGE_DIGEST_MIDDLE_CHARS = 500
+MESSAGE_DIGEST_TAIL_CHARS = 900
+MESSAGE_DIGEST_MAX_SAMPLE_LINES = 6
+MESSAGE_DIGEST_SAMPLE_LINE_CHARS = 180
+ATTACHMENT_SUMMARY_LIMIT = 8
+
+
 def workflow_manifests(db: Session) -> List[Dict[str, Any]]:
     workflows = db.query(WorkflowDefinition).filter(WorkflowDefinition.enabled.is_(True)).order_by(WorkflowDefinition.name.asc()).all()
     manifests = []
@@ -214,6 +223,109 @@ def _format_recent_messages(recent_messages: List[Dict[str, Any]], *, char_limit
     return "\n".join(rows) if rows else "(none)"
 
 
+def _normalize_message_text(message: str) -> str:
+    return str(message or "").replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
+
+
+def _short_line(line: str, limit: int = MESSAGE_DIGEST_SAMPLE_LINE_CHARS) -> str:
+    text = " ".join(str(line or "").split()).strip()
+    if len(text) > limit:
+        text = text[:limit].rstrip() + "..."
+    return text
+
+
+def _sample_representative_lines(text: str, *, max_lines: int = MESSAGE_DIGEST_MAX_SAMPLE_LINES) -> List[str]:
+    candidates = []
+    for line_number, line in enumerate(text.splitlines(), 1):
+        compact = _short_line(line)
+        if not compact:
+            continue
+        if compact in {item[1] for item in candidates}:
+            continue
+        candidates.append((line_number, compact))
+    if len(candidates) <= max_lines:
+        return [f"L{line_number}: {compact}" for line_number, compact in candidates]
+    if max_lines <= 1:
+        line_number, compact = candidates[0]
+        return [f"L{line_number}: {compact}"]
+    selected = []
+    last_index = len(candidates) - 1
+    for index in range(max_lines):
+        selected_index = round(index * last_index / (max_lines - 1))
+        line_number, compact = candidates[selected_index]
+        selected.append(f"L{line_number}: {compact}")
+    return selected
+
+
+def _count_substrings(text: str, values: List[str]) -> int:
+    lowered = text.casefold()
+    return sum(lowered.count(value.casefold()) for value in values)
+
+
+def _format_message_for_router(message: str) -> str:
+    text = _normalize_message_text(message)
+    if len(text) <= MESSAGE_DIGEST_THRESHOLD:
+        return text
+
+    lines = text.splitlines()
+    middle_start = max(0, (len(text) - MESSAGE_DIGEST_MIDDLE_CHARS) // 2)
+    middle_end = min(len(text), middle_start + MESSAGE_DIGEST_MIDDLE_CHARS)
+    samples = _sample_representative_lines(text)
+    sections = [
+        "<long_user_message_digest>",
+        f"Original length: {len(text)} characters, {len(lines)} lines.",
+        f"Detected structure: {_count_substrings(text, ['http://', 'https://'])} URL marker(s), {text.count('```')} code-fence marker(s).",
+        "This is a routing digest, not the full message. Use the visible beginning/end and structural summary to route; do not infer omitted content.",
+        "",
+        "<beginning_excerpt>",
+        text[:MESSAGE_DIGEST_HEAD_CHARS].rstrip(),
+        "</beginning_excerpt>",
+        "",
+        "<middle_excerpt>",
+        text[middle_start:middle_end].strip(),
+        "</middle_excerpt>",
+        "",
+        "<ending_excerpt>",
+        text[-MESSAGE_DIGEST_TAIL_CHARS:].lstrip(),
+        "</ending_excerpt>",
+    ]
+    if samples:
+        sections.extend([
+            "",
+            "<representative_short_lines>",
+            *samples,
+            "</representative_short_lines>",
+        ])
+    sections.append("</long_user_message_digest>")
+    return "\n".join(sections)
+
+
+def _format_attachment_summary(attachments: List[Dict[str, Any]]) -> str:
+    if not attachments:
+        return "No attachments."
+    rows = [f"{len(attachments)} attachment(s) are present."]
+    for index, attachment in enumerate(attachments[:ATTACHMENT_SUMMARY_LIMIT], 1):
+        if not isinstance(attachment, dict):
+            rows.append(f"{index}. Attachment")
+            continue
+        kind = str(attachment.get("kind") or ("image" if attachment.get("data_url") else "file") or "attachment")
+        name = str(attachment.get("name") or attachment.get("source_path") or f"attachment-{index}")
+        mime_type = str(attachment.get("mime_type") or "").strip()
+        size = attachment.get("size")
+        text_length = len(str(attachment.get("text") or ""))
+        parts = [f"{index}. {kind}: {name}"]
+        if mime_type:
+            parts.append(f"mime={mime_type}")
+        if size is not None:
+            parts.append(f"size={size}")
+        if text_length:
+            parts.append(f"text_chars={text_length}")
+        rows.append("; ".join(parts))
+    if len(attachments) > ATTACHMENT_SUMMARY_LIMIT:
+        rows.append(f"... {len(attachments) - ATTACHMENT_SUMMARY_LIMIT} more attachment(s) omitted from routing summary.")
+    return "\n".join(rows)
+
+
 def _format_workflow_choices(manifests: List[Dict[str, Any]]) -> str:
     rows: List[str] = []
     for item in manifests:
@@ -235,11 +347,9 @@ def _router_prompt(
     attachments: List[Dict[str, Any]],
     manifests: List[Dict[str, Any]],
 ) -> str:
-    message_excerpt = str(message or "")
-    if len(message_excerpt) > 1800:
-        message_excerpt = message_excerpt[:1800] + "..."
-    history_chars = 300 if len(message_excerpt) > 1000 else 500
-    attachment_line = "No attachments." if not attachments else f"{len(attachments)} attachment(s) are present."
+    message_excerpt = _format_message_for_router(message)
+    history_chars = 250 if len(message_excerpt) > MESSAGE_DIGEST_THRESHOLD else 500
+    attachment_line = _format_attachment_summary(attachments)
     return (
         "You are Heimgeist's workflow router. Choose exactly one allowed workflow for the current user message.\n\n"
         "Decision method:\n"
@@ -253,8 +363,10 @@ def _router_prompt(
         "- Short follow-ups usually inherit the previous subject, place, entity, file, source, or task unless the user clearly changes topic.\n"
         "- Resolve pronouns and fragments such as 'that', 'it', 'there', 'also', 'and', 'politically', or 'what about' into the standalone request.\n"
         "- For web workflows, write search queries for the standalone factual request, not the literal fragment the user typed.\n\n"
+        "Long-message routing rule:\n"
+        "- If the current user message is shown as a digest, route from the user's explicit request and the required capabilities. A long pasted payload alone does not require web search or research.\n\n"
         f"Recent conversation:\n{_format_recent_messages(recent_messages, char_limit=history_chars)}\n\n"
-        f"Current user message:\n{message_excerpt}\n\n"
+        f"Current user message or routing digest:\n{message_excerpt}\n\n"
         f"Attachments:\n{attachment_line}\n\n"
         "Allowed workflows. This list is already filtered by interface settings and available capabilities; choose only from this list:\n"
         f"{_format_workflow_choices(manifests)}\n\n"

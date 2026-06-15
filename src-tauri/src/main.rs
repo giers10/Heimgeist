@@ -28,6 +28,7 @@ const BACKEND_SIDECAR_NAME: &str = "heimgeist-backend";
 const BACKEND_STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const DEFAULT_OLLAMA_API_URL: &str = "http://127.0.0.1:11434";
 const DEFAULT_EMBED_MODEL: &str = "nomic-embed-text:latest";
+const DEFAULT_ENRICHMENT_MODEL: &str = "qwen3:4b";
 const DEFAULT_TRANSCRIPTION_MODEL: &str = "base";
 const BGE_EMBED_MODEL: &str = "bge-m3:latest";
 const DEFAULT_UI_SCALE: f64 = 1.0;
@@ -121,6 +122,10 @@ fn default_settings() -> SettingsMap {
     settings.insert("visionModel".into(), json!(""));
     settings.insert("embedModel".into(), json!(DEFAULT_EMBED_MODEL));
     settings.insert("rerankModel".into(), json!(DEFAULT_EMBED_MODEL));
+    settings.insert(
+        "enrichmentModel".into(),
+        json!(DEFAULT_ENRICHMENT_MODEL),
+    );
     settings.insert(
         "transcriptionModel".into(),
         json!(DEFAULT_TRANSCRIPTION_MODEL),
@@ -244,6 +249,14 @@ fn migrate_settings(source: Option<SettingsMap>) -> (SettingsMap, bool) {
         migrated = true;
     }
 
+    if !source.contains_key("enrichmentModel") {
+        next.insert(
+            "enrichmentModel".into(),
+            json!(DEFAULT_ENRICHMENT_MODEL),
+        );
+        migrated = true;
+    }
+
     if !source.contains_key("transcriptionModel") {
         next.insert(
             "transcriptionModel".into(),
@@ -263,6 +276,10 @@ fn normalize_settings(settings: &mut SettingsMap) {
     let vision_model = normalize_model_name(settings.get("visionModel"), "");
     let embed_model = normalize_embed_model(settings.get("embedModel"));
     let rerank_model = normalize_embed_model(settings.get("rerankModel"));
+    let enrichment_model = normalize_model_name(
+        settings.get("enrichmentModel"),
+        DEFAULT_ENRICHMENT_MODEL,
+    );
     let transcription_model = normalize_model_name(
         settings.get("transcriptionModel"),
         DEFAULT_TRANSCRIPTION_MODEL,
@@ -280,6 +297,7 @@ fn normalize_settings(settings: &mut SettingsMap) {
     settings.insert("visionModel".into(), json!(vision_model));
     settings.insert("embedModel".into(), json!(embed_model));
     settings.insert("rerankModel".into(), json!(rerank_model));
+    settings.insert("enrichmentModel".into(), json!(enrichment_model));
     settings.insert("transcriptionModel".into(), json!(transcription_model));
     settings.insert("uiScale".into(), json!(ui_scale));
     settings.insert(

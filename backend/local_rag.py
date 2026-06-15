@@ -22,7 +22,9 @@ from pydantic import BaseModel
 
 from .app_settings import (
     DEFAULT_EMBED_MODEL as DEFAULT_EMBED_MODEL_SETTING,
+    DEFAULT_ENRICHMENT_MODEL,
     get_embed_model_preference,
+    get_enrichment_model_preference,
     get_ollama_api_url,
 )
 from .paths import library_root
@@ -35,7 +37,7 @@ LIB_ROOT = library_root()
 RAW_CORPUS_PROFILE = "per-file-default-v1"
 PREPARE_PROFILE = "selective-enrich-v2"
 DEFAULT_EMBED_MODEL = DEFAULT_EMBED_MODEL_SETTING
-DEFAULT_ENRICH_MODEL = "qwen3:4b"
+DEFAULT_ENRICH_MODEL = DEFAULT_ENRICHMENT_MODEL
 DEFAULT_ENRICH_MIN_CHARS = 240
 DEFAULT_ENRICH_MAX_TEXT = 6000
 DEFAULT_ENRICH_CONCURRENCY = max(1, min(4, (os.cpu_count() or 4) // 2))
@@ -104,6 +106,10 @@ def _default_ollama_url() -> str:
 
 def _default_embed_model() -> str:
     return get_embed_model_preference()
+
+
+def _default_enrichment_model() -> str:
+    return get_enrichment_model_preference()
 
 
 def _resolve_ollama_url(value: Optional[str] = None) -> str:
@@ -631,13 +637,15 @@ def _persist_item_metadata(slug: str, enhanced_path: Path) -> None:
                 "status": "ready" if ok else "fallback",
                 "headline": str(record.get("headline") or ""),
                 "summary": str(record.get("summary") or ""),
-                "keywords": list(record.get("keywords") or [])[:12],
-                "entities": list(record.get("entities") or [])[:12],
+                "keywords": list(record.get("keywords") or []),
+                "entities": list(record.get("entities") or []),
+                "qa": list(record.get("qa") or []),
                 "language": record.get("lang"),
                 "level": str(enrichment_meta.get("level") or "standard"),
                 "model": enrichment_meta.get("model"),
                 "strategy": enrichment_meta.get("strategy"),
                 "qa_count": len(record.get("qa") or []),
+                "quality_flags": list(enrichment_meta.get("quality_flags") or []),
                 "updated_at": now_iso(),
                 "error": enrichment_meta.get("error") if not ok else None,
             }
@@ -997,7 +1005,7 @@ def _run_selected_enrichment(slug: str, on_progress=None, **opts) -> Dict[str, A
         shadow_out=paths["shadow_partial"],
         on_progress=on_progress,
         ollama=_resolve_ollama_url(opts.get("ollama")),
-        model=opts.get("enrich_model", DEFAULT_ENRICH_MODEL),
+        model=opts.get("enrich_model") or _default_enrichment_model() or DEFAULT_ENRICH_MODEL,
         summary_lang=opts.get("summary_lang", "auto"),
         concurrency=opts.get("enrich_concurrency", DEFAULT_ENRICH_CONCURRENCY),
         min_chars=opts.get("min_chars", DEFAULT_ENRICH_MIN_CHARS),
@@ -1060,7 +1068,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
             slug,
             on_progress=enrich_progress,
             ollama=_resolve_ollama_url(opts.get("ollama")),
-            enrich_model=opts.get("enrich_model", DEFAULT_ENRICH_MODEL),
+            enrich_model=opts.get("enrich_model") or _default_enrichment_model() or DEFAULT_ENRICH_MODEL,
             summary_lang=opts.get("summary_lang", "auto"),
             enrich_concurrency=opts.get("enrich_concurrency", DEFAULT_ENRICH_CONCURRENCY),
             min_chars=opts.get("min_chars", DEFAULT_ENRICH_MIN_CHARS),

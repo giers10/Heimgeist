@@ -122,10 +122,7 @@ fn default_settings() -> SettingsMap {
     settings.insert("visionModel".into(), json!(""));
     settings.insert("embedModel".into(), json!(DEFAULT_EMBED_MODEL));
     settings.insert("rerankModel".into(), json!(DEFAULT_EMBED_MODEL));
-    settings.insert(
-        "enrichmentModel".into(),
-        json!(DEFAULT_ENRICHMENT_MODEL),
-    );
+    settings.insert("enrichmentModel".into(), json!(DEFAULT_ENRICHMENT_MODEL));
     settings.insert(
         "transcriptionModel".into(),
         json!(DEFAULT_TRANSCRIPTION_MODEL),
@@ -250,10 +247,7 @@ fn migrate_settings(source: Option<SettingsMap>) -> (SettingsMap, bool) {
     }
 
     if !source.contains_key("enrichmentModel") {
-        next.insert(
-            "enrichmentModel".into(),
-            json!(DEFAULT_ENRICHMENT_MODEL),
-        );
+        next.insert("enrichmentModel".into(), json!(DEFAULT_ENRICHMENT_MODEL));
         migrated = true;
     }
 
@@ -276,10 +270,8 @@ fn normalize_settings(settings: &mut SettingsMap) {
     let vision_model = normalize_model_name(settings.get("visionModel"), "");
     let embed_model = normalize_embed_model(settings.get("embedModel"));
     let rerank_model = normalize_embed_model(settings.get("rerankModel"));
-    let enrichment_model = normalize_model_name(
-        settings.get("enrichmentModel"),
-        DEFAULT_ENRICHMENT_MODEL,
-    );
+    let enrichment_model =
+        normalize_model_name(settings.get("enrichmentModel"), DEFAULT_ENRICHMENT_MODEL);
     let transcription_model = normalize_model_name(
         settings.get("transcriptionModel"),
         DEFAULT_TRANSCRIPTION_MODEL,

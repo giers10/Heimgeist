@@ -635,6 +635,7 @@ export default function App() {
       setModel(settings.chatModel || ''); // Load the selected model, with a fallback
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || 'base');
+      setWorkflowRouterModel(settings.workflowRouterModel || '');
       setStreamOutput(settings.streamOutput || false);
       setAudioInputEnabled(true);
       if (settings.audioInputEnabled !== true) {
@@ -654,6 +655,15 @@ export default function App() {
       cancelled = true
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false
+    if (!backendApiUrl) return () => {}
+    fetchWorkflows(backendApiUrl)
+      .then(data => { if (!cancelled) setWorkflows(Array.isArray(data.workflows) ? data.workflows : []) })
+      .catch(error => { if (!cancelled) console.warn('Failed to load workflows', error) })
+    return () => { cancelled = true }
+  }, [backendApiUrl])
 
   useEffect(() => {
     modelRef.current = model

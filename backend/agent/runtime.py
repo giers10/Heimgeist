@@ -596,6 +596,8 @@ class WorkflowRuntime:
         db = self.db_factory()
         try:
             run = db.query(WorkflowRun).filter(WorkflowRun.id == run_id).first()
+            if run is None or not run.session_id:
+                return
             session = db.query(chat_models.ChatSession).filter(chat_models.ChatSession.session_id == run.session_id).first()
             if session is None:
                 raise RuntimeError("Chat session no longer exists.")

@@ -63,7 +63,11 @@ export default function WorkflowEditor({ apiBase, model, onChanged, tools, workf
   React.useEffect(() => {
     const graph = workflow?.graph || {}
     setNodes((graph.nodes || []).map(toCanvasNode))
-    setEdges(graph.edges || [])
+    setEdges((graph.edges || []).map(edge => ({
+      ...edge,
+      sourceHandle: edge.sourceHandle || edge.source_handle || 'output',
+      targetHandle: edge.targetHandle || edge.target_handle || 'input',
+    })))
     setInputsText(JSON.stringify(graph.inputs || {}, null, 2))
     setOutputsText(JSON.stringify(graph.outputs || {}, null, 2))
     setLimits(graph.limits || {})

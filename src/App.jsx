@@ -54,8 +54,30 @@ import desktopApi from './desktop/desktopApi'
 import WorkflowsArea from './workflows/WorkflowsArea'
 import WorkflowConfirmationDialog from './workflows/WorkflowConfirmationDialog'
 import WorkflowExecutionPanel from './workflows/WorkflowExecutionPanel'
+import WorkflowList from './workflows/WorkflowList'
 import WorkflowSelector from './workflows/WorkflowSelector'
-import { cancelWorkflowRun, fetchWorkflows, respondToConfirmation } from './workflows/workflowApi'
+import {
+  cancelWorkflowRun,
+  createWorkflow,
+  deleteWorkflow,
+  duplicateWorkflow,
+  fetchTools,
+  fetchWorkflow,
+  fetchWorkflows,
+  respondToConfirmation,
+} from './workflows/workflowApi'
+
+const DEFAULT_WORKFLOW_GRAPH = {
+  schema_version: 1,
+  inputs: { prompt: { type: 'string' }, session_id: { type: ['string', 'null'] } },
+  outputs: { content: { type: 'string' } },
+  nodes: [
+    { id: 'input', type: 'input', position: { x: 80, y: 120 }, config: {} },
+    { id: 'output', type: 'output', position: { x: 440, y: 120 }, config: { value: { content: { $ref: 'input.prompt' }, sources: [], usage: {} } } },
+  ],
+  edges: [{ id: 'input-output', source: 'input', source_handle: 'output', target: 'output', target_handle: 'input' }],
+  limits: { maximum_nodes: 40, maximum_tool_calls: 20, maximum_llm_calls: 8, maximum_runtime_seconds: 300, maximum_result_chars: 120000, maximum_concurrency: 4 },
+}
 
 export default function App() {
   const [chatSessions, setChatSessions] = useState([])
@@ -72,6 +94,10 @@ export default function App() {
   const [newLibraryName, setNewLibraryName] = useState('')
   const [libraryCreateError, setLibraryCreateError] = useState('')
   const [workflows, setWorkflows] = useState([])
+  const [workflowTools, setWorkflowTools] = useState([])
+  const [activeWorkflowId, setActiveWorkflowId] = useState(null)
+  const [activeWorkflow, setActiveWorkflow] = useState(null)
+  const [workflowError, setWorkflowError] = useState('')
   const {
     chatLibrary,
     chatLibrarySlug,

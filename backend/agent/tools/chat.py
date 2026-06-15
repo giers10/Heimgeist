@@ -52,7 +52,10 @@ def _collect_sources(blocks: List[Any]) -> List[Any]:
         if not isinstance(block, dict):
             continue
         for source in block.get("sources") or []:
-            key = str(source.get("url") if isinstance(source, dict) else source)
+            key = str(
+                (source.get("url") or source.get("source_message_id") or source.get("doc_id") or source)
+                if isinstance(source, dict) else source
+            )
             if key and key not in seen:
                 seen.add(key)
                 sources.append(source)

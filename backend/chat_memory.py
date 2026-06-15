@@ -20,10 +20,27 @@ _STOPWORDS = {
     "from", "had", "has", "have", "how", "into", "just", "like", "more", "not", "now",
     "our", "out", "over", "please", "should", "that", "the", "then", "there", "this",
     "was", "were", "what", "when", "where", "which", "with", "would", "you", "your",
+    "all", "anything", "chat", "chats", "conversation", "conversations", "discuss",
+    "discussed", "everything", "list", "me", "talk", "talked", "tell", "topic", "topics",
     "aber", "als", "auch", "auf", "aus", "bei", "bin", "bis", "das", "dem", "den",
-    "der", "des", "die", "ein", "eine", "einem", "einen", "einer", "für", "hat",
-    "ich", "ist", "mit", "nicht", "oder", "sich", "sind", "und", "uns", "von",
-    "war", "was", "wie", "wir", "zu", "zum", "zur",
+    "der", "des", "die", "ein", "eine", "einem", "einen", "einer", "erzaehl", "erzähl",
+    "erzähle", "für", "ging", "hat", "ich", "ist", "letzte", "letzten", "letztes", "mir",
+    "mit", "nicht", "oder", "sich", "sind", "und", "uns", "über", "ueber", "von",
+    "war", "was", "wie", "wir", "worum", "zu", "zum", "zur",
+}
+_LAST_CONVERSATION_RE = re.compile(
+    r"\b(last|latest|previous|prior)\s+(chat|conversation|session)\b"
+    r"|\b(letzte[sn]?|vorherige[sn]?)\s+(gespr[aä]ch|chat|unterhaltung)\b"
+    r"|\bworum\s+ging\s+es\s+im\s+letzte[sn]?\s+gespr[aä]ch\b",
+    re.IGNORECASE,
+)
+_QUERY_EXPANSIONS = {
+    "music": ["song", "songs", "album", "albums", "artist", "artists", "band", "bands", "lied", "lieder", "musik"],
+    "musik": ["music", "song", "songs", "album", "albums", "artist", "artists", "band", "bands", "lied", "lieder"],
+    "song": ["music", "songs", "lied", "lieder", "musik"],
+    "songs": ["music", "song", "lied", "lieder", "musik"],
+    "lied": ["music", "musik", "song", "songs", "lieder"],
+    "lieder": ["music", "musik", "song", "songs", "lied"],
 }
 
 

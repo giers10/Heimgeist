@@ -122,6 +122,7 @@ class RouterSelectRequest(BaseModel):
     recent_messages: List[Dict[str, Any]] = Field(default_factory=list)
     attachments: List[Dict[str, Any]] = Field(default_factory=list)
     library_slug: Optional[str] = None
+    web_search_enabled: bool = False
     model: Optional[str] = None
     chat_model: Optional[str] = None
     confidence_threshold: float = 0.55

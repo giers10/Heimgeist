@@ -15,6 +15,7 @@ const ENRICHMENT_MODEL_KEY = 'enrichmentModel';
 const MODEL_KEY = 'chatModel';
 const VISION_MODEL_KEY = 'visionModel';
 const TRANSCRIPTION_MODEL_KEY = 'transcriptionModel';
+const WORKFLOW_ROUTER_MODEL_KEY = 'workflowRouterModel';
 const AUTO_DEEP_ENRICHMENT_KEY = 'autoDeepEnrichment';
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
 const DEFAULT_AUDIO_INPUT_LANGUAGE = '';
@@ -74,6 +75,7 @@ export default function GeneralSettings({
   panel,
   onModelChange,
   onVisionModelChange,
+  onWorkflowRouterModelChange,
   onTranscriptionModelChange,
   onLibrariesPurged,
   onAudioInputDeviceChange,
@@ -91,6 +93,7 @@ export default function GeneralSettings({
   const [selectedModel, setSelectedModel] = useState('');
   const [visionModel, setVisionModel] = useState('');
   const [transcriptionModel, setTranscriptionModel] = useState(DEFAULT_TRANSCRIPTION_MODEL);
+  const [workflowRouterModel, setWorkflowRouterModel] = useState('');
   const [autoDeepEnrichment, setAutoDeepEnrichment] = useState(true);
   const [audioInputDeviceId, setAudioInputDeviceId] = useState(DEFAULT_AUDIO_INPUT_DEVICE_ID);
   const [audioInputLanguage, setAudioInputLanguage] = useState(DEFAULT_AUDIO_INPUT_LANGUAGE);
@@ -129,6 +132,7 @@ export default function GeneralSettings({
       setSelectedModel(settings.chatModel || '');
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || DEFAULT_TRANSCRIPTION_MODEL);
+      setWorkflowRouterModel(settings.workflowRouterModel || '');
       setAutoDeepEnrichment(settings.autoDeepEnrichment !== false);
       setAudioInputDeviceId(
         typeof settings.audioInputDeviceId === 'string'
@@ -419,6 +423,13 @@ export default function GeneralSettings({
     }
   };
 
+  const handleWorkflowRouterModelChange = (event) => {
+    const nextModel = event.target.value;
+    setWorkflowRouterModel(nextModel);
+    desktopApi.setSetting(WORKFLOW_ROUTER_MODEL_KEY, nextModel);
+    onWorkflowRouterModelChange?.(nextModel);
+  };
+
   const handleAutoDeepEnrichmentToggle = () => {
     const nextValue = !autoDeepEnrichment;
     setAutoDeepEnrichment(nextValue);
@@ -605,6 +616,7 @@ export default function GeneralSettings({
   const rerankingModelOptions = buildSelectOptions(rerankingModels, rerankModel, 'saved model unavailable', showMissingModelLabel);
   const enrichmentModelOptions = buildSelectOptions(chatModels, enrichmentModel, 'saved model unavailable', showMissingModelLabel);
   const transcriptionModelOptions = buildSelectOptions(whisperModels, transcriptionModel, 'saved model unavailable', showMissingModelLabel);
+  const workflowRouterModelOptions = buildSelectOptions(chatModels, workflowRouterModel, 'saved model unavailable', showMissingModelLabel);
 
   if (panel === 'AI Models') {
     return (
@@ -621,6 +633,16 @@ export default function GeneralSettings({
           </select>
           <p className="setting-description">
             Heimgeist uses this model for normal text chat.
+          </p>
+        </div>
+        <div className="setting-section">
+          <h3>Workflow Router Model</h3>
+          <select className="select" value={workflowRouterModel} onChange={handleWorkflowRouterModelChange}>
+            <option value="">Use chat model</option>
+            {workflowRouterModelOptions.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
+          </select>
+          <p className="setting-description">
+            Automatic workflow selection uses this local Ollama model and falls back to the chat model when unavailable.
           </p>
         </div>
         <div className="setting-section">

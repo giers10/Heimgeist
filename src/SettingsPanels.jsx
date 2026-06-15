@@ -31,6 +31,7 @@ export function SettingsPanel({
   onStreamOutputChange,
   onTranscriptionModelChange,
   onVisionModelChange,
+  onWorkflowRouterModelChange,
   searxEngines,
   searxUrl,
   setSearxEngines,
@@ -54,6 +55,7 @@ export function SettingsPanel({
           panel="AI Models"
           onModelChange={onModelChange}
           onVisionModelChange={onVisionModelChange}
+          onWorkflowRouterModelChange={onWorkflowRouterModelChange}
           onTranscriptionModelChange={onTranscriptionModelChange}
           onLibrariesPurged={onLibrariesPurged}
         />

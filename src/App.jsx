@@ -1993,6 +1993,7 @@ async function createNewChat() {
             onStreamOutputChange={setStreamOutput}
             onTranscriptionModelChange={setTranscriptionModel}
             onVisionModelChange={setVisionModel}
+            onWorkflowRouterModelChange={setWorkflowRouterModel}
             searxEngines={searxEngines}
             searxUrl={searxUrl}
             setSearxEngines={setSearxEngines}

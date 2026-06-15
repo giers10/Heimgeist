@@ -35,11 +35,18 @@ def edge(source: str, target: str, source_handle: str = "output", suffix: str = 
     }
 
 
-def chat_arguments(context_blocks: List[Dict[str, str]] | None = None) -> Dict[str, Any]:
+EVIDENCE_FIRST_SYSTEM_PROMPT = (
+    "Answer the current user request using the supplied retrieved context as the primary evidence. "
+    "If retrieved context conflicts with older chat history, prefer the retrieved context and explain the correction briefly. "
+    "Do not recommend that the user consult external sources when relevant retrieved sources are already present."
+)
+
+
+def chat_arguments(context_blocks: List[Dict[str, str]] | None = None, system_prompt: str = "") -> Dict[str, Any]:
     return {
         "model": {"$ref": "run.chat_model"},
         "messages": {"$ref": "run.messages"},
-        "system_prompt": "",
+        "system_prompt": system_prompt,
         "context_blocks": context_blocks or [],
         "attachments": {"$ref": "run.attachments"},
         "vision_model": {"$ref": "run.vision_model"},
@@ -102,7 +109,7 @@ def web_graph() -> Dict[str, Any]:
                 "prompt": {"$ref": "input.prompt"}, "pages": {"$ref": "nodes.fetch.output.pages"}, "model": {"$ref": "run.chat_model"},
                 "rerank_model": None, "context_excerpt": "", "maximum_results": 6, "minimum_score": 55,
             }}),
-            node("chat", "tool", 1260, 100, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.rerank.output"}])}),
+            node("chat", "tool", 1260, 100, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.rerank.output"}], EVIDENCE_FIRST_SYSTEM_PROMPT)}),
             node("output", "output", 1540, 100, {"value": {"$ref": "nodes.chat.output"}}),
         ],
         [edge("input", "queries"), edge("queries", "search"), edge("search", "fetch"), edge("fetch", "rerank"), edge("rerank", "chat"), edge("chat", "output")],
@@ -144,7 +151,7 @@ KNOWLEDGE_WEB = graph(
         }}),
         node("merge", "merge", 1300, 130, {"values": [{"$ref": "nodes.knowledge.output"}, {"$ref": "nodes.rerank.output"}], "deduplicate_by": "url"}),
         node("limit", "limit", 1520, 130, {"value": {"$ref": "nodes.merge.output"}, "maximum_chars": 22000}),
-        node("chat", "tool", 1760, 130, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.limit.output"}])}),
+        node("chat", "tool", 1760, 130, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.limit.output"}], EVIDENCE_FIRST_SYSTEM_PROMPT)}),
         node("output", "output", 2040, 130, {"value": {"$ref": "nodes.chat.output"}}),
     ],
     [
@@ -195,8 +202,16 @@ RESEARCH = graph(
     [
         node("input", "input", 0, 180),
         node("analyze", "prompt", 220, 180, {
-            "model_source": "chat_model", "system_template": "Extract the core research question.",
-            "user_template": "{{input.prompt}}", "output_mode": "text", "temperature": 0.1,
+            "model_source": "chat_model",
+            "system_template": (
+                "Rewrite the user's current request as one concrete web research question. "
+                "Resolve follow-ups, pronouns, and phrases like 'that agreement' using the recent conversation. "
+                "If the request follows a current-news answer, preserve the current-news entities and claims from that answer. "
+                "Do not introduce historical topics or named agreements unless they appear in the current request or recent conversation. "
+                "Return one concise search-ready question only."
+            ),
+            "user_template": "Current request:\n{{input.prompt}}\n\nRecent conversation:\n{{run.messages}}",
+            "output_mode": "text", "temperature": 0.1,
         }),
         node("queries1", "tool", 470, 80, {"tool": "heimgeist.web_generate_queries", "arguments": {
             "prompt": {"$ref": "nodes.analyze.output.content"}, "model": {"$ref": "run.chat_model"}, "messages": {"$ref": "run.messages"},
@@ -230,7 +245,7 @@ RESEARCH = graph(
         node("empty2", "template", 1910, -80, {"template": "", "values": {}}),
         node("merge", "merge", 2820, 80, {"values": [{"$ref": "nodes.rank1.output"}, {"$ref": "nodes.rank2.output"}], "deduplicate_by": "url", "allow_missing": True}),
         node("limit", "limit", 3050, 80, {"value": {"$ref": "nodes.merge.output"}, "maximum_chars": 28000}),
-        node("chat", "tool", 3280, 80, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.limit.output"}])}),
+        node("chat", "tool", 3280, 80, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.limit.output"}], EVIDENCE_FIRST_SYSTEM_PROMPT)}),
         node("output", "output", 3520, 80, {"value": {"$ref": "nodes.chat.output"}}),
     ],
     [

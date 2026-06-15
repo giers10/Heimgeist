@@ -45,6 +45,52 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(queries)
         self.assertTrue(all("iran" in query.lower() for query in queries))
 
+    async def test_generate_queries_filters_followup_filler_and_keeps_quoted_topic(self):
+        registry = NativeToolProvider()
+        register_web_tools(registry)
+
+        prompt = (
+            "nah i mean what you got from the news, you said\n"
+            "```7. The Iranian government describes ending the war in Lebanon as "
+            "\"inseparable\" from this broader Iran-US agreement, while Hezbollah also issued a statement.```"
+        )
+        result_payload = {
+            "queries": [
+                "nah mean you got latest news",
+                "Iranian government Lebanon Iran-US agreement Hezbollah statement",
+            ]
+        }
+        with patch(
+            "backend.agent.tools.web.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps(result_payload))),
+        ):
+            result = await registry.call_tool(
+                "heimgeist.web_generate_queries",
+                {"prompt": prompt, "model": "model", "messages": []},
+                context(registry),
+            )
+
+        queries = result["queries"]
+        self.assertNotIn("nah mean you got latest news", queries)
+        self.assertTrue(any("iran" in query.lower() and "lebanon" in query.lower() for query in queries))
+
+    async def test_generate_queries_accepts_followup_synonyms_and_libanon_spelling(self):
+        registry = NativeToolProvider()
+        register_web_tools(registry)
+
+        result_payload = {"queries": ["US Iran deal Lebanon ceasefire"]}
+        with patch(
+            "backend.agent.tools.web.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps(result_payload))),
+        ):
+            result = await registry.call_tool(
+                "heimgeist.web_generate_queries",
+                {"prompt": "tell me more about the agreement to end war in libanon", "model": "model", "messages": []},
+                context(registry),
+            )
+
+        self.assertIn("US Iran deal Lebanon ceasefire", result["queries"])
+
     async def test_search_filters_dictionary_noise_for_current_lookup(self):
         registry = NativeToolProvider()
         register_web_tools(registry)

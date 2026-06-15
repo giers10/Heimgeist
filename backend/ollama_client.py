@@ -2,12 +2,50 @@ import httpx
 import json
 import re
 import time
-from typing import Dict, Any, List, AsyncGenerator, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, Any, List, AsyncGenerator, Optional, Tuple
 
 from .app_settings import get_ollama_api_url
 
 _MODEL_DETAILS_CACHE: Dict[Tuple[str, str], Tuple[float, Dict[str, Any]]] = {}
 _MODEL_DETAILS_TTL_S = 15.0
+
+
+@dataclass
+class OllamaToolCall:
+    name: str
+    arguments: Dict[str, Any]
+    raw: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class OllamaUsage:
+    prompt_eval_count: int = 0
+    eval_count: int = 0
+    total_duration: int = 0
+    load_duration: int = 0
+    prompt_eval_duration: int = 0
+    eval_duration: int = 0
+
+
+@dataclass
+class OllamaChatResult:
+    content: str = ""
+    thinking: str = ""
+    tool_calls: List[OllamaToolCall] = field(default_factory=list)
+    usage: OllamaUsage = field(default_factory=OllamaUsage)
+    done_reason: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class OllamaStreamChunk:
+    content: str = ""
+    thinking: str = ""
+    tool_calls: List[OllamaToolCall] = field(default_factory=list)
+    done: bool = False
+    usage: OllamaUsage = field(default_factory=OllamaUsage)
+    raw: Dict[str, Any] = field(default_factory=dict)
 
 
 def _cache_key(model: str) -> Tuple[str, str]:
@@ -202,51 +240,132 @@ def supports_vision(model_data: Dict[str, Any]) -> bool:
 
     return False
 
+def _parse_tool_calls(value: Any) -> List[OllamaToolCall]:
+    calls: List[OllamaToolCall] = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        function = item.get("function") if isinstance(item.get("function"), dict) else item
+        name = str(function.get("name") or "").strip()
+        arguments = function.get("arguments") or {}
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments)
+            except Exception:
+                arguments = {}
+        if name and isinstance(arguments, dict):
+            calls.append(OllamaToolCall(name=name, arguments=arguments, raw=item))
+    return calls
+
+
+def _usage_from_payload(data: Dict[str, Any]) -> OllamaUsage:
+    return OllamaUsage(
+        prompt_eval_count=int(data.get("prompt_eval_count") or 0),
+        eval_count=int(data.get("eval_count") or 0),
+        total_duration=int(data.get("total_duration") or 0),
+        load_duration=int(data.get("load_duration") or 0),
+        prompt_eval_duration=int(data.get("prompt_eval_duration") or 0),
+        eval_duration=int(data.get("eval_duration") or 0),
+    )
+
+
+def _chat_payload(
+    model: str,
+    messages: List[Dict[str, Any]],
+    *,
+    stream: bool,
+    options: Optional[Dict[str, Any]] = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    format: Optional[Any] = None,
+    think: Optional[bool] = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {"model": model, "messages": messages, "stream": stream}
+    if options:
+        payload["options"] = options
+    if tools:
+        payload["tools"] = tools
+    if format is not None:
+        payload["format"] = format
+    if think is not None:
+        payload["think"] = bool(think)
+    return payload
+
+
+async def chat_typed(
+    model: str,
+    messages: List[Dict[str, Any]],
+    *,
+    options: Dict[str, Any] | None = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    format: Optional[Any] = None,
+    think: Optional[bool] = None,
+    cancellation_event: Optional[Any] = None,
+) -> OllamaChatResult:
+    ollama_url = get_ollama_api_url()
+    if cancellation_event is not None and cancellation_event.is_set():
+        raise asyncio.CancelledError()
+    payload = _chat_payload(model, messages, stream=False, options=options, tools=tools, format=format, think=think)
+    async with httpx.AsyncClient(timeout=600.0) as client:
+        r = await client.post(f"{ollama_url}/api/chat", json=payload)
+        r.raise_for_status()
+        data = r.json()
+    message = data.get("message") if isinstance(data.get("message"), dict) else {}
+    if not message and data.get("messages"):
+        message = data["messages"][-1] or {}
+    return OllamaChatResult(
+        content=str(message.get("content") or data.get("content") or ""),
+        thinking=str(message.get("thinking") or data.get("thinking") or ""),
+        tool_calls=_parse_tool_calls(message.get("tool_calls") or data.get("tool_calls")),
+        usage=_usage_from_payload(data),
+        done_reason=data.get("done_reason"),
+        raw=data,
+    )
+
+
+async def chat_stream_typed(
+    model: str,
+    messages: List[Dict[str, Any]],
+    *,
+    options: Optional[Dict[str, Any]] = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    format: Optional[Any] = None,
+    think: Optional[bool] = None,
+    cancellation_event: Optional[Any] = None,
+) -> AsyncGenerator[OllamaStreamChunk, None]:
+    ollama_url = get_ollama_api_url()
+    payload = _chat_payload(model, messages, stream=True, options=options, tools=tools, format=format, think=think)
+    async with httpx.AsyncClient(timeout=600.0) as client:
+        async with client.stream("POST", f"{ollama_url}/api/chat", json=payload) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if cancellation_event is not None and cancellation_event.is_set():
+                    raise asyncio.CancelledError()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                message = data.get("message") if isinstance(data.get("message"), dict) else {}
+                yield OllamaStreamChunk(
+                    content=str(message.get("content") or data.get("content") or ""),
+                    thinking=str(message.get("thinking") or data.get("thinking") or ""),
+                    tool_calls=_parse_tool_calls(message.get("tool_calls") or data.get("tool_calls")),
+                    done=bool(data.get("done")),
+                    usage=_usage_from_payload(data),
+                    raw=data,
+                )
+
+
 async def chat(
     model: str,
     messages: List[Dict[str, Any]],
     *,
     options: Dict[str, Any] | None = None,
 ) -> str:
-    ollama_url = get_ollama_api_url()
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False
-    }
-    if options:
-        payload["options"] = options
-    async with httpx.AsyncClient(timeout=600.0) as client:
-        r = await client.post(f"{ollama_url}/api/chat", json=payload)
-        r.raise_for_status()
-        data = r.json()
-        # Ollama returns full conversation; pick last message content
-        try:
-            return data["message"]["content"]
-        except Exception:
-            # Newer Ollama formats may return messages list
-            msgs = data.get("messages") or []
-            if msgs:
-                return msgs[-1].get("content", "")
-            return data.get("content", "")
+    return (await chat_typed(model, messages, options=options)).content
 
 async def chat_stream(model: str, messages: List[Dict[str, Any]]) -> AsyncGenerator[str, None]:
-    ollama_url = get_ollama_api_url()
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": True
-    }
-    async with httpx.AsyncClient(timeout=600.0) as client:
-        async with client.stream("POST", f"{ollama_url}/api/chat", json=payload) as r:
-            r.raise_for_status()
-            async for line in r.aiter_lines():
-                if line:
-                    try:
-                        chunk = json.loads(line)
-                        if "content" in chunk: # Newer Ollama format
-                             yield chunk["content"]
-                        elif "message" in chunk and "content" in chunk["message"]: # Older format
-                            yield chunk["message"]["content"]
-                    except json.JSONDecodeError:
-                        pass # Ignore invalid JSON lines
+    async for chunk in chat_stream_typed(model, messages):
+        if chunk.content:
+            yield chunk.content

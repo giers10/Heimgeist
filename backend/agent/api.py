@@ -536,6 +536,7 @@ def get_workflow_events(run_id: str, after_sequence: int = Query(0, ge=0), follo
     async def stream():
         sequence = after_sequence
         idle_after_terminal = 0
+        emitted_interrupted = False
         while True:
             db = SessionLocal()
             try:
@@ -555,6 +556,17 @@ def get_workflow_events(run_id: str, after_sequence: int = Query(0, ge=0), follo
                         "payload": _json(item.payload_json, {}),
                     }, ensure_ascii=False) + "\n"
                 terminal = run.status in {"completed", "failed", "cancelled", "interrupted"}
+                if run.status == "interrupted" and not emitted_interrupted:
+                    emitted_interrupted = True
+                    yield json.dumps({
+                        "run_id": run.id,
+                        "workflow_id": run.workflow_id,
+                        "node_id": None,
+                        "sequence": sequence + 1,
+                        "timestamp": (run.finished_at or datetime.utcnow()).isoformat(),
+                        "type": "run_interrupted",
+                        "payload": _json(run.error_json, {"message": "Workflow run was interrupted."}),
+                    }, ensure_ascii=False) + "\n"
             finally:
                 db.close()
             if not follow:

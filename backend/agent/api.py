@@ -307,6 +307,7 @@ async def _select_for_run(db: Session, request: WorkflowRunRequest) -> tuple[Wor
         router_result = await select_workflow(
             db, message=request.message, recent_messages=recent_messages, attachments=request.attachments,
             library_slug=request.library_slug, router_model=request.router_model, chat_model=request.model,
+            web_search_enabled=request.web_search_enabled,
         )
         workflow = _find_workflow(db, router_result["workflow_id"])
     elif request.selection_mode == "explicit":

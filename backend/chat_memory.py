@@ -124,9 +124,9 @@ def _attachment_summary(raw_value: Any) -> str:
     return ", ".join(labels[:8])
 
 
-def _is_memory_only_response(row: models.ChatMessage) -> bool:
+def _is_memory_only_source_value(raw_value: Any) -> bool:
     try:
-        sources = json.loads(getattr(row, "sources_json", None) or "[]")
+        sources = json.loads(raw_value or "[]")
     except Exception:
         return False
     if not isinstance(sources, list) or not sources:
@@ -135,6 +135,10 @@ def _is_memory_only_response(row: models.ChatMessage) -> bool:
         if not isinstance(source, dict) or source.get("type") != "chat_memory":
             return False
     return True
+
+
+def _is_memory_only_response(row: models.ChatMessage) -> bool:
+    return _is_memory_only_source_value(getattr(row, "sources_json", None))
 
 
 def _completed_turns(session: models.ChatSession, rows: Sequence[models.ChatMessage]) -> List[Dict[str, Any]]:
@@ -499,7 +503,7 @@ def _load_live_candidates(
             SELECT
                 s.session_id, s.name AS session_name,
                 m.id AS message_row_id, m.message_id, m.role, m.content,
-                m.attachments_json, m.created_at
+                m.sources_json, m.attachments_json, m.created_at
             FROM chat_messages m
             JOIN chat_sessions s ON s.id = m.session_pk
             WHERE (:exclude_session_id IS NULL OR s.session_id != :exclude_session_id)
@@ -522,6 +526,9 @@ def _load_live_candidates(
             pending_by_session[session_id] = item
             continue
         if item.get("role") != "assistant" or session_id not in pending_by_session:
+            continue
+        if _is_memory_only_source_value(item.get("sources_json")):
+            pending_by_session.pop(session_id, None)
             continue
         user = pending_by_session.pop(session_id)
         user_content = _clean_content(user.get("content"))

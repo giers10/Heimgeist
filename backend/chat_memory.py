@@ -141,7 +141,12 @@ def _is_memory_only_response(row: models.ChatMessage) -> bool:
     return _is_memory_only_source_value(getattr(row, "sources_json", None))
 
 
-def _completed_turns(session: models.ChatSession, rows: Sequence[models.ChatMessage]) -> List[Dict[str, Any]]:
+def _completed_turns(
+    session: models.ChatSession,
+    rows: Sequence[models.ChatMessage],
+    *,
+    skip_memory_only: bool = True,
+) -> List[Dict[str, Any]]:
     turns: List[Dict[str, Any]] = []
     pending_user: Optional[models.ChatMessage] = None
     session_title = _clean_content(session.name, limit=200) or "New Chat"
@@ -151,7 +156,7 @@ def _completed_turns(session: models.ChatSession, rows: Sequence[models.ChatMess
             continue
         if row.role != "assistant" or pending_user is None:
             continue
-        if _is_memory_only_response(row):
+        if skip_memory_only and _is_memory_only_response(row):
             pending_user = None
             continue
 
@@ -642,50 +647,30 @@ def _load_previous_session_hits(
             current_created_at = None
 
     try:
-        previous_session_id = db.execute(text(
-            """
-            SELECT t.session_id
-            FROM chat_memory_turns t
-            JOIN chat_sessions s ON s.session_id = t.session_id
-            WHERE (:exclude_session_id IS NULL OR t.session_id != :exclude_session_id)
-              AND (:current_created_at IS NULL OR s.created_at < :current_created_at)
-            GROUP BY t.session_id, s.created_at
-            ORDER BY s.created_at DESC
-            LIMIT 1
-            """
-        ), {
-            "exclude_session_id": exclude_session_id,
-            "current_created_at": current_created_at,
-        }).scalar()
+        sessions = (
+            db.query(models.ChatSession)
+            .filter(models.ChatSession.session_id != exclude_session_id if exclude_session_id else text("1=1"))
+            .filter(models.ChatSession.created_at < current_created_at if current_created_at else text("1=1"))
+            .order_by(models.ChatSession.created_at.desc(), models.ChatSession.id.desc())
+            .limit(20)
+            .all()
+        )
     except Exception:
-        previous_session_id = None
-    if not previous_session_id:
         return []
 
-    try:
-        rows = db.execute(text(
-            """
-            SELECT
-                turn_key, session_id, session_name, user_message_id, assistant_message_id,
-                user_message_row_id, assistant_message_row_id, user_content, assistant_content,
-                attachment_summary, search_text, created_at
-            FROM chat_memory_turns
-            WHERE session_id = :session_id
-            ORDER BY assistant_message_row_id ASC
-            LIMIT :limit
-            """
-        ), {
-            "session_id": previous_session_id,
-            "limit": max(1, limit),
-        }).mappings().all()
-    except Exception:
-        return []
-    hits: List[Dict[str, Any]] = []
-    for row in rows:
-        item = _row_mapping(row)
-        item["_score"] = 1.0
-        hits.append(item)
-    return hits
+    for session in sessions:
+        rows = (
+            db.query(models.ChatMessage)
+            .filter(models.ChatMessage.session_pk == session.id)
+            .order_by(models.ChatMessage.created_at.asc(), models.ChatMessage.id.asc())
+            .all()
+        )
+        hits = _completed_turns(session, rows, skip_memory_only=False)[:max(1, limit)]
+        if hits:
+            for hit in hits:
+                hit["_score"] = 1.0
+            return hits
+    return []
 
 
 def build_chat_memory_context(

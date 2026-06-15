@@ -64,10 +64,13 @@ def _slugify(value: str) -> str:
 
 
 _REMEMBER_CONTENT_PATTERNS = [
-    re.compile(r"^\s*(?:please\s+)?remember\s+(?:this|that)\s*[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
-    re.compile(r"^\s*(?:please\s+)?save\s+(?:this|that)\s*[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
-    re.compile(r"^\s*(?:bitte\s+)?merk\s+dir\s+(?:das\s*)?[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
-    re.compile(r"^\s*(?:bitte\s+)?speicher(?:e)?\s+(?:das|dies|diese|diesen)?\s*[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:please\s+)?remember\s+this\s*[:\-–—]\s*(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:please\s+)?remember\s+that\s+(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:please\s+)?save\s+this\s*[:\-–—]\s*(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:please\s+)?save\s+that\s+(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:bitte\s+)?merk\s+dir\s+das\s*[:\-–—]\s*(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:bitte\s+)?merk\s+dir\s+(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:bitte\s+)?speicher(?:e)?\s+(?:das|dies|diese|diesen)\s*[:\-–—]\s*(.+)$", re.IGNORECASE | re.DOTALL),
 ]
 
 

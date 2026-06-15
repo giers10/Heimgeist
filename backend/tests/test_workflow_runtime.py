@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import uuid
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -62,7 +63,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     def create_run(self, graph_value, session=True):
         db = self.Session()
-        workflow = WorkflowDefinition(slug=f"w-{id(graph_value)}", name="Test", built_in=False, enabled=True)
+        workflow = WorkflowDefinition(slug=f"w-{uuid.uuid4().hex}", name="Test", built_in=False, enabled=True)
         db.add(workflow); db.flush()
         revision = WorkflowRevision(workflow_id=workflow.id, version=1, graph_json=json.dumps(graph_value), checksum="x", created_by="test")
         db.add(revision); db.flush(); workflow.current_revision_id = revision.id

@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import requests
+import httpx
 
 from .app_settings import (
     get_enrichment_model_preference,
@@ -128,10 +128,11 @@ def _download_latest_yt_dlp(binary_path: Path, status_path: Path) -> Optional[st
     url = f"{YTDLP_RELEASE_URL}/{_yt_dlp_asset_name()}"
     tmp_path = binary_path.with_suffix(binary_path.suffix + ".download")
     try:
-        with requests.get(url, stream=True, timeout=(10, 120)) as response:
+        timeout = httpx.Timeout(120.0, connect=10.0)
+        with httpx.stream("GET", url, follow_redirects=True, timeout=timeout) as response:
             response.raise_for_status()
             with tmp_path.open("wb") as handle:
-                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                for chunk in response.iter_bytes(chunk_size=1024 * 1024):
                     if chunk:
                         handle.write(chunk)
         if os.name != "nt":

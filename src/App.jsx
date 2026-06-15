@@ -1103,6 +1103,14 @@ export default function App() {
   }, [availableChatModels, model])
 
   const handleWorkflowRunEvent = React.useCallback((sessionId, event) => {
+    if (
+      event.type === 'tool_result'
+      && String(event.payload?.tool || '').startsWith('heimgeist.save_')
+      && event.payload?.result?.status === 'saved'
+    ) {
+      void refreshLibraries()
+      void refreshLibraryJobs()
+    }
     setWorkflowExecutions(previous => {
       const current = previous[sessionId] || {
         runId: event.run_id,
@@ -1152,7 +1160,7 @@ export default function App() {
         },
       }
     })
-  }, [])
+  }, [backendApiUrl])
 
   const { regenerateFromIndex, sendMessage } = createChatGenerationHandlers({
     activeSessionId,

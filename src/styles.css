@@ -2312,16 +2312,19 @@ input:checked + .slider:before {
 }
 
 .workflows-area {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  display: block;
   height: 100%;
   min-height: 0;
 }
 
 .workflow-list {
+  height: 100%;
   overflow: auto;
-  border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 92%, black);
+}
+
+.sidebar .workflow-list {
+  background: transparent;
 }
 
 .workflow-list-heading,
@@ -2344,6 +2347,10 @@ input:checked + .slider:before {
   background: var(--panel);
 }
 
+.sidebar .workflow-list-heading {
+  background: color-mix(in srgb, var(--panel) 96%, black);
+}
+
 .workflow-list-item {
   justify-content: space-between;
   padding: 12px 14px;
@@ -2351,8 +2358,20 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 
+.sidebar .workflow-list-item {
+  margin: 8px 8px 0;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 82%, black);
+}
+
 .workflow-list-item.active {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.sidebar .workflow-list-item.active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
 }
 
 .workflow-list-item small {
@@ -2363,6 +2382,7 @@ input:checked + .slider:before {
 
 .workflow-list-actions {
   display: flex;
+  gap: 8px;
 }
 
 .workflows-main,
@@ -2564,10 +2584,6 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 1050px) {
-  .workflows-area {
-    grid-template-columns: 210px minmax(0, 1fr);
-  }
-
   .workflow-editor-grid {
     grid-template-columns: 90px minmax(420px, 1fr) 260px;
   }

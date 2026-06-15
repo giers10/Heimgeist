@@ -205,8 +205,14 @@ RESEARCH = graph(
             "rerank_model": None, "context_excerpt": "", "maximum_results": 6, "minimum_score": 50,
         }}),
         node("evaluate", "prompt", 1430, 80, {
-            "model_source": "chat_model", "system_template": "Judge whether the evidence can answer the request. Return JSON.",
-            "user_template": "Request: {{input.prompt}}\nEvidence: {{nodes.rank1.output.context_block}}",
+            "model_source": "chat_model",
+            "system_template": (
+                "Judge whether the retrieved evidence directly answers the standalone request. "
+                "Return JSON only. Set sufficient=true only when the evidence contains relevant sourced facts for the main answer. "
+                "If sufficient=true, follow_up_query must be an empty string. "
+                "If sufficient=false, follow_up_query must be one concise web search query for the missing information, not an explanation."
+            ),
+            "user_template": "Original user message: {{input.prompt}}\nResolved request and router inputs: {{nodes.input.output}}\nEvidence: {{nodes.rank1.output.context_block}}",
             "output_mode": "json", "json_schema": {"type": "object", "properties": {"sufficient": {"type": "boolean"}, "follow_up_query": {"type": "string"}}, "required": ["sufficient", "follow_up_query"], "additionalProperties": False},
             "temperature": 0.1, "json_repair": True,
         }),

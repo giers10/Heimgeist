@@ -404,6 +404,9 @@ async def create_workflow_run(request: WorkflowRunRequest):
                 stored_attachments = _json(user_message.attachments_json, [])
                 run_attachments = request.attachments or stored_attachments
                 db.flush()
+                if not target_message_id and workflow.slug == "remember-this":
+                    target_message_id = user_message.message_id
+                    target_message_content = target_message_content or _extract_remember_content(request.message)
             else:
                 attachments = [main_module._normalize_chat_attachment_or_raise(item, include_text=True) for item in request.attachments]
                 run_attachments = attachments

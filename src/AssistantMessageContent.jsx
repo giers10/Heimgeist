@@ -39,8 +39,9 @@ export default function AssistantMessageContent({ content, streamOutput, sources
       />
       {Array.isArray(sources) && sources.length > 0 && (
         <div className="msg-sources chips">
-          {sources.map((u, i) => {
-            let label = u
+          {sources.map((source, i) => {
+            const u = typeof source === 'string' ? source : (source?.url || source?.canonical_url || '')
+            let label = typeof source === 'object' && source?.title ? source.title : u
             let isFile = false
             try {
               const parsed = new URL(u)
@@ -55,14 +56,14 @@ export default function AssistantMessageContent({ content, streamOutput, sources
             } catch {}
             return (
               <a
-                key={u + i}
+                key={(u || JSON.stringify(source)) + i}
                 className="chip"
-                href={u}
+                href={u || undefined}
                 target="_blank"
                 rel="noreferrer"
-                title={u}
+                title={typeof source === 'object' ? (source.snippet || u) : u}
                 onClick={(event) => {
-                  if (!isFile) return
+                  if (!isFile || !u) return
                   event.preventDefault()
                   try {
                     const parsed = new URL(u)

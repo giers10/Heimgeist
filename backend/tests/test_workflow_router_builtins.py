@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.agent.models import WorkflowDefinition
 from backend.agent.registry import NativeToolProvider
-from backend.agent.router import select_workflow
+from backend.agent.router import _format_message_for_router, _router_prompt, select_workflow
 from backend.agent.tools import register_native_tools
 from backend.agent.validation import validate_workflow_graph
 from backend.agent.workflows.builtins import BUILTIN_WORKFLOWS, seed_builtin_workflows
@@ -182,6 +182,60 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Web search mode:", prompt)
         self.assertNotIn("Selected knowledge database:", prompt)
         db.close()
+
+    async def test_long_message_digest_preserves_request_boundaries(self):
+        message = (
+            "Please summarize the pasted material and keep the answer short.\n"
+            + ("A" * 3600)
+            + "\nMiddle note: focus on the security implications.\n"
+            + ("B" * 3600)
+            + "\nActually, compare the risks and benefits instead."
+        )
+
+        digest = _format_message_for_router(message)
+
+        self.assertLess(len(digest), len(message))
+        self.assertIn("<long_user_message_digest>", digest)
+        self.assertIn("Please summarize the pasted material", digest)
+        self.assertIn("Middle note: focus on the security implications", digest)
+        self.assertIn("Actually, compare the risks and benefits instead.", digest)
+        self.assertIn("Original length:", digest)
+
+    async def test_router_prompt_uses_bounded_digest_and_attachment_summary(self):
+        message = (
+            "Instruction before payload: analyze this local document.\n"
+            + "\n".join(f"payload line {index} " + ("x" * 80) for index in range(400))
+            + "\nInstruction after payload: do not search the web unless needed."
+        )
+        manifest = {
+            "workflow_id": "direct",
+            "slug": "input-output",
+            "name": "Input -> Output",
+            "routing_description": "Use when no external tool is needed.",
+            "examples": [],
+            "required_capabilities": ["chat"],
+        }
+
+        prompt = _router_prompt(
+            message=message,
+            recent_messages=[{"role": "assistant", "content": "previous " + ("y" * 2000)}],
+            attachments=[{
+                "kind": "file",
+                "name": "large-report.pdf",
+                "mime_type": "application/pdf",
+                "size": 12345,
+                "text": "attachment text " * 1000,
+            }],
+            manifests=[manifest],
+        )
+
+        self.assertLess(len(prompt), 9000)
+        self.assertIn("Current user message or routing digest:", prompt)
+        self.assertIn("Instruction before payload", prompt)
+        self.assertIn("Instruction after payload", prompt)
+        self.assertIn("large-report.pdf", prompt)
+        self.assertIn("text_chars=", prompt)
+        self.assertNotIn("attachment text attachment text attachment text", prompt)
 
     async def test_all_builtins_validate(self):
         registry = NativeToolProvider(); register_native_tools(registry)

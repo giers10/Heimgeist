@@ -236,12 +236,14 @@ def _short_line(line: str, limit: int = MESSAGE_DIGEST_SAMPLE_LINE_CHARS) -> str
 
 def _sample_representative_lines(text: str, *, max_lines: int = MESSAGE_DIGEST_MAX_SAMPLE_LINES) -> List[str]:
     candidates = []
+    seen = set()
     for line_number, line in enumerate(text.splitlines(), 1):
         compact = _short_line(line)
         if not compact:
             continue
-        if compact in {item[1] for item in candidates}:
+        if compact in seen:
             continue
+        seen.add(compact)
         candidates.append((line_number, compact))
     if len(candidates) <= max_lines:
         return [f"L{line_number}: {compact}" for line_number, compact in candidates]

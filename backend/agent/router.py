@@ -113,6 +113,13 @@ _KNOWLEDGE_RE = re.compile(
     re.IGNORECASE,
 )
 _GREETING_RE = re.compile(r"^\s*(hi|hello|hey|hallo|moin|servus|danke|thanks|thank\s+you)[!.?\s]*$", re.IGNORECASE)
+_FRESH_INFO_RE = re.compile(
+    r"\b("
+    r"weather|forecast|news|politics|political|latest|current|today|tonight|now|recent|breaking|"
+    r"wetter|vorhersage|nachrichten|politik|aktuell|heute|neueste"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 def _fast_path(
@@ -176,6 +183,18 @@ def _clean_router_queries(raw: Any, fallback: str) -> List[str]:
     return cleaned
 
 
+def _router_inputs_need_fresh_info(inputs: Any, message: str, reason: str = "") -> bool:
+    values: List[str] = [str(message or ""), str(reason or "")]
+    if isinstance(inputs, dict):
+        for key in ("resolved_request", "web_search_query", "search_query"):
+            values.append(str(inputs.get(key) or ""))
+        for key in ("web_search_queries", "search_queries"):
+            raw = inputs.get(key)
+            if isinstance(raw, list):
+                values.extend(str(item or "") for item in raw)
+    return bool(_FRESH_INFO_RE.search(" ".join(values)))
+
+
 def _normalize_router_inputs(selected: Dict[str, Any], inputs: Any, message: str) -> Dict[str, Any]:
     normalized = dict(inputs) if isinstance(inputs, dict) else {}
     if "web" not in (selected.get("required_capabilities") or []):
@@ -184,7 +203,8 @@ def _normalize_router_inputs(selected: Dict[str, Any], inputs: Any, message: str
     if raw_queries is None:
         raw_queries = normalized.get("search_queries")
     raw_query = normalized.get("web_search_query") or normalized.get("search_query")
-    queries = _clean_router_queries(raw_queries if raw_queries is not None else raw_query, message)
+    query_fallback = normalized.get("resolved_request") or message
+    queries = _clean_router_queries(raw_queries if raw_queries is not None else raw_query, query_fallback)
     if raw_query:
         raw_query_text = " ".join(str(raw_query).split()).strip()
         if raw_query_text and raw_query_text.casefold() not in {item.casefold() for item in queries}:
@@ -335,7 +355,10 @@ async def select_workflow(
         workflow_id = str(parsed.get("workflow_id") or "")
         selected = next((item for item in manifests if item["workflow_id"] == workflow_id or item["slug"] == workflow_id), None)
         confidence = float(parsed.get("confidence") or 0)
-        forced_web = _forced_web_manifest(manifests, library_slug=library_slug) if web_search_enabled else None
+        raw_inputs = parsed.get("inputs")
+        forced_web = _forced_web_manifest(manifests, library_slug=library_slug) if (
+            web_search_enabled or _router_inputs_need_fresh_info(raw_inputs, message, str(parsed.get("reason") or ""))
+        ) else None
         forced = False
         if selected is None and forced_web:
             selected = forced_web

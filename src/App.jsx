@@ -1080,6 +1080,52 @@ export default function App() {
     selectChat(sessionId);
   };
 
+  async function handleSelectWorkflow(workflowId) {
+    if (!backendApiUrl || !workflowId) return
+    setActiveWorkflowId(workflowId)
+    try {
+      setActiveWorkflow(await fetchWorkflow(backendApiUrl, workflowId))
+      setWorkflowError('')
+    } catch (error) {
+      console.warn('Failed to load workflow', error)
+      setWorkflowError(String(error?.message || error))
+    }
+  }
+
+  async function handleCreateWorkflow() {
+    if (!backendApiUrl) return
+    try {
+      const created = await createWorkflow(backendApiUrl, { name: 'Untitled Workflow', graph: DEFAULT_WORKFLOW_GRAPH })
+      await refreshWorkflows(created.id)
+    } catch (error) {
+      console.warn('Failed to create workflow', error)
+      setWorkflowError(String(error?.message || error))
+    }
+  }
+
+  async function handleDuplicateWorkflow(workflowId) {
+    if (!backendApiUrl || !workflowId) return
+    try {
+      const created = await duplicateWorkflow(backendApiUrl, workflowId)
+      await refreshWorkflows(created.id)
+    } catch (error) {
+      console.warn('Failed to duplicate workflow', error)
+      setWorkflowError(String(error?.message || error))
+    }
+  }
+
+  async function handleDeleteWorkflow(workflowId) {
+    if (!backendApiUrl || !workflowId) return
+    if (!window.confirm('Delete this workflow and its revisions?')) return
+    try {
+      await deleteWorkflow(backendApiUrl, workflowId)
+      await refreshWorkflows(activeWorkflowId === workflowId ? null : activeWorkflowId)
+    } catch (error) {
+      console.warn('Failed to delete workflow', error)
+      setWorkflowError(String(error?.message || error))
+    }
+  }
+
   const messages = useMemo(() => {
     return chatSessions.find(s => s.session_id === activeSessionId)?.messages || [];
   }, [activeSessionId, chatSessions]);

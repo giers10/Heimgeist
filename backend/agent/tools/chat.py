@@ -70,8 +70,20 @@ def _drop_superseded_trailing_user_rows(rows: List[Any]) -> List[Any]:
     return [*rows[:first_trailing_user], rows[-1]]
 
 
+def _append_context_to_last_user_message(messages: List[Dict[str, Any]], context_text: str) -> None:
+    if not context_text:
+        return
+    for index in range(len(messages) - 1, -1, -1):
+        if str(messages[index].get("role") or "") == "user":
+            content = str(messages[index].get("content") or "").strip()
+            messages[index]["content"] = f"{content}\n\n{context_text}".strip()
+            return
+
+
 async def chat_handler(arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
     messages = [dict(item) for item in arguments.get("messages") or []]
+    context_text = _context_text(arguments.get("context_blocks") or [])
+    context_applied = False
     if context.session_id:
         db = context.db_factory()
         try:
@@ -90,8 +102,8 @@ async def chat_handler(arguments: Dict[str, Any], context: ToolExecutionContext)
             supports_vision = await main_module._model_supports_vision(arguments["model"])
             override_index = len(rows) - 1 if rows[-1].role == "user" else None
             prompt = rows[-1].content if override_index is not None else ""
-            context_text = _context_text(arguments.get("context_blocks") or [])
             override_content = f"{prompt}\n\n{context_text}".strip() if context_text else None
+            context_applied = bool(override_content)
             messages = await main_module._build_ollama_messages_from_rows(
                 rows,
                 request_model_supports_vision=supports_vision,
@@ -100,6 +112,8 @@ async def chat_handler(arguments: Dict[str, Any], context: ToolExecutionContext)
                 override_user_row_index=override_index,
                 override_user_content=override_content,
             )
+    if context_text and not context_applied:
+        _append_context_to_last_user_message(messages, context_text)
     system_prompt = str(arguments.get("system_prompt") or "").strip()
     if system_prompt:
         messages.insert(0, {"role": "system", "content": system_prompt})

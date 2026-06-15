@@ -3,6 +3,7 @@ export const COLOR_SCHEME_KEY = 'colorScheme'
 export const WEBSEARCH_URL_KEY = 'websearch.searxUrl'
 export const WEBSEARCH_ENGINES_KEY = 'websearch.engines'
 export const CHAT_LIBRARY_MAP_KEY = 'chat.libraryBySession'
+export const CHAT_WORKFLOW_MAP_KEY = 'chat.workflowBySession'
 export const DEFAULT_SEARX_URL = 'http://127.0.0.1:8888'
 export const DEFAULT_BACKEND_API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 export const MAX_IMAGE_ATTACHMENTS = 6

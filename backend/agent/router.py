@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -39,6 +40,123 @@ def workflow_manifests(db: Session) -> List[Dict[str, Any]]:
     return manifests
 
 
+def _fallback_result(fallback: WorkflowDefinition, reason: str = "Router fallback to direct chat.") -> Dict[str, Any]:
+    return {
+        "workflow_id": fallback.id,
+        "workflow_slug": fallback.slug,
+        "confidence": 0.0,
+        "reason": reason,
+        "inputs": {},
+        "fallback": True,
+    }
+
+
+def _manifest_by_slug(manifests: List[Dict[str, Any]], slug: str) -> Optional[Dict[str, Any]]:
+    return next((item for item in manifests if item["slug"] == slug), None)
+
+
+def _workflow_result(item: Dict[str, Any], *, confidence: float, reason: str, inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    return {
+        "workflow_id": item["workflow_id"],
+        "workflow_slug": item["slug"],
+        "confidence": max(0.0, min(float(confidence), 1.0)),
+        "reason": reason,
+        "inputs": inputs or {},
+        "fallback": False,
+    }
+
+
+def _capability_enabled(capability: str, *, library_slug: Optional[str], web_search_enabled: bool, has_attachments: bool) -> bool:
+    if capability in {"chat"}:
+        return True
+    if capability == "web":
+        return web_search_enabled
+    if capability in {"rag", "knowledge_write"}:
+        return bool(library_slug)
+    if capability == "vision":
+        return has_attachments
+    return False
+
+
+def _allowed_manifests(
+    manifests: List[Dict[str, Any]],
+    *,
+    library_slug: Optional[str],
+    web_search_enabled: bool,
+    has_attachments: bool,
+) -> List[Dict[str, Any]]:
+    allowed = []
+    for item in manifests:
+        capabilities = item.get("required_capabilities") or []
+        if all(_capability_enabled(str(capability), library_slug=library_slug, web_search_enabled=web_search_enabled, has_attachments=has_attachments) for capability in capabilities):
+            allowed.append(item)
+    return allowed
+
+
+_REMEMBER_RE = re.compile(
+    r"\b(remember\s+(this|that)|save\s+(this|that)|merk\s+dir\s+(das|:)?|speicher(e)?\s+(das|dies|diese|diesen)?)\b",
+    re.IGNORECASE,
+)
+_WEB_RE = re.compile(
+    r"\b(web|internet|online|search|look\s+up|google|latest|current|today|news|recent|heute|aktuell|neueste|nachrichten|suche|recherchier)\b",
+    re.IGNORECASE,
+)
+_KNOWLEDGE_RE = re.compile(
+    r"\b(my\s+(notes|documents|files|database|knowledge)|meine[nr]?\s+(notizen|dokumente|dateien|datenbank|daten)|rag|knowledge\s+base|datenbank)\b",
+    re.IGNORECASE,
+)
+_GREETING_RE = re.compile(r"^\s*(hi|hello|hey|hallo|moin|servus|danke|thanks|thank\s+you)[!.?\s]*$", re.IGNORECASE)
+
+
+def _fast_path(
+    manifests: List[Dict[str, Any]],
+    *,
+    message: str,
+    library_slug: Optional[str],
+    web_search_enabled: bool,
+    has_attachments: bool,
+) -> Optional[Dict[str, Any]]:
+    text = str(message or "").strip()
+    if not text and not has_attachments:
+        return None
+
+    if has_attachments:
+        vision = _manifest_by_slug(manifests, "vision-answer")
+        if vision:
+            return _workflow_result(vision, confidence=1.0, reason="The request includes attachments.")
+
+    lowered = text.lower()
+    mentions_knowledge = bool(_KNOWLEDGE_RE.search(text))
+    mentions_web = bool(_WEB_RE.search(text))
+
+    if _REMEMBER_RE.search(text):
+        remember = _manifest_by_slug(manifests, "remember-this")
+        if remember:
+            return _workflow_result(remember, confidence=1.0, reason="The user explicitly asked Heimgeist to remember or save this.")
+
+    if web_search_enabled and library_slug and mentions_web and mentions_knowledge:
+        combined = _manifest_by_slug(manifests, "knowledge-web-answer")
+        if combined:
+            return _workflow_result(combined, confidence=0.95, reason="The request asks to combine selected knowledge with current web information.")
+
+    if web_search_enabled and mentions_web:
+        web = _manifest_by_slug(manifests, "web-answer")
+        if web:
+            return _workflow_result(web, confidence=0.95, reason="The request asks for current or web information and web search is enabled.")
+
+    if library_slug and mentions_knowledge:
+        knowledge = _manifest_by_slug(manifests, "knowledge-answer")
+        if knowledge:
+            return _workflow_result(knowledge, confidence=0.95, reason="The request explicitly refers to the selected knowledge database.")
+
+    if _GREETING_RE.match(text):
+        direct = _manifest_by_slug(manifests, "input-output")
+        if direct:
+            return _workflow_result(direct, confidence=1.0, reason="Simple conversational prompt.")
+
+    return None
+
+
 async def select_workflow(
     db: Session,
     *,
@@ -46,6 +164,7 @@ async def select_workflow(
     recent_messages: List[Dict[str, Any]],
     attachments: List[Dict[str, Any]],
     library_slug: Optional[str],
+    web_search_enabled: bool = False,
     router_model: Optional[str],
     chat_model: Optional[str],
     confidence_threshold: float = 0.55,
@@ -53,19 +172,23 @@ async def select_workflow(
     fallback = db.query(WorkflowDefinition).filter(WorkflowDefinition.slug == "input-output").first()
     if fallback is None:
         raise RuntimeError("The built-in input-output workflow is missing.")
-    fallback_result = {
-        "workflow_id": fallback.id,
-        "workflow_slug": fallback.slug,
-        "confidence": 0.0,
-        "reason": "Router fallback to direct chat.",
-        "inputs": {},
-        "fallback": True,
-    }
-    manifests = workflow_manifests(db)
-    if attachments:
-        vision = next((item for item in manifests if item["slug"] == "vision-answer"), None)
-        if vision:
-            return {**fallback_result, "workflow_id": vision["workflow_id"], "workflow_slug": vision["slug"], "confidence": 1.0, "reason": "The request includes attachments.", "fallback": False}
+    fallback_result = _fallback_result(fallback)
+    has_attachments = bool(attachments)
+    manifests = _allowed_manifests(
+        workflow_manifests(db),
+        library_slug=library_slug,
+        web_search_enabled=web_search_enabled,
+        has_attachments=has_attachments,
+    )
+    fast = _fast_path(
+        manifests,
+        message=message,
+        library_slug=library_slug,
+        web_search_enabled=web_search_enabled,
+        has_attachments=has_attachments,
+    )
+    if fast:
+        return fast
 
     preferred = str(router_model or get_workflow_router_model_preference() or "").strip()
     model = preferred or str(chat_model or "").strip()
@@ -92,6 +215,8 @@ async def select_workflow(
         f"Recent messages: {json.dumps(compact_history, ensure_ascii=False)}\n"
         f"Attachment count: {len(attachments)}\n"
         f"Selected knowledge database: {library_slug or 'none'}\n"
+        f"Web search permission: {'enabled' if web_search_enabled else 'disabled'}\n"
+        "Only select workflows from the enabled list. Do not select a workflow that needs a disabled capability.\n"
         f"Enabled workflows: {json.dumps(manifests, ensure_ascii=False)}"
     )
     try:

@@ -498,6 +498,7 @@ async def create_workflow_run(request: WorkflowRunRequest):
         sample_inputs.setdefault("prompt", request.message)
         sample_inputs.setdefault("session_id", request.session_id)
         web_search_query, web_search_queries = _resolve_web_search_inputs(sample_inputs, request.message)
+        memory_blocks = [memory_context] if memory_context.get("context_block") else []
         run_values = {
             "session_id": request.session_id,
             "chat_model": request.model,
@@ -510,7 +511,7 @@ async def create_workflow_run(request: WorkflowRunRequest):
             "messages": messages,
             "attachments": run_attachments,
             "generation_options": request.generation_options,
-            "context_blocks": [],
+            "context_blocks": memory_blocks,
             "manual_library_enabled": bool(request.library_slug),
             "web_search_enabled": request.web_search_enabled,
             "web_search_query": web_search_query,
@@ -528,6 +529,8 @@ async def create_workflow_run(request: WorkflowRunRequest):
         db.add(run)
         db.commit()
         db.refresh(run)
+        if request.regenerate_index is not None and request.session_id:
+            safe_sync_chat_memory_for_session(db, request.session_id)
         run_id = run.id
         workflow_payload = {"id": workflow.id, "slug": workflow.slug, "name": workflow.name, "revision_id": revision.id}
     finally:

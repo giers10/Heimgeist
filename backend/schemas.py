@@ -13,6 +13,7 @@ class ChatAttachment(BaseModel):
     text: Optional[str] = None
 
 class Message(BaseModel):
+    message_id: Optional[str] = None
     role: str
     content: str
     sources: Optional[List[str]] = None
@@ -34,6 +35,12 @@ class ChatResponse(BaseModel):
 
 class HistoryResponse(BaseModel):
     messages: List[Message]
+
+
+class SaveMessageToKnowledgeRequest(BaseModel):
+    message_id: str
+    title: Optional[str] = None
+    content: Optional[str] = None
 
 class GenerateTitleRequest(BaseModel):
     session_id: str

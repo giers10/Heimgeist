@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import uuid
 from .database import Base
 
 class ChatSession(Base):
@@ -17,6 +18,7 @@ class ChatMessage(Base):
     __tablename__ = 'chat_messages'
 
     id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid.uuid4()))
     session_pk = Column(Integer, ForeignKey('chat_sessions.id'), nullable=False)
     role = Column(String(16), nullable=False)  # 'user' | 'assistant'
     content = Column(Text, nullable=False)

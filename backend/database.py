@@ -2,6 +2,7 @@
 from sqlalchemy import text
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+import uuid
 
 from .paths import database_path, sqlite_database_url
 
@@ -32,11 +33,25 @@ class Base(DeclarativeBase):
 
 def ensure_sources_column(engine):
     try:
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             cols = [row[1] for row in conn.execute(text("PRAGMA table_info(chat_messages)"))]
+            if "message_id" not in cols:
+                conn.execute(text("ALTER TABLE chat_messages ADD COLUMN message_id TEXT"))
             if "sources_json" not in cols:
                 conn.execute(text("ALTER TABLE chat_messages ADD COLUMN sources_json TEXT DEFAULT '[]'"))
             if "attachments_json" not in cols:
                 conn.execute(text("ALTER TABLE chat_messages ADD COLUMN attachments_json TEXT DEFAULT '[]'"))
+            missing_ids = conn.execute(
+                text("SELECT id FROM chat_messages WHERE message_id IS NULL OR message_id = ''")
+            ).fetchall()
+            for row in missing_ids:
+                conn.execute(
+                    text("UPDATE chat_messages SET message_id = :message_id WHERE id = :id"),
+                    {"message_id": str(uuid.uuid4()), "id": row[0]},
+                )
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_chat_messages_message_id "
+                "ON chat_messages (message_id)"
+            ))
     except Exception as e:
         print("[db] ensure_sources_column error:", e)

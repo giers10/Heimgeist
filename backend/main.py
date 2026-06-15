@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from . import models, schemas
 from .database import Base, engine, SessionLocal, ensure_sources_column
-from .local_rag import router as local_rag_router
+from .local_rag import router as local_rag_router, save_chat_message_snapshot
 from .ollama_admin import inspect_ollama_startup, prepare_startup_models, pull_local_model, start_local_ollama
 from .ollama_client import (
     list_model_catalog as ollama_list_model_catalog,
@@ -517,7 +517,12 @@ def _row_to_history_message(row: models.ChatMessage) -> dict:
         sources = []
 
     attachments = _load_message_attachments(getattr(row, "attachments_json", None))
-    payload = {"role": row.role, "content": row.content, "sources": sources}
+    payload = {
+        "message_id": row.message_id,
+        "role": row.role,
+        "content": row.content,
+        "sources": sources,
+    }
     if attachments:
         payload["attachments"] = [_attachment_history_payload(attachment) for attachment in attachments]
     return payload
@@ -735,6 +740,74 @@ def history(session_id: str, db: Session = Depends(get_db)):
     )
     msgs = [_row_to_history_message(r) for r in rows]
     return {"messages": msgs}
+
+
+def _default_knowledge_title(content: str, role: str) -> str:
+    clean = re.sub(r"\s+", " ", str(content or "")).strip()
+    if len(clean) > 90:
+        clean = clean[:87].rstrip() + "..."
+    prefix = "User note" if role == "user" else "Saved answer"
+    return f"{prefix}: {clean}" if clean else prefix
+
+
+@app.post("/libraries/{slug}/chat-messages")
+async def save_message_to_knowledge(
+    slug: str,
+    req: schemas.SaveMessageToKnowledgeRequest,
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.message_id == str(req.message_id or "").strip())
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Chat message not found.")
+
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == row.session_pk).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found.")
+
+    sources = []
+    try:
+        sources = json.loads(row.sources_json or "[]")
+    except Exception:
+        sources = []
+
+    previous_user = None
+    if row.role == "assistant":
+        previous_user = (
+            db.query(models.ChatMessage)
+            .filter(
+                models.ChatMessage.session_pk == row.session_pk,
+                models.ChatMessage.role == "user",
+                models.ChatMessage.id < row.id,
+            )
+            .order_by(models.ChatMessage.id.desc())
+            .first()
+        )
+
+    default_content = row.content
+    if row.role == "assistant" and previous_user:
+        default_content = (
+            f"User question:\n{previous_user.content.strip()}\n\n"
+            f"Assistant response:\n{row.content.strip()}"
+        )
+
+    content = str(req.content if req.content is not None else default_content).strip()
+    title = str(req.title or _default_knowledge_title(row.content, row.role)).strip()
+    return await save_chat_message_snapshot(
+        slug,
+        title=title,
+        content=content,
+        source_message_id=row.message_id,
+        source_session_id=session.session_id,
+        source_session_title=sanitize_chat_title(session.name),
+        source_role=row.role,
+        source_created_at=row.created_at.isoformat() if row.created_at else None,
+        sources=[str(source) for source in sources if str(source).strip()],
+        saved_by="user",
+    )
 
 @app.post("/chat")
 async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):

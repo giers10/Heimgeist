@@ -233,7 +233,7 @@ def _source_signature(files: List[Dict[str, Any]]) -> Optional[str]:
             "rel": entry.get("rel") or "",
             "size": int(entry.get("size") or 0),
         }
-        if entry.get("managed") or entry.get("kind") in {"text", "website"}:
+        if entry.get("managed") or entry.get("kind") in {"text", "website", "chat_message"}:
             payload.update({
                 "item_id": entry.get("item_id") or "",
                 "kind": entry.get("kind") or "file",
@@ -1394,10 +1394,15 @@ def get_library_item(slug: str, item_id: str):
         raise HTTPException(status_code=404, detail="Content item not found")
 
     payload = dict(entry)
-    if entry.get("kind") in {"text", "website"}:
+    if entry.get("kind") in {"text", "website", "chat_message"}:
         path = Path(str(entry.get("path") or ""))
         payload["content"] = path.read_text(encoding="utf-8") if path.exists() else ""
-        payload["content_origin"] = "stored_snapshot" if entry.get("kind") == "website" else "stored_text"
+        if entry.get("kind") == "website":
+            payload["content_origin"] = "stored_snapshot"
+        elif entry.get("kind") == "chat_message":
+            payload["content_origin"] = "stored_chat_message"
+        else:
+            payload["content_origin"] = "stored_text"
         payload["content_truncated"] = False
     else:
         content, truncated = _read_indexed_file_text(slug, entry)
@@ -1443,11 +1448,87 @@ async def create_library_text(slug: str, req: CreateTextRequest):
     return {"item": entry, "job_id": job_id, "library": library_payload(data)}
 
 
+async def save_chat_message_snapshot(
+    slug: str,
+    *,
+    title: str,
+    content: str,
+    source_message_id: str,
+    source_session_id: str,
+    source_session_title: str,
+    source_role: str,
+    source_created_at: Optional[str],
+    sources: Optional[List[str]] = None,
+    saved_by: str = "user",
+) -> Dict[str, Any]:
+    data = read_library(slug)
+    existing = next(
+        (
+            entry for entry in data.get("files", [])
+            if entry.get("kind") == "chat_message"
+            and entry.get("source_message_id") == source_message_id
+        ),
+        None,
+    )
+    if existing:
+        return {
+            "item": existing,
+            "job_id": None,
+            "already_saved": True,
+            "library": library_payload(data),
+        }
+
+    clean_title = str(title or "").strip()
+    clean_content = str(content or "").strip()
+    if not clean_title:
+        raise HTTPException(status_code=400, detail="A title is required.")
+    if not clean_content:
+        raise HTTPException(status_code=400, detail="Message content is required.")
+
+    item_id = uuid.uuid4().hex
+    source_path = _managed_source_path(slug, item_id)
+    rel = _managed_stage_rel(item_id)
+    _write_text_atomic(source_path, clean_content)
+    _ensure_stage_link(slug, source_path, rel)
+    timestamp = now_iso()
+    entry = {
+        "item_id": item_id,
+        "kind": "chat_message",
+        "title": clean_title[:240],
+        "name": clean_title[:240],
+        "path": str(source_path),
+        "rel": rel,
+        "sha256": _sha256_file(source_path),
+        "size": source_path.stat().st_size,
+        "added_at": timestamp,
+        "updated_at": timestamp,
+        "sync_status": "pending",
+        "enrich_enabled": False,
+        "metadata": {"status": "pending"},
+        "managed": True,
+        "source_role": source_role,
+        "source_message_id": source_message_id,
+        "source_session_id": source_session_id,
+        "source_session_title": source_session_title,
+        "source_created_at": source_created_at,
+        "sources": list(sources or []),
+        "saved_by": saved_by,
+    }
+    data.setdefault("files", []).append(entry)
+    job_id = await _save_library_change(slug, data)
+    return {
+        "item": entry,
+        "job_id": job_id,
+        "already_saved": False,
+        "library": library_payload(data),
+    }
+
+
 @router.patch("/libraries/{slug}/texts/{item_id}")
 async def update_library_text(slug: str, item_id: str, req: UpdateTextRequest):
     data = read_library(slug)
     entry = _find_item(data, item_id)
-    if not entry or entry.get("kind") != "text":
+    if not entry or entry.get("kind") not in {"text", "chat_message"}:
         raise HTTPException(status_code=404, detail="Text item not found")
 
     title = str(req.title or "").strip()

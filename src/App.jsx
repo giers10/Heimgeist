@@ -1408,6 +1408,12 @@ async function createNewChat() {
             DBs
           </div>
           <div
+            className={`sidebar-tab ${activeSidebarMode === 'workflows' ? 'active' : ''}`}
+            onClick={() => handleSidebarClick('workflows')}
+          >
+            Flows
+          </div>
+          <div
             className={`sidebar-tab ${activeSidebarMode === 'settings' ? 'active' : ''}`}
             onClick={() => handleSidebarClick('settings')}
           >
@@ -1508,8 +1514,11 @@ async function createNewChat() {
               onSelect={setActiveSettingsSubmenu}
             />
           )}
+          {activeSidebarMode === 'workflows' && (
+            <div className="empty-list-message">Create, validate, and test native workflows in the editor.</div>
+          )}
         </div>
-        {activeSidebarMode !== 'settings' && (
+        {(activeSidebarMode === 'chats' || activeSidebarMode === 'dbs') && (
           <div className="sidebar-footer">
             {activeSidebarMode === 'chats' && (
               <button className="button new-chat-button" onClick={createNewChat}>New Chat</button>
@@ -1590,6 +1599,11 @@ async function createNewChat() {
                     {`DB: ${chatLibrary.name}${chatLibraryStatusSuffix}`}
                   </span>
                 )}
+                <span className="header-subtle">
+                  {chatWorkflowSelection.mode === 'automatic'
+                    ? 'Flow: Automatic'
+                    : `Flow: ${selectedWorkflow?.name || 'Direct'}`}
+                </span>
               </div>
               <div className="header-actions">
                 <div className="model-picker" ref={chatModelPickerRef}>
@@ -1643,6 +1657,7 @@ async function createNewChat() {
               ref={chatRef}
               onClick={handleChatFrameClick}
             >
+              <WorkflowExecutionPanel execution={workflowExecutions[activeSessionId]} />
               {messages.map((m, i) => {
                 const isEditingThis = m.role === 'user' && editingMessageIndex === i;
                 return (
@@ -1818,6 +1833,12 @@ async function createNewChat() {
                   libraries={libraries}
                   setChatLibraryForSession={setChatLibraryForSession}
                 />
+                <WorkflowSelector
+                  disabled={isSending}
+                  selection={chatWorkflowSelection}
+                  workflows={workflows}
+                  onChange={(nextSelection) => setChatWorkflowForSession(activeSessionId, nextSelection)}
+                />
                   <div className="footer-tool-group" ref={attachmentMenuRef}>
                     <button
                       type="button"
@@ -1979,6 +2000,13 @@ async function createNewChat() {
             streamOutput={streamOutput}
           />
         )}
+        {activeSidebarMode === 'workflows' && (
+          <WorkflowsArea
+            apiBase={backendApiUrl}
+            model={model}
+            onWorkflowsChanged={setWorkflows}
+          />
+        )}
         {knowledgeSaveTarget && (
           <SaveMessageToKnowledgeDialog
             apiBase={backendApiUrl}
@@ -1991,6 +2019,31 @@ async function createNewChat() {
           />
         )}
         {knowledgeSaveToast && <div className="knowledge-save-toast" role="status">{knowledgeSaveToast}</div>}
+        <WorkflowConfirmationDialog
+          confirmation={pendingWorkflowConfirmation}
+          onRespond={async (approved) => {
+            const confirmation = pendingWorkflowConfirmation
+            if (!confirmation) return
+            try {
+              await respondToConfirmation(
+                backendApiUrl,
+                confirmation.run_id,
+                confirmation.payload?.confirmation_id,
+                approved,
+              )
+              setPendingWorkflowConfirmation(null)
+              setWorkflowExecutions(previous => ({
+                ...previous,
+                [confirmation.sessionId]: {
+                  ...(previous[confirmation.sessionId] || {}),
+                  status: 'running',
+                },
+              }))
+            } catch (error) {
+              window.alert(error.message)
+            }
+          }}
+        />
       </div>
     </div>
   )

@@ -109,6 +109,7 @@ class WorkflowRunRequest(BaseModel):
     generation_options: Dict[str, Any] = Field(default_factory=dict)
     sample_inputs: Dict[str, Any] = Field(default_factory=dict)
     explicit_user_action: bool = False
+    regenerate_index: Optional[int] = Field(default=None, ge=0)
 
 
 class ConfirmationResponseRequest(BaseModel):

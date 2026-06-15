@@ -326,10 +326,14 @@ async def create_workflow_run(request: WorkflowRunRequest):
     try:
         workflow, router_result = await _select_for_run(db, request)
         revision_id = request.workflow_revision_id or workflow.current_revision_id
-        if request.workflow_revision_id and request.workflow_revision_id != workflow.current_revision_id:
+        if (
+            request.workflow_revision_id
+            and request.workflow_revision_id != workflow.current_revision_id
+            and request.regenerate_index is None
+        ):
             raise HTTPException(status_code=409, detail="The requested workflow revision is stale.")
         revision = db.query(WorkflowRevision).filter(WorkflowRevision.id == revision_id).first()
-        if revision is None:
+        if revision is None or revision.workflow_id != workflow.id:
             raise HTTPException(status_code=409, detail="The selected workflow has no current revision.")
         graph = _json(revision.graph_json, {})
         validation = validate_workflow_graph(graph, registry)
@@ -338,20 +342,43 @@ async def create_workflow_run(request: WorkflowRunRequest):
 
         session = None
         user_message = None
+        run_attachments = request.attachments
         if request.session_id:
             session = db.query(chat_models.ChatSession).filter(chat_models.ChatSession.session_id == request.session_id).first()
+            if session is None and request.regenerate_index is not None:
+                raise HTTPException(status_code=404, detail="Chat session not found.")
             if session is None:
                 session = chat_models.ChatSession(session_id=request.session_id)
                 db.add(session)
                 db.flush()
             from .. import main as main_module
-            attachments = [main_module._normalize_chat_attachment_or_raise(item, include_text=True) for item in request.attachments]
-            user_message = chat_models.ChatMessage(
-                session_pk=session.id, role="user", content=request.message,
-                attachments_json=json.dumps(attachments, ensure_ascii=False),
-            )
-            db.add(user_message)
-            db.flush()
+            if request.regenerate_index is not None:
+                rows = db.query(chat_models.ChatMessage).filter(
+                    chat_models.ChatMessage.session_pk == session.id
+                ).order_by(chat_models.ChatMessage.created_at.asc(), chat_models.ChatMessage.id.asc()).all()
+                if request.regenerate_index >= len(rows):
+                    raise HTTPException(status_code=400, detail="Invalid regeneration message index.")
+                user_index = request.regenerate_index
+                while user_index >= 0 and rows[user_index].role != "user":
+                    user_index -= 1
+                if user_index < 0:
+                    raise HTTPException(status_code=400, detail="No user message is available for regeneration.")
+                user_message = rows[user_index]
+                user_message.content = request.message
+                for stale_message in rows[user_index + 1:]:
+                    db.delete(stale_message)
+                stored_attachments = _json(user_message.attachments_json, [])
+                run_attachments = request.attachments or stored_attachments
+                db.flush()
+            else:
+                attachments = [main_module._normalize_chat_attachment_or_raise(item, include_text=True) for item in request.attachments]
+                run_attachments = attachments
+                user_message = chat_models.ChatMessage(
+                    session_pk=session.id, role="user", content=request.message,
+                    attachments_json=json.dumps(attachments, ensure_ascii=False),
+                )
+                db.add(user_message)
+                db.flush()
 
         messages = []
         if session:
@@ -372,7 +399,7 @@ async def create_workflow_run(request: WorkflowRunRequest):
             "searx_url": request.searx_url,
             "searx_engines": request.searx_engines,
             "messages": messages,
-            "attachments": request.attachments,
+            "attachments": run_attachments,
             "generation_options": request.generation_options,
             "context_blocks": [],
             "manual_library_enabled": bool(request.library_slug),

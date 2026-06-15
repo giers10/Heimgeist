@@ -659,7 +659,7 @@ def enrich_one(
     include_qa = source_key in args.deep_source_paths
     level = "deep" if include_qa else "standard"
 
-    is_short = len(base_text) < args.min_chars
+    is_short = len(base_text) < args.min_chars and not include_qa
     sampled = base_text if len(base_text) <= args.max_text else head_mid_tail_sample(base_text, args.max_text)
     target_lang = args.summary_lang
     if target_lang == "auto":

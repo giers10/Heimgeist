@@ -1277,6 +1277,7 @@ def purge_libraries():
     LIB_ROOT.mkdir(parents=True, exist_ok=True)
     JOBS.clear()
     LIB_LOCKS.clear()
+    QUERY_LOCKS.clear()
 
     if failures:
         preview = "; ".join(failures[:3])
@@ -1310,6 +1311,8 @@ def delete_library(slug: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Library not found")
     shutil.rmtree(path)
+    LIB_LOCKS.pop(slug, None)
+    QUERY_LOCKS.pop(slug, None)
     return {"ok": True}
 
 

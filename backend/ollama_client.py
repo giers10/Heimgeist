@@ -202,13 +202,20 @@ def supports_vision(model_data: Dict[str, Any]) -> bool:
 
     return False
 
-async def chat(model: str, messages: List[Dict[str, Any]]) -> str:
+async def chat(
+    model: str,
+    messages: List[Dict[str, Any]],
+    *,
+    options: Dict[str, Any] | None = None,
+) -> str:
     ollama_url = get_ollama_api_url()
     payload = {
         "model": model,
         "messages": messages,
         "stream": False
     }
+    if options:
+        payload["options"] = options
     async with httpx.AsyncClient(timeout=600.0) as client:
         r = await client.post(f"{ollama_url}/api/chat", json=payload)
         r.raise_for_status()

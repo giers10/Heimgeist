@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set
 from sqlalchemy.orm import Session
 
 from .. import models as chat_models
+from ..chat_memory import safe_sync_chat_memory_for_session
 from ..ollama_client import chat_typed
 from .bindings import BindingError, resolve_bindings
 from .events import EventWriter
@@ -173,9 +174,11 @@ class WorkflowRuntime:
 
         try:
             if selection_mode == "direct":
-                run_values["context_blocks"] = await self._prepare_compatibility_context(
+                existing_context_blocks = list(run_values.get("context_blocks") or [])
+                compatibility_context_blocks = await self._prepare_compatibility_context(
                     run_id, workflow_id, run_values, workflow_inputs, writer, cancellation_event, counters, consume_llm_call
                 )
+                run_values["context_blocks"] = [*existing_context_blocks, *compatibility_context_blocks]
             await asyncio.wait_for(
                 self._execute_graph(
                     run_id, workflow_id, session_id, selection_mode, graph, values, node_outputs,
@@ -393,8 +396,11 @@ class WorkflowRuntime:
             tool_name = "heimgeist.agent" if node.type == "agent" else str(node.config.get("tool") or "")
             arguments_config = node.config.get("arguments") or node.config
             arguments = resolve_bindings(arguments_config, values)
-            if tool_name == "heimgeist.chat" and not arguments.get("context_blocks"):
-                arguments["context_blocks"] = values["run"].get("context_blocks") or []
+            if tool_name == "heimgeist.chat":
+                run_context_blocks = values["run"].get("context_blocks") or []
+                node_context_blocks = arguments.get("context_blocks") or []
+                if run_context_blocks:
+                    arguments["context_blocks"] = [*node_context_blocks, *run_context_blocks]
             async with counter_lock:
                 counters["tool_calls"] += 1
                 maximum = int(values.get("run", {}).get("maximum_tool_calls_override") or 0)
@@ -613,6 +619,7 @@ class WorkflowRuntime:
                 usage_json=json.dumps(usage),
             ))
             db.commit()
+            safe_sync_chat_memory_for_session(db, run.session_id)
         finally:
             db.close()
 

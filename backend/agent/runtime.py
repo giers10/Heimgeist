@@ -605,7 +605,12 @@ class WorkflowRuntime:
                 session_pk=session.id, role="assistant", content=content,
                 sources_json=json.dumps(sources, ensure_ascii=False, default=str),
                 workflow_id=run.workflow_id, workflow_revision_id=run.workflow_revision_id, workflow_run_id=run.id,
-                agent_summary_json=json.dumps({"tool_calls": counters["tool_calls"], "llm_calls": counters["llm_calls"], "duration_seconds": duration}),
+                agent_summary_json=json.dumps({
+                    "tool_calls": counters["tool_calls"],
+                    "llm_calls": counters["llm_calls"],
+                    "duration_seconds": duration,
+                    "selection_mode": run.selection_mode,
+                }),
                 usage_json=json.dumps(usage),
             ))
             db.commit()

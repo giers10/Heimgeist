@@ -218,16 +218,17 @@ export function createChatGenerationHandlers({
         const currentSelection = getChatWorkflowForSession(sessionId) || { mode: 'direct', workflowId: null }
         const originalAssistant = msgs.slice(lastUserIdx + 1).find(message => message?.role === 'assistant')
         const originalWorkflowId = originalAssistant?.workflow_id || null
+        const originalSelectionMode = originalAssistant?.agent_summary?.selection_mode || null
         let selection = currentSelection
         let workflowRevisionId = null
-        if (currentSelection.mode === 'automatic' && originalWorkflowId) {
+        if (currentSelection.mode === 'automatic' && originalSelectionMode === 'automatic' && originalWorkflowId) {
           selection = { mode: 'explicit', workflowId: originalWorkflowId }
           workflowRevisionId = originalAssistant?.workflow_revision_id || null
         } else if (
           originalWorkflowId
           && (
-            (currentSelection.mode === 'explicit' && currentSelection.workflowId === originalWorkflowId)
-            || (currentSelection.mode === 'direct' && originalWorkflowId === 'input-output')
+            (currentSelection.mode === 'explicit' && originalSelectionMode === 'explicit' && currentSelection.workflowId === originalWorkflowId)
+            || (currentSelection.mode === 'direct' && originalSelectionMode === 'direct')
           )
         ) {
           workflowRevisionId = originalAssistant?.workflow_revision_id || null

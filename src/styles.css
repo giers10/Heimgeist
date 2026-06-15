@@ -1874,6 +1874,51 @@ input:checked + .slider:before {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+.library-item-metadata {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.library-item-metadata p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.library-metadata-chips,
+.library-metadata-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.library-metadata-chips span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.library-metadata-entities span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.library-metadata-warning {
+  margin-top: 8px;
+  color: #d6a75f;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .library-file-path,
 .muted-copy {
   color: var(--muted);

@@ -13,13 +13,18 @@ function itemSyncMeta(item) {
   const progress = Math.max(0, Math.min(100, Number(sync.progress) || 0))
   const detail = String(sync.detail || '').trim()
   const enrichEnabled = !!item?.enrich_enabled
+  const metadataReady = ['ready', 'fallback'].includes(item?.metadata?.status)
 
   if (status === 'ready') {
     return {
       status,
       progress: 100,
       label: 'Available',
-      detail: detail || (enrichEnabled ? 'Ready with standard metadata and deep enrichment.' : 'Ready with standard metadata.')
+      detail: detail || (
+        metadataReady
+          ? (enrichEnabled ? 'Ready with standard metadata and deep enrichment.' : 'Ready with standard metadata.')
+          : 'Ready for chat. Automatic metadata has not been generated yet.'
+      )
     }
   }
   if (status === 'failed') {

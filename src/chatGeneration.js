@@ -169,6 +169,9 @@ export function createChatGenerationHandlers({
           setAssistantMessageContent(setChatSessions, sessionId, assistantMsgId, `Error: ${message}`)
         } else if (event.type === 'run_cancelled') {
           setAssistantMessageContent(setChatSessions, sessionId, assistantMsgId, fullReply, { removeIfEmpty: true })
+        } else if (event.type === 'run_interrupted') {
+          const message = event.payload?.message || 'Workflow run was interrupted.'
+          setAssistantMessageContent(setChatSessions, sessionId, assistantMsgId, `Error: ${message}`)
         }
       },
     })

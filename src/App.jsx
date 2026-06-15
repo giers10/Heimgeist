@@ -1252,6 +1252,9 @@ export default function App() {
       } else if (event.type === 'run_cancelled') {
         status = 'cancelled'
         finishedAt = Date.now()
+      } else if (event.type === 'run_interrupted') {
+        status = 'interrupted'
+        finishedAt = Date.now()
       } else if (event.type === 'confirmation_required') {
         status = 'waiting_confirmation'
         setPendingWorkflowConfirmation({ ...event, sessionId })

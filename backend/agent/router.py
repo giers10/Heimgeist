@@ -301,6 +301,9 @@ async def select_workflow(
     )
     if fast:
         return fast
+    manifests = _filter_for_interface_settings(manifests, web_search_enabled=web_search_enabled)
+    if not manifests:
+        return fallback_result
 
     preferred = str(router_model or get_workflow_router_model_preference() or "").strip()
     model = preferred or str(chat_model or "").strip()
@@ -316,26 +319,7 @@ async def select_workflow(
     if not model:
         return fallback_result
 
-    message_excerpt = str(message or "")
-    if len(message_excerpt) > 1800:
-        message_excerpt = message_excerpt[:1800] + "…"
-    history_chars = 300 if len(message_excerpt) > 1000 else 500
-    compact_history = [
-        {"role": item.get("role"), "content": str(item.get("content") or "")[:history_chars]}
-        for item in recent_messages[-4:]
-    ]
-    prompt = (
-        "Select exactly one enabled workflow for the current request. Do not invent workflows. "
-        "Prefer the lowest-cost workflow that can complete the task. Return JSON only.\n\n"
-        f"Current request: {message_excerpt}\n"
-        f"Recent messages: {json.dumps(compact_history, ensure_ascii=False)}\n"
-        f"Attachment count: {len(attachments)}\n"
-        f"Selected knowledge database: {library_slug or 'none'}\n"
-        f"Web search mode: {'forced' if web_search_enabled else 'automatic'}\n"
-        "Web workflows are available in automatic mode even when not forced. If web search mode is forced, select a web-capable workflow unless a higher-priority write or attachment workflow is required. Knowledge workflows still require a selected database; vision workflows still require attachments.\n"
-        "When selecting any workflow with the web capability, inputs MUST include web_search_query and web_search_queries. These must be concise search-engine queries, resolved from recent conversation when the current request is a follow-up. Do not copy conversational filler; search for the factual topic.\n"
-        f"Enabled workflows: {json.dumps(manifests, ensure_ascii=False)}"
-    )
+    prompt = _router_prompt(message=message, recent_messages=recent_messages, attachments=attachments, manifests=manifests)
     try:
         result = await chat_typed(
             model,

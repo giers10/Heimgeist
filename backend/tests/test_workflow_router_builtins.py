@@ -138,6 +138,43 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(mocked.await_args.args[0], "chat")
         db.close()
 
+    async def test_router_prompt_formats_followup_context_and_filters_for_forced_web(self):
+        db = self.Session()
+        web = db.query(WorkflowDefinition).filter_by(slug="web-answer").one()
+        with patch(
+            "backend.agent.router.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({
+                "workflow_id": web.id,
+                "confidence": 0.95,
+                "reason": "current follow-up",
+                "inputs": {"web_search_query": "Iran political news today", "web_search_queries": ["Iran political news today"]},
+            }))),
+        ) as mocked:
+            result = await select_workflow(
+                db,
+                message="and what's the news politically?",
+                recent_messages=[
+                    {"role": "user", "content": "what's the weather in Iran today"},
+                    {"role": "assistant", "content": "The weather in Tehran, Iran today is clear."},
+                ],
+                attachments=[],
+                library_slug=None,
+                router_model=None,
+                chat_model="model",
+                web_search_enabled=True,
+            )
+
+        prompt = mocked.await_args.args[1][0]["content"]
+        self.assertEqual(result["inputs"]["web_search_query"], "Iran political news today")
+        self.assertIn("Recent conversation:\n1. User: what's the weather in Iran today", prompt)
+        self.assertIn("search for 'Iran political news today'", prompt)
+        self.assertIn("Allowed workflows. This list is already filtered", prompt)
+        self.assertIn("web-answer", prompt)
+        self.assertNotIn("input-output", prompt)
+        self.assertNotIn("Web search mode:", prompt)
+        self.assertNotIn("Selected knowledge database:", prompt)
+        db.close()
+
     async def test_all_builtins_validate(self):
         registry = NativeToolProvider(); register_native_tools(registry)
         for item in BUILTIN_WORKFLOWS:

@@ -188,3 +188,12 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
         for item in BUILTIN_WORKFLOWS:
             with self.subTest(item=item["slug"]):
                 self.assertTrue(validate_workflow_graph(item["graph"], registry).valid)
+
+    async def test_research_evaluator_contract_avoids_contradictory_followups(self):
+        research = next(item for item in BUILTIN_WORKFLOWS if item["slug"] == "research")
+        evaluate = next(node for node in research["graph"]["nodes"] if node["id"] == "evaluate")
+        config = evaluate["config"]
+
+        self.assertIn("If sufficient=true, follow_up_query must be an empty string", config["system_template"])
+        self.assertIn("If sufficient=false, follow_up_query must be one concise web search query", config["system_template"])
+        self.assertIn("Resolved request and router inputs", config["user_template"])

@@ -83,7 +83,6 @@ export default function ChatDatabasePicker({
                   key={library.slug}
                   type="button"
                   className={"db-picker-option" + (selected ? " selected" : "")}
-                  disabled={!library.files?.length}
                   onClick={() => {
                     setChatLibraryForSession(activeSessionId, library.slug)
                     setIsDbPickerOpen(false)

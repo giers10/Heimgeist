@@ -1796,6 +1796,95 @@ input:checked + .slider:before {
   border-color: color-mix(in srgb, #69c4a1 34%, var(--border));
 }
 
+.library-content-card.kind-chat_message {
+  border-color: color-mix(in srgb, #e9c46a 48%, var(--border));
+}
+
+.knowledge-save-button:hover svg {
+  stroke: #e9c46a;
+}
+
+.knowledge-save-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(3px);
+}
+
+.knowledge-save-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(680px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+}
+
+.knowledge-save-dialog label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.knowledge-save-dialog input,
+.knowledge-save-dialog select,
+.knowledge-save-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.knowledge-save-dialog textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.knowledge-save-header,
+.knowledge-save-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.knowledge-save-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.knowledge-save-actions {
+  justify-content: flex-end;
+}
+
+.knowledge-save-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1300;
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border));
+  border-radius: 11px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
 .library-content-card.expanded {
   grid-column: 1 / -1;
 }

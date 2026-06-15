@@ -4,6 +4,7 @@ import TextareaAutosize from 'react-textarea-autosize';
 import AssistantMessageContent from './AssistantMessageContent'
 import ChatDatabasePicker from './ChatDatabasePicker'
 import LibraryManager from './LibraryManager'
+import SaveMessageToKnowledgeDialog from './SaveMessageToKnowledgeDialog'
 import { SettingsPanel, SettingsSidebar } from './SettingsPanels'
 import { applyColorScheme } from './colorSchemes'
 import {
@@ -152,6 +153,9 @@ export default function App() {
   // Editing state for user messages
   const [editingMessageIndex, setEditingMessageIndex] = useState(null);
   const [editText, setEditText] = useState('');
+  const [knowledgeSaveTarget, setKnowledgeSaveTarget] = useState(null)
+  const [knowledgeSaveToast, setKnowledgeSaveToast] = useState('')
+  const knowledgeJumpTargetRef = useRef(null)
   // Helpers + handlers for message copy/edit/regenerate (must live inside App)
   function getMarkdownForCopy(message) {
     const raw = message.content || '';
@@ -835,20 +839,26 @@ export default function App() {
     applyColorScheme(colorScheme);
   }, [colorScheme]);
 
-  const fetchHistory = (sessionId) => {
-    if (!sessionId || !backendApiUrl) return;
-    fetch(`${backendApiUrl}/history?session_id=${encodeURIComponent(sessionId)}`)
-      .then(r => r.json())
-      .then(data => {
-        setChatSessions(prevSessions =>
-          prevSessions.map(session =>
-            session.session_id === sessionId
-              ? { ...session, messages: data.messages || [] }
-              : session
-          )
-        );
-      })
-      .catch(() => {});
+  const fetchHistory = async (sessionId) => {
+    if (!sessionId || !backendApiUrl) return null;
+    try {
+      const response = await fetch(`${backendApiUrl}/history?session_id=${encodeURIComponent(sessionId)}`)
+      const data = await response.json()
+      const historyMessages = (data.messages || []).map(message => ({
+        ...message,
+        id: message.message_id || message.id,
+      }))
+      setChatSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.session_id === sessionId
+            ? { ...session, messages: historyMessages }
+            : session
+        )
+      );
+      return historyMessages
+    } catch {
+      return null
+    }
   };
 
   async function refreshLibraries() {
@@ -1011,6 +1021,47 @@ export default function App() {
     return libraries.find(lib => lib.slug === activeLibrarySlug) || null;
   }, [activeLibrarySlug, libraries]);
 
+  function showKnowledgeSaveToast(message) {
+    setKnowledgeSaveToast(message)
+    window.setTimeout(() => setKnowledgeSaveToast(current => current === message ? '' : current), 4200)
+  }
+
+  function openKnowledgeSaveDialog(message, index) {
+    if (!message?.message_id) {
+      showKnowledgeSaveToast('This message is still being written to chat history. Try again in a moment.')
+      return
+    }
+    let precedingUserMessage = null
+    if (message.role === 'assistant') {
+      for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+        if (messages[cursor]?.role === 'user') {
+          precedingUserMessage = messages[cursor]
+          break
+        }
+      }
+    }
+    setKnowledgeSaveTarget({ message, precedingUserMessage })
+  }
+
+  async function handleKnowledgeSaved(result) {
+    setKnowledgeSaveTarget(null)
+    await refreshLibraries()
+    await refreshLibraryJobs()
+    showKnowledgeSaveToast(result?.already_saved ? 'This message is already saved in that database.' : 'Message saved to knowledge.')
+  }
+
+  function openChatMessageSource(item) {
+    const sessionId = String(item?.source_session_id || '')
+    const messageId = String(item?.source_message_id || '')
+    if (!sessionId || !chatSessions.some(session => session.session_id === sessionId)) {
+      showKnowledgeSaveToast('The original chat is no longer available. The saved knowledge remains intact.')
+      return
+    }
+    knowledgeJumpTargetRef.current = messageId
+    setActiveSidebarMode('chats')
+    selectChat(sessionId)
+  }
+
   const chatModelPickerOptions = useMemo(() => {
     return buildModelPickerOptions(availableChatModels, model, 'saved model unavailable')
   }, [availableChatModels, model])
@@ -1030,6 +1081,7 @@ export default function App() {
     input,
     isSending,
     model,
+    onMessagesPersisted: fetchHistory,
     restoredForRef,
     scrollMessageToTop,
     scrollToBottom,
@@ -1049,6 +1101,14 @@ export default function App() {
     visionModel,
     webSearchEnabled,
   })
+
+  useEffect(() => {
+    const messageId = knowledgeJumpTargetRef.current
+    if (activeSidebarMode !== 'chats' || !messageId) return
+    if (!messages.some(message => message.message_id === messageId)) return
+    knowledgeJumpTargetRef.current = null
+    requestAnimationFrame(() => scrollMessageToTop(messageId, 'smooth', activeSessionId))
+  }, [activeSessionId, activeSidebarMode, messages, scrollMessageToTop])
 
   useEffect(() => {
     if (!isChatModelPickerOpen) return
@@ -1524,6 +1584,9 @@ async function createNewChat() {
                             <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                             </button>
+                            <button className="icon-button knowledge-save-button" title="Save message to knowledge" aria-label="Save message to knowledge" onClick={() => openKnowledgeSaveDialog(m, i)}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.5 14.5A7 7 0 1 1 15.5 14.5C14.6 15.2 14 16.1 14 17h-4c0-.9-.6-1.8-1.5-2.5Z"/></svg>
+                            </button>
                             <button className="icon-button" title="Regenerate response" onClick={() => regenerateFromIndex(i)}>
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
                             </button>
@@ -1589,6 +1652,9 @@ async function createNewChat() {
                             </button>
                             <button className="icon-button" title="Copy message" onClick={() => handleCopyMessage(m)}>
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            </button>
+                            <button className="icon-button knowledge-save-button" title="Save message to knowledge" aria-label="Save message to knowledge" onClick={() => openKnowledgeSaveDialog(m, i)}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.5 14.5A7 7 0 1 1 15.5 14.5C14.6 15.2 14 16.1 14 17h-4c0-.9-.6-1.8-1.5-2.5Z"/></svg>
                             </button>
                           </div>
                         )}
@@ -1808,6 +1874,7 @@ async function createNewChat() {
               apiBase={backendApiUrl}
               library={activeLibrary}
               jobs={libraryJobs}
+              onOpenChatMessage={openChatMessageSource}
               onRefresh={async () => {
                 await refreshLibraries();
                 await refreshLibraryJobs();
@@ -1833,6 +1900,18 @@ async function createNewChat() {
             streamOutput={streamOutput}
           />
         )}
+        {knowledgeSaveTarget && (
+          <SaveMessageToKnowledgeDialog
+            apiBase={backendApiUrl}
+            defaultLibrarySlug={chatLibrarySlug || activeLibrarySlug}
+            libraries={libraries}
+            message={knowledgeSaveTarget.message}
+            onClose={() => setKnowledgeSaveTarget(null)}
+            onSaved={handleKnowledgeSaved}
+            precedingUserMessage={knowledgeSaveTarget.precedingUserMessage}
+          />
+        )}
+        {knowledgeSaveToast && <div className="knowledge-save-toast" role="status">{knowledgeSaveToast}</div>}
       </div>
     </div>
   )

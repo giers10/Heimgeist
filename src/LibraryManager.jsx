@@ -54,6 +54,7 @@ function itemSyncMeta(item) {
 function kindLabel(item) {
   if (item?.kind === 'text') return 'Text'
   if (item?.kind === 'website') return 'Website'
+  if (item?.kind === 'chat_message') return 'Chat Message'
   return 'File'
 }
 
@@ -69,7 +70,7 @@ async function expectJson(response) {
   return data
 }
 
-export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
+export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessage, onRefresh }) {
   const [busy, setBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [toasts, setToasts] = useState([])
@@ -332,6 +333,8 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
       item.path,
       item.url,
       item.kind,
+      item.source_session_title,
+      item.source_role,
       item.metadata?.headline,
       item.metadata?.summary,
       ...(item.metadata?.keywords || []),
@@ -437,7 +440,13 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
             {filteredItems.map(item => {
               const sync = itemSyncMeta(item)
               const label = kindLabel(item)
-              const source = item.kind === 'website' ? item.url : item.kind === 'text' ? 'Written in Heimgeist' : item.path
+              const source = item.kind === 'website'
+                ? item.url
+                : item.kind === 'text'
+                  ? 'Written in Heimgeist'
+                  : item.kind === 'chat_message'
+                    ? `${item.source_role === 'user' ? 'User message' : 'Assistant message'} · ${item.source_session_title || 'Chat'}`
+                    : item.path
               const itemId = item.item_id || item.sha256 || item.rel
               const isExpanded = expandedItemId === itemId
               const preview = contentPreviews[itemId]
@@ -509,7 +518,7 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                   {isExpanded && (
                     <div className="library-content-preview">
                       <div className="library-content-preview-label">
-                        {item.kind === 'website' ? 'Saved website text' : item.kind === 'text' ? 'Stored text' : 'Extracted text used by RAG'}
+                        {item.kind === 'website' ? 'Saved website text' : item.kind === 'chat_message' ? 'Stored chat knowledge' : item.kind === 'text' ? 'Stored text' : 'Extracted text used by RAG'}
                       </div>
                       {preview?.loading && <div className="muted-copy">Loading content…</div>}
                       {preview?.error && <div className="form-error">{preview.error}</div>}
@@ -525,7 +534,8 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                     <button className="button ghost" disabled={busy} onClick={() => toggleContentPreview(item)}>
                       {isExpanded ? 'Hide Content' : 'View Content'}
                     </button>
-                    {item.kind === 'text' && <button className="button ghost" disabled={busy} onClick={() => editText(item)}>Edit</button>}
+                    {(item.kind === 'text' || item.kind === 'chat_message') && <button className="button ghost" disabled={busy} onClick={() => editText(item)}>Edit</button>}
+                    {item.kind === 'chat_message' && <button className="button ghost" onClick={() => onOpenChatMessage?.(item)}>Open Chat</button>}
                     {item.kind === 'website' && <button className="button ghost" onClick={() => desktopApi.openExternalLink(item.url)}>Open</button>}
                     {item.kind === 'website' && <button className="button ghost" disabled={busy} onClick={() => refreshWebsite(item)}>Refresh</button>}
                     {(!item.kind || item.kind === 'file') && <button className="button ghost" onClick={() => desktopApi.openPath(item.path)}>Open</button>}

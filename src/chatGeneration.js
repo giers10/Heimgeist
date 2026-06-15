@@ -62,6 +62,7 @@ export function createChatGenerationHandlers({
   input,
   isSending,
   model,
+  onMessagesPersisted,
   restoredForRef,
   scrollMessageToTop,
   scrollToBottom,
@@ -270,6 +271,7 @@ export function createChatGenerationHandlers({
           setNewMsgTip(prev => ({ ...prev, [sessionId]: assistantMsgId }))
         }
       }
+      if (onMessagesPersisted) void onMessagesPersisted(sessionId)
     } catch (error) {
       if (!isAbortError(error)) {
         console.error(error)
@@ -542,6 +544,7 @@ export function createChatGenerationHandlers({
       if (activeSessionIdRef.current !== targetSessionId) {
         setUnreadSessions(prev => [...new Set([...prev, targetSessionId])])
       }
+      if (onMessagesPersisted) void onMessagesPersisted(targetSessionId)
 
       if (isNewChat) {
         requestGeneratedTitle({

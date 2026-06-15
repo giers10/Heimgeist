@@ -204,14 +204,18 @@ async def select_workflow(
     if not model:
         return fallback_result
 
+    message_excerpt = str(message or "")
+    if len(message_excerpt) > 1800:
+        message_excerpt = message_excerpt[:1800] + "…"
+    history_chars = 300 if len(message_excerpt) > 1000 else 500
     compact_history = [
-        {"role": item.get("role"), "content": str(item.get("content") or "")[:700]}
+        {"role": item.get("role"), "content": str(item.get("content") or "")[:history_chars]}
         for item in recent_messages[-4:]
     ]
     prompt = (
         "Select exactly one enabled workflow for the current request. Do not invent workflows. "
         "Prefer the lowest-cost workflow that can complete the task. Return JSON only.\n\n"
-        f"Current request: {message}\n"
+        f"Current request: {message_excerpt}\n"
         f"Recent messages: {json.dumps(compact_history, ensure_ascii=False)}\n"
         f"Attachment count: {len(attachments)}\n"
         f"Selected knowledge database: {library_slug or 'none'}\n"

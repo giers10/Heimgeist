@@ -68,7 +68,7 @@ import multiprocessing as mp_context
 try:
     import orjson as _orjson
     def json_dumps(obj) -> str:
-        return _orjson.dumps(obj, option=_orjson.OPT_NON_STR_KEYS | _orjson.OPT_SERIALIZABLE).decode("utf-8")
+        return _orjson.dumps(obj, option=_orjson.OPT_NON_STR_KEYS).decode("utf-8")
     def json_loads(s: str) -> Any:
         return _orjson.loads(s)
 except Exception:
@@ -91,7 +91,7 @@ except Exception:
 # Constants & helpers
 # -------------------------
 
-PROMPT_VERSION = "v3.0"
+PROMPT_VERSION = "v4.0-standard-deep"
 
 ENTITY_CANON = {
     "PERSON": "PERSON",
@@ -343,12 +343,13 @@ def build_system(summary_lang: str) -> str:
         f"Output language for headline/summary/keywords/Q&A must be '{summary_lang}'."
     )
 
-def build_user_main(text: str, summary_lang: str, doc_hint: str, want_qa: int) -> str:
-    want_qa = max(2, min(4, int(want_qa)))
+def build_user_main(text: str, summary_lang: str, doc_hint: str, want_qa: int, *, include_qa: bool) -> str:
+    want_qa = max(2, min(4, int(want_qa))) if include_qa else 0
     # Fixed internal instruction for style/tone
     fixed_instruction = (
         "Produce concise headlines (≤12 words) and 2–4 sentence summaries; "
-        "5–12 normalized keywords (kebab-case); named entities with types; 2–4 useful QA pairs. "
+        "5–12 normalized keywords (kebab-case) and named entities with types. "
+        + ("Also produce 2–4 useful QA pairs. " if include_qa else "Set qa to an empty list. ")
         "Keep strictly grounded in the source."
     )
     return (
@@ -369,7 +370,7 @@ def build_user_main(text: str, summary_lang: str, doc_hint: str, want_qa: int) -
         f"Constraints:\n"
         f"- Headline and summary MUST be in {summary_lang}.\n"
         "- Extract proper nouns and salient terms as entities; deduplicate by name.\n"
-        "- Q&A must be answerable ONLY from the TEXT; keep questions <= 16 words; answers concise (<= ~80 words).\n"
+        + ("- Q&A must be answerable ONLY from the TEXT; keep questions <= 16 words; answers concise (<= ~80 words).\n" if include_qa else "- Return an empty qa list.\n")
         "- Be terse and informative; no filler.\n\n"
         "TEXT:\n" + text
     )
@@ -505,6 +506,7 @@ def enforce_schema_and_language(
     target_lang: str,
     rec_text_sample: str,
     rec_is_short: bool,
+    include_qa: bool,
     perform_translate,
     stats: Dict[str, int],
 ) -> Dict[str, Any]:
@@ -547,30 +549,29 @@ def enforce_schema_and_language(
 
     # QA
     qas = []
-    for qa in out.get("qa", []) or []:
-        if not isinstance(qa, dict): continue
-        q = clamp_words(sanitize_text(str(qa.get("q", ""))), 16)
-        a = sanitize_text(str(qa.get("a", "")))
-        if q and a and len(a) >= 30:
-            qas.append({"q": q, "a": a})
-    # ensure minimum count target
-    target = QA_TARGET_SHORT if rec_is_short else QA_TARGET_DEFAULT
-    if len(qas) < target:
-        need = target - len(qas)
-        # ask for a top-up
-        add = perform_translate("__QATOPUP__", rec_text_sample, need)  # overloaded: returns dict {"qa":[...]}
-        extra = []
-        if isinstance(add, dict):
-            for qa in add.get("qa", []) or []:
-                if not isinstance(qa, dict): continue
-                q = clamp_words(sanitize_text(str(qa.get("q", ""))), 16)
-                a = sanitize_text(str(qa.get("a", "")))
-                if q and a and len(a) >= 30:
-                    extra.append({"q": q, "a": a})
-        if extra:
-            qas.extend(extra[:need])
-            quality_flags.append("qa_topped_up")
-            stats["qa_topped_up"] += 1
+    if include_qa:
+        for qa in out.get("qa", []) or []:
+            if not isinstance(qa, dict): continue
+            q = clamp_words(sanitize_text(str(qa.get("q", ""))), 16)
+            a = sanitize_text(str(qa.get("a", "")))
+            if q and a and len(a) >= 30:
+                qas.append({"q": q, "a": a})
+        target = QA_TARGET_SHORT if rec_is_short else QA_TARGET_DEFAULT
+        if len(qas) < target:
+            need = target - len(qas)
+            add = perform_translate("__QATOPUP__", rec_text_sample, need)
+            extra = []
+            if isinstance(add, dict):
+                for qa in add.get("qa", []) or []:
+                    if not isinstance(qa, dict): continue
+                    q = clamp_words(sanitize_text(str(qa.get("q", ""))), 16)
+                    a = sanitize_text(str(qa.get("a", "")))
+                    if q and a and len(a) >= 30:
+                        extra.append({"q": q, "a": a})
+            if extra:
+                qas.extend(extra[:need])
+                quality_flags.append("qa_topped_up")
+                stats["qa_topped_up"] += 1
 
     # Language guard (per-field)
     def _guard_lang(field_value: str, field_name: str) -> str:
@@ -628,6 +629,7 @@ class Args:
     force: bool
     cache_dir: str
     verbose: bool
+    deep_source_paths: frozenset[str]
 
 def enrich_one(
     rec: Dict[str, Any],
@@ -645,6 +647,12 @@ def enrich_one(
     rec_id = str(rec.get("id") or "")
     rec_type = str(rec.get("record_type") or "")
     doc_hint = build_doc_hint(rec)
+    source_path = str(rec.get("source_path") or "")
+    try:
+        source_key = str(Path(source_path).expanduser().resolve())
+    except Exception:
+        source_key = source_path
+    include_qa = source_key in args.deep_source_paths
 
     is_short = len(base_text) < args.min_chars
     sampled = base_text if len(base_text) <= args.max_text else head_mid_tail_sample(base_text, args.max_text)
@@ -692,7 +700,8 @@ def enrich_one(
         doc_hint += " The TEXT appears noisy/garbled (possibly OCR). Summarize what the document likely conveys and any clearly legible details; avoid copying garbled strings."
 
     # caching
-    key = stable_hash(sampled, args.model, target_lang, rec_id, rec_type)
+    level = "deep" if include_qa else "standard"
+    key = stable_hash(sampled, args.model, target_lang, rec_id, f"{rec_type}:{level}")
     if not args.force:
         hit = cache_main.get(key)
         if hit is not None:
@@ -708,6 +717,7 @@ def enrich_one(
                     "prompt_version": hit.get("prompt_version"),
                     "cached": True,
                     "strategy": hit.get("strategy"),
+                    "level": hit.get("level") or level,
                     "ok": True,
                     "error": None,
                 }
@@ -765,8 +775,13 @@ def enrich_one(
 
     # main call
     system = build_system(target_lang)
-    user = build_user_main(sampled, target_lang, doc_hint, qa_target)
-    options = {"temperature": 0.2, "repeat_penalty": 1.1, "top_p": 0.9, "num_predict": 320}
+    user = build_user_main(sampled, target_lang, doc_hint, qa_target, include_qa=include_qa)
+    options = {
+        "temperature": 0.2,
+        "repeat_penalty": 1.1,
+        "top_p": 0.9,
+        "num_predict": 360 if include_qa else 240,
+    }
 
     with sem:
         tries, backoff, last_exc = 3, 1.5, None
@@ -808,6 +823,7 @@ def enrich_one(
                     target_lang=target_lang,
                     rec_text_sample=sampled,
                     rec_is_short=is_short,
+                    include_qa=include_qa,
                     perform_translate=perform_translate,
                     stats=stats,
                 )
@@ -823,6 +839,7 @@ def enrich_one(
                     "prompt_version": PROMPT_VERSION,
                     "cached": False,
                     "strategy": "sampled" if len(base_text) > args.max_text else "full",
+                    "level": level,
                 }
 
                 # save to cache
@@ -840,6 +857,7 @@ def enrich_one(
                         "prompt_version": PROMPT_VERSION,
                         "cached": False,
                         "strategy": result["strategy"],
+                        "level": level,
                         "ok": True,
                         "error": None,
                         "quality_flags": result["quality_flags"],
@@ -866,6 +884,7 @@ def enrich_one(
         "prompt_version": PROMPT_VERSION,
         "cached": False,
         "strategy": f"fallback:{type(last_exc).__name__ if last_exc else 'error'}",
+        "level": level,
         "quality_flags": ["fallback"],
     }
     enriched = dict(rec)
@@ -880,6 +899,7 @@ def enrich_one(
             "prompt_version": PROMPT_VERSION,
             "cached": False,
             "strategy": fallback["strategy"],
+            "level": level,
             "ok": False,
             "error": str(last_exc) if last_exc else "unknown",
             "quality_flags": ["fallback"],
@@ -943,6 +963,13 @@ def run_enrich(inp: Path, out: Path, shadow_out: Path, *,
                summary_lang: str = "auto",
                on_progress: Optional[Callable[[str, float, str], None]] = None,
                cancellation_event: Optional[threading.Event] = None, **opts) -> dict:
+    deep_source_paths = set()
+    for value in opts.get("deep_source_paths", []) or []:
+        try:
+            deep_source_paths.add(str(Path(str(value)).expanduser().resolve()))
+        except Exception:
+            deep_source_paths.add(str(value))
+
     args = Args(
         inp=str(inp),
         out=str(out),
@@ -958,6 +985,7 @@ def run_enrich(inp: Path, out: Path, shadow_out: Path, *,
         force=opts.get("force", False),
         cache_dir=opts.get("cache_dir", ".rag_cache"),
         verbose=opts.get("verbose", False),
+        deep_source_paths=frozenset(deep_source_paths),
     )
 
     src = Path(args.inp).expanduser().resolve()

@@ -617,6 +617,43 @@ def get_db():
     finally:
         db.close()
 
+
+def _dedupe_sources(items: List[Any]) -> List[Any]:
+    sources: List[Any] = []
+    seen = set()
+    for item in items or []:
+        try:
+            key = json.dumps(item, sort_keys=True, ensure_ascii=False) if isinstance(item, dict) else str(item)
+        except Exception:
+            key = str(item)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        sources.append(item)
+    return sources
+
+
+def _merge_enriched_context(message: str, enriched_message: Optional[str], context_blocks: List[str]) -> Optional[str]:
+    blocks = [str(block or "").strip() for block in context_blocks or [] if str(block or "").strip()]
+    if not blocks:
+        return enriched_message
+    base_content = str(enriched_message or "").strip() or str(message or "").strip()
+    return f"{base_content}\n\n" + "\n\n".join(blocks)
+
+
+def _chat_memory_context(db: Session, prompt: str, session_id: Optional[str]) -> Dict[str, Any]:
+    try:
+        return build_chat_memory_context(
+            db,
+            prompt,
+            exclude_session_id=session_id,
+            top_k=4,
+            context_character_budget=3600,
+        )
+    except Exception as exc:
+        print("[chat-memory] retrieval failed:", exc)
+        return {"context_block": "", "sources": [], "hits": []}
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -877,11 +914,17 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         vision_model=req.vision_model,
         transcription_model=req.transcription_model,
     )
+    memory_context = _chat_memory_context(db, req.message, req.session_id)
+    enriched_message = _merge_enriched_context(
+        req.message,
+        req.enriched_message,
+        [memory_context.get("context_block")],
+    )
 
     current_user_message, user_attachments = await _build_ollama_user_message(
         req.message,
         req.attachments or [],
-        enriched_message=req.enriched_message,
+        enriched_message=enriched_message,
         request_model_supports_vision=request_model_supports_vision,
         vision_model=req.vision_model,
         transcription_model=req.transcription_model,
@@ -901,7 +944,7 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
     messages = [*history_messages, current_user_message]
 
     # Sources to persist with the assistant reply
-    sources = req.sources or []
+    sources = _dedupe_sources([*(req.sources or []), *(memory_context.get("sources") or [])])
 
     if req.stream:
         async def stream_generator():
@@ -924,6 +967,7 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
                     sources_json=json.dumps(sources or []),
                 ))
                 db_sess.commit()
+                safe_sync_chat_memory_for_session(db_sess, req.session_id)
             finally:
                 if db_sess is not None:
                     db_sess.close()
@@ -941,6 +985,7 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         )
         db.add(as_row)
         db.commit()
+        safe_sync_chat_memory_for_session(db, req.session_id)
         return {"reply": reply}
 
 @app.post("/generate-title", response_model=schemas.GenerateTitleResponse)
@@ -1031,7 +1076,6 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
     idx = req.index
     model = req.model
     stream = bool(req.stream)
-    sources = req.sources or []
 
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
     if not session:
@@ -1054,20 +1098,28 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
             break
 
     request_model_supports_vision = await _model_supports_vision(model)
+    memory_context = _chat_memory_context(db, msgs[last_user_idx].content, session_id)
+    enriched_message = _merge_enriched_context(
+        msgs[last_user_idx].content,
+        req.enriched_message,
+        [memory_context.get("context_block")],
+    )
     conversation = await _build_ollama_messages_from_rows(
         msgs[: last_user_idx + 1],
         request_model_supports_vision=request_model_supports_vision,
         vision_model=req.vision_model,
         transcription_model=req.transcription_model,
         override_user_row_index=last_user_idx,
-        override_user_content=req.enriched_message,
+        override_user_content=enriched_message,
     )
+    sources = _dedupe_sources([*(req.sources or []), *(memory_context.get("sources") or [])])
 
     # prune after that user only after conversation building succeeds
     if last_user_idx < len(msgs) - 1:
         for m in msgs[last_user_idx + 1:]:
             db.delete(m)
         db.commit()
+        safe_sync_chat_memory_for_session(db, session_id)
 
     session_pk = session.id
 
@@ -1088,6 +1140,7 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
                     sources_json=json.dumps(sources or [])
                 ))
                 db_sess.commit()
+                safe_sync_chat_memory_for_session(db_sess, session_id)
             finally:
                 try:
                     db_sess.close()
@@ -1106,6 +1159,7 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
         sources_json=json.dumps(sources or [])
     ))
     db.commit()
+    safe_sync_chat_memory_for_session(db, session_id)
     return {"reply": reply}
 
 

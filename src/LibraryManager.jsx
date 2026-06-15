@@ -442,8 +442,10 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
               const isExpanded = expandedItemId === itemId
               const preview = contentPreviews[itemId]
               const metadata = item.metadata || {}
-              const keywords = Array.isArray(metadata.keywords) ? metadata.keywords.slice(0, 6) : []
-              const entities = Array.isArray(metadata.entities) ? metadata.entities.slice(0, 4) : []
+              const keywords = Array.isArray(metadata.keywords) ? metadata.keywords : []
+              const entities = Array.isArray(metadata.entities) ? metadata.entities : []
+              const qaPairs = Array.isArray(metadata.qa) ? metadata.qa : []
+              const qualityFlags = Array.isArray(metadata.quality_flags) ? metadata.quality_flags : []
               return (
                 <article key={itemId} className={`library-content-card kind-${item.kind || 'file'} ${isExpanded ? 'expanded' : ''}`}>
                   <div className="library-content-card-header">
@@ -456,6 +458,7 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                     {item.enrich_enabled ? 'Deep enrichment' : 'Standard'}
                   </div>
                   <div className={`library-item-metadata status-${metadata.status || 'missing'}`}>
+                    {metadata.headline && <h3>{metadata.headline}</h3>}
                     {metadata.summary ? (
                       <p>{metadata.summary}</p>
                     ) : (
@@ -473,6 +476,25 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                         {entities.map(entity => (
                           <span key={`${entity.name}-${entity.type}`}>{entity.name}{entity.type ? ` · ${entity.type}` : ''}</span>
                         ))}
+                      </div>
+                    )}
+                    {qaPairs.length > 0 && (
+                      <div className="library-metadata-qa">
+                        <div className="library-metadata-label">Generated Q&amp;A</div>
+                        {qaPairs.map((qa, index) => (
+                          <div className="library-metadata-qa-pair" key={`${qa.q}-${index}`}>
+                            <strong>{qa.q}</strong>
+                            <span>{qa.a}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(metadata.model || metadata.language || metadata.strategy || qualityFlags.length > 0) && (
+                      <div className="library-metadata-details">
+                        {metadata.model && <span>Model: {metadata.model}</span>}
+                        {metadata.language && <span>Language: {metadata.language}</span>}
+                        {metadata.strategy && <span>Strategy: {metadata.strategy}</span>}
+                        {qualityFlags.length > 0 && <span>Flags: {qualityFlags.join(', ')}</span>}
                       </div>
                     )}
                     {metadata.status === 'fallback' && <div className="library-metadata-warning">Local model metadata was unavailable; Heimgeist used a text fallback.</div>}

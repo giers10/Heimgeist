@@ -11,6 +11,7 @@ import desktopApi from './desktop/desktopApi';
 
 const EMBED_MODEL_KEY = 'embedModel';
 const RERANK_MODEL_KEY = 'rerankModel';
+const ENRICHMENT_MODEL_KEY = 'enrichmentModel';
 const MODEL_KEY = 'chatModel';
 const VISION_MODEL_KEY = 'visionModel';
 const TRANSCRIPTION_MODEL_KEY = 'transcriptionModel';
@@ -18,6 +19,7 @@ const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
 const DEFAULT_AUDIO_INPUT_LANGUAGE = '';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
 const DEFAULT_EMBED_MODEL = 'nomic-embed-text:latest';
+const DEFAULT_ENRICHMENT_MODEL = 'qwen3:4b';
 const DEFAULT_TRANSCRIPTION_MODEL = 'base';
 const DEFAULT_UPDATE_STATUS = {
   state: 'idle',
@@ -79,6 +81,7 @@ export default function GeneralSettings({
   const [backendApiUrl, setBackendApiUrl] = useState('');
   const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
   const [rerankModel, setRerankModel] = useState(DEFAULT_EMBED_MODEL);
+  const [enrichmentModel, setEnrichmentModel] = useState(DEFAULT_ENRICHMENT_MODEL);
   const [chatModels, setChatModels] = useState([]);
   const [embeddingModels, setEmbeddingModels] = useState([]);
   const [visionModels, setVisionModels] = useState([]);
@@ -120,6 +123,7 @@ export default function GeneralSettings({
       setBackendApiUrl(resolveBackendApiUrl(settings));
       setEmbedModel(settings.embedModel || DEFAULT_EMBED_MODEL);
       setRerankModel(settings.rerankModel || settings.embedModel || DEFAULT_EMBED_MODEL);
+      setEnrichmentModel(settings.enrichmentModel || DEFAULT_ENRICHMENT_MODEL);
       setSelectedModel(settings.chatModel || '');
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || DEFAULT_TRANSCRIPTION_MODEL);
@@ -272,6 +276,15 @@ export default function GeneralSettings({
   }, [rerankingModels, rerankModel, embedModel, panel, settingsHydrated]);
 
   useEffect(() => {
+    if (panel !== 'AI Models' || !settingsHydrated || enrichmentModel) {
+      return;
+    }
+    const nextModel = chatModels[0] || DEFAULT_ENRICHMENT_MODEL;
+    setEnrichmentModel(nextModel);
+    desktopApi.setSetting(ENRICHMENT_MODEL_KEY, nextModel);
+  }, [chatModels, enrichmentModel, panel, settingsHydrated]);
+
+  useEffect(() => {
     if (panel !== 'AI Models') {
       return;
     }
@@ -386,6 +399,12 @@ export default function GeneralSettings({
     const nextModel = event.target.value;
     setRerankModel(nextModel);
     desktopApi.setSetting(RERANK_MODEL_KEY, nextModel);
+  };
+
+  const handleEnrichmentModelChange = (event) => {
+    const nextModel = event.target.value;
+    setEnrichmentModel(nextModel);
+    desktopApi.setSetting(ENRICHMENT_MODEL_KEY, nextModel);
   };
 
   const handleTranscriptionModelChange = (event) => {
@@ -575,6 +594,7 @@ export default function GeneralSettings({
   const visionModelOptions = buildSelectOptions(visionModels, visionModel, 'saved model unavailable', showMissingModelLabel);
   const embeddingModelOptions = buildSelectOptions(embeddingModels, embedModel, 'saved model unavailable', showMissingModelLabel);
   const rerankingModelOptions = buildSelectOptions(rerankingModels, rerankModel, 'saved model unavailable', showMissingModelLabel);
+  const enrichmentModelOptions = buildSelectOptions(chatModels, enrichmentModel, 'saved model unavailable', showMissingModelLabel);
   const transcriptionModelOptions = buildSelectOptions(whisperModels, transcriptionModel, 'saved model unavailable', showMissingModelLabel);
 
   if (panel === 'AI Models') {
@@ -638,6 +658,22 @@ export default function GeneralSettings({
           </select>
           <p className="setting-description">
             Heimgeist currently uses an embedding-based reranker for web search, so this should generally be an embedding-capable Ollama model.
+          </p>
+        </div>
+        <div className="setting-section">
+          <h3>Knowledge Metadata Model</h3>
+          <select
+            className="select"
+            value={enrichmentModel}
+            onChange={handleEnrichmentModelChange}
+          >
+            {enrichmentModelOptions.length === 0 && <option value="">{isLoadingModelCatalog ? 'Loading models…' : '— No generation models available —'}</option>}
+            {enrichmentModelOptions.map(model => (
+              <option key={model.value} value={model.value}>{model.label}</option>
+            ))}
+          </select>
+          <p className="setting-description">
+            Heimgeist uses this local model for summaries, keywords, entities, and optional Deep enrichment Q&amp;A.
           </p>
         </div>
         <div className="setting-section">

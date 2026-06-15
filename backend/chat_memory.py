@@ -124,6 +124,19 @@ def _attachment_summary(raw_value: Any) -> str:
     return ", ".join(labels[:8])
 
 
+def _is_memory_only_response(row: models.ChatMessage) -> bool:
+    try:
+        sources = json.loads(getattr(row, "sources_json", None) or "[]")
+    except Exception:
+        return False
+    if not isinstance(sources, list) or not sources:
+        return False
+    for source in sources:
+        if not isinstance(source, dict) or source.get("type") != "chat_memory":
+            return False
+    return True
+
+
 def _completed_turns(session: models.ChatSession, rows: Sequence[models.ChatMessage]) -> List[Dict[str, Any]]:
     turns: List[Dict[str, Any]] = []
     pending_user: Optional[models.ChatMessage] = None
@@ -133,6 +146,9 @@ def _completed_turns(session: models.ChatSession, rows: Sequence[models.ChatMess
             pending_user = row
             continue
         if row.role != "assistant" or pending_user is None:
+            continue
+        if _is_memory_only_response(row):
+            pending_user = None
             continue
 
         user_content = _clean_content(pending_user.content)

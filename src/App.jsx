@@ -124,6 +124,7 @@ export default function App() {
   const [visionModel, setVisionModel] = useState('')
   const [transcriptionModel, setTranscriptionModel] = useState('base')
   const [workflowRouterModel, setWorkflowRouterModel] = useState('')
+  const [workflowSelectionMode, setWorkflowSelectionMode] = useState('auto')
   const [selectedChatModelSupportsVision, setSelectedChatModelSupportsVision] = useState(false)
   const [selectedVisionModelSupportsVision, setSelectedVisionModelSupportsVision] = useState(false)
   const [input, setInput] = useState('')
@@ -672,6 +673,7 @@ export default function App() {
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || 'base');
       setWorkflowRouterModel(settings.workflowRouterModel || '');
+      setWorkflowSelectionMode(settings.workflowSelectionMode === 'manual' ? 'manual' : 'auto');
       setStreamOutput(settings.streamOutput || false);
       setAudioInputEnabled(true);
       if (settings.audioInputEnabled !== true) {
@@ -1301,6 +1303,7 @@ export default function App() {
     visionModel,
     webSearchEnabled,
     workflowRouterModel,
+    workflowSelectionMode,
   })
 
   useEffect(() => {

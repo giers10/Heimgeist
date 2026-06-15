@@ -43,6 +43,7 @@ DEFAULT_ENRICH_CONCURRENCY = max(1, min(4, (os.cpu_count() or 4) // 2))
 JOB_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 JOBS: Dict[str, Dict[str, Any]] = {}
 LIB_LOCKS: Dict[str, asyncio.Lock] = {}
+QUERY_LOCKS: Dict[str, threading.Lock] = {}
 
 
 class CreateLibraryRequest(BaseModel):
@@ -1712,19 +1713,21 @@ def library_context(slug: str, req: LibraryContextRequest):
     embed_model = req.embed_model or pipeline.get("embed_model") or _default_embed_model() or DEFAULT_EMBED_MODEL
     try:
         run_query = _load_pipeline_fn("unified_rag", "run_query")
-        result = run_query(
-            shadow_index=paths["shadow_index"],
-            shadow_store=paths["shadow_store"],
-            content_index=paths["content_index"],
-            content_store=paths["content_store"],
-            query=req.prompt,
-            answer=False,
-            ollama=_resolve_ollama_url(req.ollama),
-            embed_model=embed_model,
-            gen_model=req.gen_model,
-            no_rerank=True,
-            k=max(1, req.top_k),
-        )
+        query_lock = QUERY_LOCKS.setdefault(slug, threading.Lock())
+        with query_lock:
+            result = run_query(
+                shadow_index=paths["shadow_index"],
+                shadow_store=paths["shadow_store"],
+                content_index=paths["content_index"],
+                content_store=paths["content_store"],
+                query=req.prompt,
+                answer=False,
+                ollama=_resolve_ollama_url(req.ollama),
+                embed_model=embed_model,
+                gen_model=req.gen_model,
+                no_rerank=True,
+                k=max(1, req.top_k),
+            )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Local retrieval failed: {type(exc).__name__}: {exc}") from exc
 

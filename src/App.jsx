@@ -81,6 +81,12 @@ export default function App() {
     removeLibraryFromChatSelections,
     setChatLibraryForSession,
   } = useChatLibrarySelection({ activeSessionId, libraries, libraryJobs })
+  const {
+    getSelectionForSession: getChatWorkflowForSession,
+    selectedWorkflow,
+    selection: chatWorkflowSelection,
+    setSelectionForSession: setChatWorkflowForSession,
+  } = useChatWorkflowSelection({ activeSessionId, workflows })
   const [isChatModelPickerOpen, setIsChatModelPickerOpen] = useState(false)
   const [availableChatModels, setAvailableChatModels] = useState([])
   const [availableVisionModels, setAvailableVisionModels] = useState([])

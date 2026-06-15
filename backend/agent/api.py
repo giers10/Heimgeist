@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import models as chat_models
+from ..chat_memory import build_chat_memory_context, safe_sync_chat_memory_for_session
 from ..database import Base, SessionLocal, engine
 from .events import EventWriter
 from .models import (
@@ -352,7 +353,25 @@ def delete_workflow(workflow_id: str):
         db.close()
 
 
-async def _select_for_run(db: Session, request: WorkflowRunRequest) -> tuple[WorkflowDefinition, Optional[Dict[str, Any]]]:
+def _memory_context_for_request(db: Session, request: WorkflowRunRequest) -> Dict[str, Any]:
+    try:
+        return build_chat_memory_context(
+            db,
+            request.message,
+            exclude_session_id=request.session_id,
+            top_k=4,
+            context_character_budget=3600,
+        )
+    except Exception as exc:
+        print("[chat-memory] workflow retrieval failed:", exc)
+        return {"context_block": "", "sources": [], "hits": []}
+
+
+async def _select_for_run(
+    db: Session,
+    request: WorkflowRunRequest,
+    memory_context: Optional[Dict[str, Any]] = None,
+) -> tuple[WorkflowDefinition, Optional[Dict[str, Any]]]:
     router_result = None
     if request.selection_mode == "automatic":
         recent_messages = []
@@ -361,6 +380,8 @@ async def _select_for_run(db: Session, request: WorkflowRunRequest) -> tuple[Wor
             if session:
                 rows = db.query(chat_models.ChatMessage).filter(chat_models.ChatMessage.session_pk == session.id).order_by(chat_models.ChatMessage.id.desc()).limit(4).all()
                 recent_messages = [{"role": row.role, "content": row.content} for row in reversed(rows)]
+        if memory_context and memory_context.get("context_block"):
+            recent_messages.append({"role": "system", "content": memory_context["context_block"]})
         router_result = await select_workflow(
             db, message=request.message, recent_messages=recent_messages, attachments=request.attachments,
             library_slug=request.library_slug, router_model=request.router_model, chat_model=request.model,
@@ -382,7 +403,8 @@ async def _select_for_run(db: Session, request: WorkflowRunRequest) -> tuple[Wor
 async def create_workflow_run(request: WorkflowRunRequest):
     db = SessionLocal()
     try:
-        workflow, router_result = await _select_for_run(db, request)
+        memory_context = _memory_context_for_request(db, request)
+        workflow, router_result = await _select_for_run(db, request, memory_context)
         revision_id = request.workflow_revision_id or workflow.current_revision_id
         if (
             request.workflow_revision_id

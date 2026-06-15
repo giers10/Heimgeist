@@ -85,6 +85,7 @@ export function createChatGenerationHandlers({
   userScrolledUpRef,
   visionModel,
   webSearchEnabled,
+  workflowRouterModel,
 }) {
   async function regenerateFromIndex(index, overrideUserText = null) {
     const sessionId = activeSessionId
@@ -358,6 +359,7 @@ export function createChatGenerationHandlers({
           attachments: outgoingAttachments,
           vision_model: visionModel || null,
           transcription_model: transcriptionModel || null,
+          router_model: workflowRouterModel || null,
           stream: true,
         }, requestController.signal)
         attachWorkflowRunToRequest?.(requestController, created.run_id)

@@ -1179,6 +1179,7 @@ export default function App() {
     userScrolledUpRef,
     visionModel,
     webSearchEnabled,
+    workflowRouterModel,
   })
 
   useEffect(() => {

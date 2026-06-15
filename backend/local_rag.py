@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from .app_settings import (
     DEFAULT_EMBED_MODEL as DEFAULT_EMBED_MODEL_SETTING,
     DEFAULT_ENRICHMENT_MODEL,
+    get_auto_deep_enrichment_preference,
     get_embed_model_preference,
     get_enrichment_model_preference,
     get_ollama_api_url,
@@ -42,6 +43,7 @@ DEFAULT_ENRICH_MIN_CHARS = 240
 DEFAULT_ENRICH_MAX_TEXT = 6000
 DEFAULT_ENRICH_CONCURRENCY = max(1, min(4, (os.cpu_count() or 4) // 2))
 ITEM_METADATA_VERSION = 2
+AUTO_DEEP_ENRICHMENT_DISABLED_KEY = "auto_deep_enrichment_disabled"
 
 JOB_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 JOBS: Dict[str, Dict[str, Any]] = {}
@@ -553,6 +555,30 @@ def _mark_entry_pending(entry: Dict[str, Any]) -> None:
     entry["metadata"].pop("error", None)
 
 
+def _enable_automatic_deep_enrichment(slug: str, data: Optional[Dict[str, Any]] = None) -> bool:
+    if not get_auto_deep_enrichment_preference():
+        return False
+
+    library = data if data is not None else read_library(slug)
+    changed = False
+    for entry in library.get("files", []):
+        metadata = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
+        if metadata.get("status") not in {"ready", "fallback"}:
+            continue
+        if _file_enrich_enabled(entry) or bool(entry.get(AUTO_DEEP_ENRICHMENT_DISABLED_KEY)):
+            continue
+        entry["enrich_enabled"] = True
+        _mark_entry_pending(entry)
+        changed = True
+
+    if not changed:
+        return False
+
+    _set_pending_prepare_signature(library, _prepare_signature(library.get("files", [])))
+    write_library(slug, library)
+    return True
+
+
 async def _save_library_change(slug: str, data: Dict[str, Any]) -> Optional[str]:
     signature = _prepare_signature(data.get("files", []))
     _set_pending_prepare_signature(data, signature)
@@ -873,6 +899,9 @@ async def _handle_post_job_state(slug: str, job_type: str, status: str) -> None:
         return
 
     if payload["states"].get("is_indexed"):
+        if job_type == "prepare" and status == "succeeded" and _enable_automatic_deep_enrichment(slug, data):
+            await _ensure_prepare_job(slug)
+            return
         _mark_all_files_ready(slug)
         _clear_pending_prepare(slug)
         return
@@ -1238,6 +1267,14 @@ async def list_libraries():
         try:
             data = _read_json(meta)
             payload = library_payload(data)
+            if (
+                payload["states"].get("is_indexed")
+                and not _has_active_job(data["slug"])
+                and _enable_automatic_deep_enrichment(data["slug"], data)
+            ):
+                await _ensure_prepare_job(data["slug"])
+                data = read_library(data["slug"])
+                payload = library_payload(data)
             has_failed_item = any(
                 str(entry.get("sync_status") or "") == "failed"
                 for entry in data.get("files", [])
@@ -1698,6 +1735,10 @@ async def update_file_enrichment(slug: str, req: UpdateFileEnrichmentRequest):
         return {"job_id": None, "library": library_payload(data)}
 
     target["enrich_enabled"] = desired
+    if desired:
+        target.pop(AUTO_DEEP_ENRICHMENT_DISABLED_KEY, None)
+    else:
+        target[AUTO_DEEP_ENRICHMENT_DISABLED_KEY] = True
     target["sync_status"] = "pending"
     target.pop("sync_error", None)
     target.pop("synced_at", None)

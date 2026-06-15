@@ -14,6 +14,7 @@ DEFAULT_EMBED_MODEL = "nomic-embed-text:latest"
 DEFAULT_RERANK_MODEL = DEFAULT_EMBED_MODEL
 DEFAULT_ENRICHMENT_MODEL = "qwen3:4b"
 DEFAULT_TRANSCRIPTION_MODEL = "base"
+DEFAULT_AUTO_DEEP_ENRICHMENT = True
 BGE_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "backendApiUrl": DEFAULT_BACKEND_API_URL,
@@ -24,6 +25,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "rerankModel": DEFAULT_RERANK_MODEL,
     "enrichmentModel": DEFAULT_ENRICHMENT_MODEL,
     "transcriptionModel": DEFAULT_TRANSCRIPTION_MODEL,
+    "autoDeepEnrichment": DEFAULT_AUTO_DEEP_ENRICHMENT,
 }
 
 
@@ -98,6 +100,18 @@ def normalize_transcription_model(value: Any) -> str:
     return normalize_model_name(value, DEFAULT_TRANSCRIPTION_MODEL)
 
 
+def normalize_boolean(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    return default
+
+
 def load_app_settings() -> Dict[str, Any]:
     path = settings_path()
     try:
@@ -134,6 +148,10 @@ def load_app_settings() -> Dict[str, Any]:
     settings["chatModel"] = normalize_model_name(settings.get("chatModel"))
     settings["visionModel"] = normalize_model_name(settings.get("visionModel"))
     settings["transcriptionModel"] = normalize_transcription_model(settings.get("transcriptionModel"))
+    settings["autoDeepEnrichment"] = normalize_boolean(
+        settings.get("autoDeepEnrichment"),
+        DEFAULT_AUTO_DEEP_ENRICHMENT,
+    )
 
     return settings
 
@@ -161,3 +179,11 @@ def get_enrichment_model_preference() -> str:
 def get_transcription_model_preference() -> str:
     settings = load_app_settings()
     return normalize_transcription_model(settings.get("transcriptionModel"))
+
+
+def get_auto_deep_enrichment_preference() -> bool:
+    settings = load_app_settings()
+    return normalize_boolean(
+        settings.get("autoDeepEnrichment"),
+        DEFAULT_AUTO_DEEP_ENRICHMENT,
+    )

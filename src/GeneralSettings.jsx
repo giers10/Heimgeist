@@ -15,6 +15,7 @@ const ENRICHMENT_MODEL_KEY = 'enrichmentModel';
 const MODEL_KEY = 'chatModel';
 const VISION_MODEL_KEY = 'visionModel';
 const TRANSCRIPTION_MODEL_KEY = 'transcriptionModel';
+const AUTO_DEEP_ENRICHMENT_KEY = 'autoDeepEnrichment';
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
 const DEFAULT_AUDIO_INPUT_LANGUAGE = '';
 const DEFAULT_BACKEND_API_URL = 'http://127.0.0.1:8000';
@@ -90,6 +91,7 @@ export default function GeneralSettings({
   const [selectedModel, setSelectedModel] = useState('');
   const [visionModel, setVisionModel] = useState('');
   const [transcriptionModel, setTranscriptionModel] = useState(DEFAULT_TRANSCRIPTION_MODEL);
+  const [autoDeepEnrichment, setAutoDeepEnrichment] = useState(true);
   const [audioInputDeviceId, setAudioInputDeviceId] = useState(DEFAULT_AUDIO_INPUT_DEVICE_ID);
   const [audioInputLanguage, setAudioInputLanguage] = useState(DEFAULT_AUDIO_INPUT_LANGUAGE);
   const [audioInputDevices, setAudioInputDevices] = useState([]);
@@ -127,6 +129,7 @@ export default function GeneralSettings({
       setSelectedModel(settings.chatModel || '');
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || DEFAULT_TRANSCRIPTION_MODEL);
+      setAutoDeepEnrichment(settings.autoDeepEnrichment !== false);
       setAudioInputDeviceId(
         typeof settings.audioInputDeviceId === 'string'
           ? settings.audioInputDeviceId
@@ -414,6 +417,12 @@ export default function GeneralSettings({
     if (onTranscriptionModelChange) {
       onTranscriptionModelChange(nextModel);
     }
+  };
+
+  const handleAutoDeepEnrichmentToggle = () => {
+    const nextValue = !autoDeepEnrichment;
+    setAutoDeepEnrichment(nextValue);
+    desktopApi.setSetting(AUTO_DEEP_ENRICHMENT_KEY, nextValue);
   };
 
   const refreshAudioDevices = async ({ requestAccess = false } = {}) => {
@@ -850,6 +859,20 @@ export default function GeneralSettings({
   if (panel === 'Advanced') {
     return (
       <div className="settings-content-panel">
+        <div className="setting-section">
+          <h3>Automatic Deep Enrichment</h3>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={autoDeepEnrichment}
+              onChange={handleAutoDeepEnrichmentToggle}
+            />
+            <span className="slider"></span>
+          </label>
+          <p className="setting-description">
+            After standard metadata is generated, Heimgeist automatically queues deep enrichment to add generated Q&amp;A. Individual content can still be switched back to Standard.
+          </p>
+        </div>
         <div className="setting-section danger-zone">
           <h3>Purge Databases</h3>
           <div className="setting-control-row">

@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   embedModel: 'nomic-embed-text:latest',
   rerankModel: 'nomic-embed-text:latest',
   transcriptionModel: 'base',
+  autoDeepEnrichment: true,
   colorScheme: 'Default',
   uiScale: 1,
   openDevToolsOnStartup: false,

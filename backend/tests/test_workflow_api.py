@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import json
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -98,4 +98,40 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
         run_values = json.loads(run.inputs_json)["run"]
         self.assertEqual(run_values["target_message_id"], self.assistant_message_id)
         self.assertEqual(run_values["target_url"], "https://example.com/source")
+        db.close()
+
+    async def test_automatic_run_persists_router_web_search_inputs(self):
+        db = self.Session()
+        web = db.query(WorkflowDefinition).filter_by(slug="web-answer").one()
+        web_id = web.id
+        db.close()
+        started = []
+        fake_runtime = SimpleNamespace(start=started.append)
+        router_result = {
+            "workflow_id": web_id,
+            "workflow_slug": "web-answer",
+            "confidence": 0.95,
+            "reason": "current information",
+            "inputs": {"web_search_query": "Iran news today", "web_search_queries": ["Iran news today", "Iran latest news"]},
+            "fallback": False,
+        }
+        request = WorkflowRunRequest(
+            session_id="router-chat",
+            message="what happened in iran today",
+            model="test-model",
+            selection_mode="automatic",
+        )
+        with (
+            patch.object(api, "SessionLocal", self.Session),
+            patch.object(api, "runtime", fake_runtime),
+            patch.object(api, "select_workflow", new=AsyncMock(return_value=router_result)),
+        ):
+            response = await api.create_workflow_run(request)
+
+        self.assertEqual(started, [response["run_id"]])
+        db = self.Session()
+        run = db.query(WorkflowRun).filter_by(id=response["run_id"]).one()
+        run_values = json.loads(run.inputs_json)["run"]
+        self.assertEqual(run_values["web_search_query"], "Iran news today")
+        self.assertEqual(run_values["web_search_queries"], ["Iran news today", "Iran latest news"])
         db.close()

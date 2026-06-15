@@ -3,9 +3,17 @@ import { CHAT_WORKFLOW_MAP_KEY } from './appConfig'
 
 const DIRECT_SELECTION = Object.freeze({ mode: 'direct', workflowId: null })
 
+function normalizeSelection(selection, validIds = null) {
+  if (selection?.mode === 'explicit' && (!validIds || validIds.has(selection.workflowId))) {
+    return selection
+  }
+  return DIRECT_SELECTION
+}
+
 function loadMap() {
   try {
-    return JSON.parse(localStorage.getItem(CHAT_WORKFLOW_MAP_KEY) || '{}')
+    const raw = JSON.parse(localStorage.getItem(CHAT_WORKFLOW_MAP_KEY) || '{}')
+    return Object.fromEntries(Object.entries(raw).map(([sessionId, selection]) => [sessionId, normalizeSelection(selection)]))
   } catch {
     return {}
   }
@@ -26,7 +34,8 @@ export function useChatWorkflowSelection({ activeSessionId, workflows }) {
       let changed = false
       const next = { ...previous }
       Object.entries(next).forEach(([sessionId, selection]) => {
-        if (selection?.mode === 'explicit' && !validIds.has(selection.workflowId)) {
+        const normalized = normalizeSelection(selection, validIds)
+        if (normalized !== selection) {
           next[sessionId] = DIRECT_SELECTION
           changed = true
         }
@@ -36,7 +45,7 @@ export function useChatWorkflowSelection({ activeSessionId, workflows }) {
   }, [workflows])
 
   const selection = activeSessionId
-    ? (selectionBySession[activeSessionId] || DIRECT_SELECTION)
+    ? normalizeSelection(selectionBySession[activeSessionId])
     : DIRECT_SELECTION
 
   const selectedWorkflow = useMemo(() => {
@@ -46,14 +55,14 @@ export function useChatWorkflowSelection({ activeSessionId, workflows }) {
   }, [selection, workflows])
 
   function getSelectionForSession(sessionId) {
-    return selectionBySession[sessionId] || DIRECT_SELECTION
+    return normalizeSelection(selectionBySession[sessionId])
   }
 
   function setSelectionForSession(sessionId, nextSelection) {
     if (!sessionId) return
     setSelectionBySession(previous => ({
       ...previous,
-      [sessionId]: nextSelection?.mode ? nextSelection : DIRECT_SELECTION,
+      [sessionId]: normalizeSelection(nextSelection),
     }))
   }
 

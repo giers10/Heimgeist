@@ -1205,6 +1205,10 @@ export default function App() {
     return buildModelPickerOptions(availableChatModels, model, 'saved model unavailable')
   }, [availableChatModels, model])
 
+  function getWorkflowEventName(event) {
+    return event?.payload?.workflow?.name || event?.payload?.name || event?.payload?.workflow_name || null
+  }
+
   const handleWorkflowRunEvent = React.useCallback((sessionId, event) => {
     if (
       event.type === 'tool_result'
@@ -1215,9 +1219,10 @@ export default function App() {
       void refreshLibraryJobs()
     }
     setWorkflowExecutions(previous => {
+      const eventWorkflowName = getWorkflowEventName(event)
       const current = previous[sessionId] || {
         runId: event.run_id,
-        workflowName: event.payload?.workflow?.name || 'Workflow',
+        workflowName: eventWorkflowName || 'Workflow',
         status: 'running',
         startedAt: Date.now(),
         events: [],
@@ -1227,7 +1232,7 @@ export default function App() {
           ...previous,
           [sessionId]: {
             runId: event.run_id,
-            workflowName: event.payload?.workflow?.name || 'Workflow',
+            workflowName: eventWorkflowName || 'Workflow',
             status: 'running',
             startedAt: Date.now(),
             events: [event],
@@ -1256,7 +1261,7 @@ export default function App() {
         [sessionId]: {
           ...current,
           runId: event.run_id || current.runId,
-          workflowName: event.payload?.workflow?.name || current.workflowName,
+          workflowName: eventWorkflowName || current.workflowName,
           status,
           finishedAt,
           events: [...(current.events || []), event].slice(-120),

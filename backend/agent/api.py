@@ -364,6 +364,7 @@ async def create_workflow_run(request: WorkflowRunRequest):
         run_attachments = request.attachments
         sample_inputs = dict(request.sample_inputs)
         target_message_id = sample_inputs.get("target_message_id") or sample_inputs.get("message_id")
+        target_message_content = sample_inputs.get("target_message_content") or sample_inputs.get("edited_content")
         target_url = sample_inputs.get("target_url") or sample_inputs.get("url")
         if not target_url:
             url_match = re.search(r"https?://[^\s<>'\"]+", request.message or "")
@@ -376,13 +377,14 @@ async def create_workflow_run(request: WorkflowRunRequest):
                 session = chat_models.ChatSession(session_id=request.session_id)
                 db.add(session)
                 db.flush()
+            previous_assistant_message_id = None
             if not target_message_id:
                 previous_assistant = db.query(chat_models.ChatMessage).filter(
                     chat_models.ChatMessage.session_pk == session.id,
                     chat_models.ChatMessage.role == "assistant",
                 ).order_by(chat_models.ChatMessage.created_at.desc(), chat_models.ChatMessage.id.desc()).first()
                 if previous_assistant:
-                    target_message_id = previous_assistant.message_id
+                    previous_assistant_message_id = previous_assistant.message_id
             from .. import main as main_module
             if request.regenerate_index is not None:
                 rows = db.query(chat_models.ChatMessage).filter(
@@ -411,6 +413,12 @@ async def create_workflow_run(request: WorkflowRunRequest):
                 )
                 db.add(user_message)
                 db.flush()
+                if not target_message_id:
+                    if workflow.slug == "remember-this":
+                        target_message_id = user_message.message_id
+                        target_message_content = target_message_content or _extract_remember_content(request.message)
+                    elif previous_assistant_message_id:
+                        target_message_id = previous_assistant_message_id
 
         messages = []
         if session:
@@ -437,6 +445,7 @@ async def create_workflow_run(request: WorkflowRunRequest):
             "web_search_enabled": request.web_search_enabled,
             "show_thinking": request.show_thinking,
             "target_message_id": target_message_id,
+            "target_message_content": target_message_content,
             "target_url": target_url,
         }
         run = WorkflowRun(

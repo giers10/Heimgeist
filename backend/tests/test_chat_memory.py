@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime, timedelta
 import tempfile
 import unittest
 
@@ -30,13 +31,14 @@ class ChatMemoryTests(unittest.TestCase):
         self.engine.dispose()
         self.temp.cleanup()
 
-    def _turn(self, db, session_id, title, user_content, assistant_content):
-        session = ChatSession(session_id=session_id, name=title)
+    def _turn(self, db, session_id, title, user_content, assistant_content, created_at=None):
+        created_at = created_at or datetime.utcnow()
+        session = ChatSession(session_id=session_id, name=title, created_at=created_at)
         db.add(session)
         db.flush()
-        db.add(ChatMessage(session_pk=session.id, role="user", content=user_content))
+        db.add(ChatMessage(session_pk=session.id, role="user", content=user_content, created_at=created_at))
         db.flush()
-        db.add(ChatMessage(session_pk=session.id, role="assistant", content=assistant_content))
+        db.add(ChatMessage(session_pk=session.id, role="assistant", content=assistant_content, created_at=created_at + timedelta(seconds=1)))
         db.flush()
         return session
 
@@ -93,3 +95,55 @@ class ChatMemoryTests(unittest.TestCase):
             db.close()
 
         self.assertEqual(context["context_block"], "")
+
+    def test_generic_prompt_words_do_not_create_false_memory_hits(self):
+        db = self.Session()
+        try:
+            self._turn(
+                db,
+                "story",
+                "Test Conversation Start",
+                "tell me a long story",
+                "The village of Eldoria sat beneath a whispering forest canopy.",
+            )
+            db.commit()
+            sync_all_chat_memory(db)
+
+            context = build_chat_memory_context(db, "tell me about thelama and crowley")
+        finally:
+            db.close()
+
+        self.assertEqual(context["context_block"], "")
+
+    def test_previous_conversation_uses_recency_not_semantic_overlap(self):
+        db = self.Session()
+        try:
+            base = datetime(2026, 1, 1, 12, 0, 0)
+            self._turn(db, "older", "Weather", "what is the weather?", "It is rainy.", created_at=base)
+            self._turn(db, "previous", "Crowley", "tell me about Crowley", "The previous chat discussed Crowley.", created_at=base + timedelta(minutes=1))
+            current = ChatSession(session_id="current", name="Letztes Gespräch", created_at=base + timedelta(minutes=2))
+            db.add(current)
+            db.commit()
+            sync_all_chat_memory(db)
+
+            context = build_chat_memory_context(db, "worum ging es im letzten gespräch?", exclude_session_id="current")
+        finally:
+            db.close()
+
+        self.assertIn("Crowley", context["context_block"])
+        self.assertNotIn("rainy", context["context_block"])
+
+    def test_music_query_matches_song_and_lied_history(self):
+        db = self.Session()
+        try:
+            self._turn(db, "song", "Identify this song", "what is this song?", "We discussed a track by an electronic artist.")
+            self._turn(db, "lied", "Lied: Hintergründe suchen", "suche hintergründe zu diesem lied", "Das Lied wurde im Kontext einer Band besprochen.")
+            db.commit()
+            sync_all_chat_memory(db)
+
+            context = build_chat_memory_context(db, "list all the music we talked about")
+        finally:
+            db.close()
+
+        self.assertIn("song", context["context_block"].casefold())
+        self.assertIn("lied", context["context_block"].casefold())

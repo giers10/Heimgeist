@@ -70,7 +70,7 @@ def _capability_enabled(capability: str, *, library_slug: Optional[str], web_sea
     if capability in {"chat"}:
         return True
     if capability == "web":
-        return web_search_enabled
+        return True
     if capability in {"rag", "knowledge_write"}:
         return bool(library_slug)
     if capability == "vision":
@@ -134,15 +134,25 @@ def _fast_path(
         if remember:
             return _workflow_result(remember, confidence=1.0, reason="The user explicitly asked Heimgeist to remember or save this.")
 
-    if web_search_enabled and library_slug and mentions_web and mentions_knowledge:
+    if web_search_enabled and library_slug:
+        combined = _manifest_by_slug(manifests, "knowledge-web-answer")
+        if combined:
+            return _workflow_result(combined, confidence=1.0, reason="Web search is explicitly enabled; using it together with the selected knowledge database.")
+
+    if web_search_enabled:
+        web = _manifest_by_slug(manifests, "web-answer")
+        if web:
+            return _workflow_result(web, confidence=1.0, reason="Web search is explicitly enabled for this chat.")
+
+    if library_slug and mentions_web and mentions_knowledge:
         combined = _manifest_by_slug(manifests, "knowledge-web-answer")
         if combined:
             return _workflow_result(combined, confidence=0.95, reason="The request asks to combine selected knowledge with current web information.")
 
-    if web_search_enabled and mentions_web:
+    if mentions_web:
         web = _manifest_by_slug(manifests, "web-answer")
         if web:
-            return _workflow_result(web, confidence=0.95, reason="The request asks for current or web information and web search is enabled.")
+            return _workflow_result(web, confidence=0.95, reason="The request asks for current or web information.")
 
     if library_slug and mentions_knowledge:
         knowledge = _manifest_by_slug(manifests, "knowledge-answer")
@@ -219,8 +229,8 @@ async def select_workflow(
         f"Recent messages: {json.dumps(compact_history, ensure_ascii=False)}\n"
         f"Attachment count: {len(attachments)}\n"
         f"Selected knowledge database: {library_slug or 'none'}\n"
-        f"Web search permission: {'enabled' if web_search_enabled else 'disabled'}\n"
-        "Only select workflows from the enabled list. Do not select a workflow that needs a disabled capability.\n"
+        f"Web search mode: {'forced' if web_search_enabled else 'automatic'}\n"
+        "Web workflows are available in automatic mode even when not forced. If web search mode is forced, select a web-capable workflow unless a higher-priority write or attachment workflow is required. Knowledge workflows still require a selected database; vision workflows still require attachments.\n"
         f"Enabled workflows: {json.dumps(manifests, ensure_ascii=False)}"
     )
     try:

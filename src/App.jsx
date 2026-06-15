@@ -1102,10 +1102,51 @@ export default function App() {
     return buildModelPickerOptions(availableChatModels, model, 'saved model unavailable')
   }, [availableChatModels, model])
 
+  const handleWorkflowRunEvent = React.useCallback((sessionId, event) => {
+    setWorkflowExecutions(previous => {
+      const current = previous[sessionId] || {
+        runId: event.run_id,
+        workflowName: event.payload?.workflow?.name || 'Workflow',
+        status: 'running',
+        startedAt: Date.now(),
+        events: [],
+      }
+      let status = current.status
+      let finishedAt = current.finishedAt
+      if (event.type === 'client_run_started') {
+        status = 'running'
+      } else if (event.type === 'run_completed') {
+        status = 'completed'
+        finishedAt = Date.now()
+      } else if (event.type === 'run_failed') {
+        status = 'failed'
+        finishedAt = Date.now()
+      } else if (event.type === 'run_cancelled') {
+        status = 'cancelled'
+        finishedAt = Date.now()
+      } else if (event.type === 'confirmation_required') {
+        status = 'waiting_confirmation'
+        setPendingWorkflowConfirmation({ ...event, sessionId })
+      }
+      return {
+        ...previous,
+        [sessionId]: {
+          ...current,
+          runId: event.run_id || current.runId,
+          workflowName: event.payload?.workflow?.name || current.workflowName,
+          status,
+          finishedAt,
+          events: [...(current.events || []), event].slice(-120),
+        },
+      }
+    })
+  }, [])
+
   const { regenerateFromIndex, sendMessage } = createChatGenerationHandlers({
     activeSessionId,
     activeSessionIdRef,
     backendApiUrl,
+    attachWorkflowRunToRequest,
     beginCancelableRequest,
     canAttachImages,
     chatSessions,
@@ -1113,11 +1154,13 @@ export default function App() {
     createNewChat,
     finishCancelableRequest,
     getChatLibraryForSession,
+    getChatWorkflowForSession,
     imageAttachmentUnavailableReason,
     input,
     isSending,
     model,
     onMessagesPersisted: fetchHistory,
+    onWorkflowRunEvent: handleWorkflowRunEvent,
     restoredForRef,
     scrollMessageToTop,
     scrollToBottom,

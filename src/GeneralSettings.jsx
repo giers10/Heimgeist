@@ -16,6 +16,7 @@ const MODEL_KEY = 'chatModel';
 const VISION_MODEL_KEY = 'visionModel';
 const TRANSCRIPTION_MODEL_KEY = 'transcriptionModel';
 const WORKFLOW_ROUTER_MODEL_KEY = 'workflowRouterModel';
+const WORKFLOW_SELECTION_MODE_KEY = 'workflowSelectionMode';
 const AUTO_DEEP_ENRICHMENT_KEY = 'autoDeepEnrichment';
 const DEFAULT_AUDIO_INPUT_DEVICE_ID = '';
 const DEFAULT_AUDIO_INPUT_LANGUAGE = '';
@@ -76,6 +77,7 @@ export default function GeneralSettings({
   onModelChange,
   onVisionModelChange,
   onWorkflowRouterModelChange,
+  onWorkflowSelectionModeChange,
   onTranscriptionModelChange,
   onLibrariesPurged,
   onAudioInputDeviceChange,
@@ -94,6 +96,7 @@ export default function GeneralSettings({
   const [visionModel, setVisionModel] = useState('');
   const [transcriptionModel, setTranscriptionModel] = useState(DEFAULT_TRANSCRIPTION_MODEL);
   const [workflowRouterModel, setWorkflowRouterModel] = useState('');
+  const [workflowSelectionMode, setWorkflowSelectionMode] = useState('auto');
   const [autoDeepEnrichment, setAutoDeepEnrichment] = useState(true);
   const [audioInputDeviceId, setAudioInputDeviceId] = useState(DEFAULT_AUDIO_INPUT_DEVICE_ID);
   const [audioInputLanguage, setAudioInputLanguage] = useState(DEFAULT_AUDIO_INPUT_LANGUAGE);
@@ -133,6 +136,7 @@ export default function GeneralSettings({
       setVisionModel(settings.visionModel || settings.chatModel || '');
       setTranscriptionModel(settings.transcriptionModel || DEFAULT_TRANSCRIPTION_MODEL);
       setWorkflowRouterModel(settings.workflowRouterModel || '');
+      setWorkflowSelectionMode(settings.workflowSelectionMode === 'manual' ? 'manual' : 'auto');
       setAutoDeepEnrichment(settings.autoDeepEnrichment !== false);
       setAudioInputDeviceId(
         typeof settings.audioInputDeviceId === 'string'
@@ -430,6 +434,13 @@ export default function GeneralSettings({
     onWorkflowRouterModelChange?.(nextModel);
   };
 
+  const handleWorkflowSelectionModeChange = (event) => {
+    const nextMode = event.target.value === 'manual' ? 'manual' : 'auto';
+    setWorkflowSelectionMode(nextMode);
+    desktopApi.setSetting(WORKFLOW_SELECTION_MODE_KEY, nextMode);
+    onWorkflowSelectionModeChange?.(nextMode);
+  };
+
   const handleAutoDeepEnrichmentToggle = () => {
     const nextValue = !autoDeepEnrichment;
     setAutoDeepEnrichment(nextValue);
@@ -633,6 +644,16 @@ export default function GeneralSettings({
           </select>
           <p className="setting-description">
             Heimgeist uses this model for normal text chat.
+          </p>
+        </div>
+        <div className="setting-section">
+          <h3>Workflow Selection</h3>
+          <select className="select" value={workflowSelectionMode} onChange={handleWorkflowSelectionModeChange}>
+            <option value="auto">Auto</option>
+            <option value="manual">Manual</option>
+          </select>
+          <p className="setting-description">
+            Auto lets Heimgeist route each chat prompt from the enabled chat capabilities. Manual shows the Flow selector in the chat bar.
           </p>
         </div>
         <div className="setting-section">

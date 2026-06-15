@@ -63,6 +63,24 @@ def _slugify(value: str) -> str:
     return slug[:90] or f"workflow-{uuid.uuid4().hex[:8]}"
 
 
+_REMEMBER_CONTENT_PATTERNS = [
+    re.compile(r"^\s*(?:please\s+)?remember\s+(?:this|that)\s*[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:please\s+)?save\s+(?:this|that)\s*[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:bitte\s+)?merk\s+dir\s+(?:das\s*)?[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:bitte\s+)?speicher(?:e)?\s+(?:das|dies|diese|diesen)?\s*[:\-–—]?\s*(.+)$", re.IGNORECASE | re.DOTALL),
+]
+
+
+def _extract_remember_content(message: str) -> Optional[str]:
+    text = str(message or "").strip()
+    for pattern in _REMEMBER_CONTENT_PATTERNS:
+        match = pattern.match(text)
+        if match:
+            content = match.group(1).strip()
+            return content or None
+    return None
+
+
 def initialize_agent_system() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()

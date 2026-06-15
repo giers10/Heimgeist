@@ -29,6 +29,12 @@ from .app_settings import (
     get_ollama_api_url,
 )
 from .paths import library_root
+from .video_ingest import (
+    UnsupportedVideoUrl,
+    ingest_video_url,
+    is_likely_media_url,
+    probe_video_url,
+)
 from .websearch import fetch_website_snapshot
 
 router = APIRouter(tags=["local-rag"])
@@ -235,7 +241,7 @@ def _source_signature(files: List[Dict[str, Any]]) -> Optional[str]:
             "rel": entry.get("rel") or "",
             "size": int(entry.get("size") or 0),
         }
-        if entry.get("managed") or entry.get("kind") in {"text", "website", "chat_message"}:
+        if entry.get("managed") or entry.get("kind") in {"text", "website", "video", "chat_message"}:
             payload.update({
                 "item_id": entry.get("item_id") or "",
                 "kind": entry.get("kind") or "file",
@@ -1431,11 +1437,13 @@ def get_library_item(slug: str, item_id: str):
         raise HTTPException(status_code=404, detail="Content item not found")
 
     payload = dict(entry)
-    if entry.get("kind") in {"text", "website", "chat_message"}:
+    if entry.get("kind") in {"text", "website", "video", "chat_message"}:
         path = Path(str(entry.get("path") or ""))
         payload["content"] = path.read_text(encoding="utf-8") if path.exists() else ""
         if entry.get("kind") == "website":
             payload["content_origin"] = "stored_snapshot"
+        elif entry.get("kind") == "video":
+            payload["content_origin"] = "stored_video_transcript"
         elif entry.get("kind") == "chat_message":
             payload["content_origin"] = "stored_chat_message"
         else:
@@ -1590,9 +1598,97 @@ async def update_library_text(slug: str, item_id: str, req: UpdateTextRequest):
 
 @router.post("/libraries/{slug}/websites")
 async def create_library_website(slug: str, req: CreateWebsiteRequest):
+    requested_url = str(req.url or "").strip()
+    try:
+        video_metadata = await asyncio.to_thread(probe_video_url, requested_url)
+    except UnsupportedVideoUrl:
+        video_metadata = None
+    except Exception as exc:
+        if is_likely_media_url(requested_url):
+            raise HTTPException(status_code=400, detail=f"Could not read video URL: {exc}") from exc
+        video_metadata = None
+
+    if video_metadata:
+        try:
+            video = await ingest_video_url(requested_url, video_metadata)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Could not process video: {exc}") from exc
+
+        data = read_library(slug)
+        canonical_url = str(video["url"])
+        video_id = str(video.get("video_id") or "")
+        extractor = str(video.get("extractor") or "")
+        duplicate = next(
+            (
+                entry for entry in data.get("files", [])
+                if entry.get("kind") == "video"
+                and (
+                    entry.get("url") == canonical_url
+                    or (
+                        video_id
+                        and entry.get("video_id") == video_id
+                        and str(entry.get("extractor") or "") == extractor
+                    )
+                )
+            ),
+            None,
+        )
+        if duplicate:
+            raise HTTPException(status_code=409, detail="This video is already saved in the database.")
+
+        item_id = uuid.uuid4().hex
+        source_path = _managed_source_path(slug, item_id)
+        rel = _managed_stage_rel(item_id)
+        _write_text_atomic(source_path, str(video["document"]))
+        _ensure_stage_link(slug, source_path, rel)
+        custom_title = str(req.title or "").strip()
+        title = custom_title or str(video.get("title") or canonical_url)
+        entry = {
+            "item_id": item_id,
+            "kind": "video",
+            "title": title[:240],
+            "title_locked": bool(custom_title),
+            "name": title[:240],
+            "url": canonical_url,
+            "requested_url": requested_url,
+            "video_id": video.get("video_id"),
+            "extractor": video.get("extractor"),
+            "channel": video.get("channel"),
+            "duration": video.get("duration"),
+            "duration_text": video.get("duration_text"),
+            "upload_date": video.get("upload_date"),
+            "thumbnail_url": video.get("thumbnail_url"),
+            "video_summary": video.get("summary"),
+            "transcript_chars": len(str(video.get("transcript") or "")),
+            "transcription_model": video.get("transcription_model"),
+            "transcription_workers": video.get("transcription_workers"),
+            "transcription_slices": video.get("transcription_slices"),
+            "summary_model": video.get("summary_model"),
+            "yt_dlp_version": video.get("yt_dlp_version"),
+            "fetched_at": video.get("fetched_at") or now_iso(),
+            "path": str(source_path),
+            "rel": rel,
+            "sha256": _sha256_file(source_path),
+            "size": source_path.stat().st_size,
+            "added_at": now_iso(),
+            "updated_at": now_iso(),
+            "sync_status": "pending",
+            "enrich_enabled": False,
+            "metadata": {"status": "pending"},
+            "managed": True,
+        }
+        data.setdefault("files", []).append(entry)
+        job_id = await _save_library_change(slug, data)
+        return {
+            "item": entry,
+            "job_id": job_id,
+            "content_kind": "video",
+            "library": library_payload(data),
+        }
+
     data = read_library(slug)
     try:
-        snapshot = await fetch_website_snapshot(req.url)
+        snapshot = await fetch_website_snapshot(requested_url)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
@@ -1622,7 +1718,7 @@ async def create_library_website(slug: str, req: CreateWebsiteRequest):
         "title_locked": bool(custom_title),
         "name": title[:240],
         "url": canonical_url,
-        "requested_url": str(snapshot.get("requested_url") or req.url),
+        "requested_url": str(snapshot.get("requested_url") or requested_url),
         "final_url": str(snapshot.get("final_url") or canonical_url),
         "content_type": snapshot.get("content_type"),
         "etag": snapshot.get("etag"),
@@ -1641,7 +1737,66 @@ async def create_library_website(slug: str, req: CreateWebsiteRequest):
     }
     data.setdefault("files", []).append(entry)
     job_id = await _save_library_change(slug, data)
-    return {"item": entry, "job_id": job_id, "library": library_payload(data)}
+    return {"item": entry, "job_id": job_id, "content_kind": "website", "library": library_payload(data)}
+
+
+@router.post("/libraries/{slug}/videos/{item_id}/refresh")
+async def refresh_library_video(slug: str, item_id: str):
+    data = read_library(slug)
+    entry = _find_item(data, item_id)
+    if not entry or entry.get("kind") != "video":
+        raise HTTPException(status_code=404, detail="Video item not found")
+
+    url = str(entry.get("url") or entry.get("requested_url") or "").strip()
+    try:
+        metadata = await asyncio.to_thread(probe_video_url, url)
+        if not metadata:
+            raise RuntimeError("yt-dlp no longer reports playable media for this URL.")
+        video = await ingest_video_url(url, metadata)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not reprocess video: {exc}") from exc
+
+    data = read_library(slug)
+    entry = _find_item(data, item_id)
+    if not entry or entry.get("kind") != "video":
+        raise HTTPException(status_code=404, detail="Video item not found")
+    source_path = Path(str(entry.get("path") or ""))
+    previous_hash = str(entry.get("sha256") or "")
+    _write_text_atomic(source_path, str(video["document"]))
+    _ensure_stage_link(slug, source_path, str(entry.get("rel") or _managed_stage_rel(item_id)))
+    new_hash = _sha256_file(source_path)
+    if not entry.get("title_locked"):
+        entry["title"] = str(video.get("title") or entry.get("title") or url)[:240]
+        entry["name"] = entry["title"]
+    entry.update({
+        "url": video.get("url") or url,
+        "video_id": video.get("video_id"),
+        "extractor": video.get("extractor"),
+        "channel": video.get("channel"),
+        "duration": video.get("duration"),
+        "duration_text": video.get("duration_text"),
+        "upload_date": video.get("upload_date"),
+        "thumbnail_url": video.get("thumbnail_url"),
+        "video_summary": video.get("summary"),
+        "transcript_chars": len(str(video.get("transcript") or "")),
+        "transcription_model": video.get("transcription_model"),
+        "transcription_workers": video.get("transcription_workers"),
+        "transcription_slices": video.get("transcription_slices"),
+        "summary_model": video.get("summary_model"),
+        "yt_dlp_version": video.get("yt_dlp_version"),
+        "fetched_at": video.get("fetched_at") or now_iso(),
+        "sha256": new_hash,
+        "size": source_path.stat().st_size,
+        "updated_at": now_iso(),
+    })
+    _mark_entry_pending(entry)
+    job_id = await _save_library_change(slug, data)
+    return {
+        "changed": previous_hash != new_hash,
+        "item": entry,
+        "job_id": job_id,
+        "library": library_payload(data),
+    }
 
 
 @router.post("/libraries/{slug}/websites/{item_id}/refresh")

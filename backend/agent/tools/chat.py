@@ -59,6 +59,17 @@ def _collect_sources(blocks: List[Any]) -> List[Any]:
     return sources
 
 
+def _drop_superseded_trailing_user_rows(rows: List[Any]) -> List[Any]:
+    if not rows or getattr(rows[-1], "role", None) != "user":
+        return rows
+    first_trailing_user = len(rows) - 1
+    while first_trailing_user > 0 and getattr(rows[first_trailing_user - 1], "role", None) == "user":
+        first_trailing_user -= 1
+    if first_trailing_user == len(rows) - 1:
+        return rows
+    return [*rows[:first_trailing_user], rows[-1]]
+
+
 async def chat_handler(arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
     messages = [dict(item) for item in arguments.get("messages") or []]
     if context.session_id:
@@ -74,6 +85,7 @@ async def chat_handler(arguments: Dict[str, Any], context: ToolExecutionContext)
         finally:
             db.close()
         if rows:
+            rows = _drop_superseded_trailing_user_rows(rows)
             from ... import main as main_module
             supports_vision = await main_module._model_supports_vision(arguments["model"])
             override_index = len(rows) - 1 if rows[-1].role == "user" else None

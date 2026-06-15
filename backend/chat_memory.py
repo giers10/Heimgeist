@@ -76,6 +76,13 @@ def ensure_chat_memory_schema(engine) -> None:
             print("[chat-memory] FTS index unavailable:", exc)
 
 
+def _ensure_schema_for_session(db: Session) -> None:
+    try:
+        ensure_chat_memory_schema(db.get_bind())
+    except Exception:
+        pass
+
+
 def _clean_content(value: Any, limit: int = 12_000) -> str:
     text_value = _THINK_RE.sub("", str(value or ""))
     text_value = re.sub(r"\s+", " ", text_value).strip()
@@ -187,6 +194,7 @@ def _insert_turn(db: Session, turn: Dict[str, Any]) -> None:
 
 
 def delete_chat_memory_for_session(db: Session, session_id: str, *, commit: bool = True) -> None:
+    _ensure_schema_for_session(db)
     keys = [
         row[0]
         for row in db.execute(
@@ -201,6 +209,7 @@ def delete_chat_memory_for_session(db: Session, session_id: str, *, commit: bool
 
 
 def sync_chat_memory_for_session(db: Session, session_id: str, *, commit: bool = True) -> int:
+    _ensure_schema_for_session(db)
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
     if session is None:
         delete_chat_memory_for_session(db, session_id, commit=commit)
@@ -222,6 +231,7 @@ def sync_chat_memory_for_session(db: Session, session_id: str, *, commit: bool =
 
 
 def sync_all_chat_memory(db: Session, *, commit: bool = True) -> int:
+    _ensure_schema_for_session(db)
     try:
         db.execute(text("DELETE FROM chat_memory_turns_fts"))
     except Exception:

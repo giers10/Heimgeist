@@ -240,7 +240,9 @@ class WorkflowRuntime:
             run_values=run_values, consume_llm_call=consume_llm_call,
         )
         prompt = str(workflow_inputs.get("prompt") or "")
-        if run_values.get("library_slug") and run_values.get("manual_library_enabled") and prompt:
+        rag_enabled = bool(run_values.get("compatibility_rag_enabled", run_values.get("manual_library_enabled")))
+        web_enabled = bool(run_values.get("compatibility_web_enabled", run_values.get("web_search_enabled")))
+        if run_values.get("library_slug") and rag_enabled and prompt:
             try:
                 counters["tool_calls"] += 1
                 await writer.emit("tool_started", {"tool": "heimgeist.knowledge_search"}, "compatibility")
@@ -252,7 +254,7 @@ class WorkflowRuntime:
                 await writer.emit("tool_result", {"tool": "heimgeist.knowledge_search", "result": result}, "compatibility")
             except Exception as exc:
                 await writer.emit("tool_result", {"tool": "heimgeist.knowledge_search", "error": str(exc)}, "compatibility")
-        if run_values.get("web_search_enabled") and prompt:
+        if web_enabled and prompt:
             try:
                 query_args = {"prompt": prompt, "model": run_values["chat_model"], "messages": run_values.get("messages") or []}
                 counters["tool_calls"] += 1

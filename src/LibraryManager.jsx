@@ -476,6 +476,7 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                       </div>
                     )}
                     {metadata.status === 'fallback' && <div className="library-metadata-warning">Local model metadata was unavailable; Heimgeist used a text fallback.</div>}
+                    {metadata.status === 'failed' && <div className="library-metadata-warning">{metadata.error || 'Metadata generation failed.'}</div>}
                   </div>
                   <div className="library-file-sync">
                     <div className="library-file-sync-detail">{sync.detail}</div>

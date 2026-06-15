@@ -1732,8 +1732,8 @@ async function createNewChat() {
                   </span>
                 )}
                 <span className="header-subtle">
-                  {chatWorkflowSelection.mode === 'automatic'
-                    ? 'Flow: Automatic'
+                  {workflowSelectionMode !== 'manual'
+                    ? 'Workflow: Auto'
                     : `Flow: ${selectedWorkflow?.name || 'Direct'}`}
                 </span>
               </div>

@@ -159,10 +159,17 @@ REMEMBER = graph(
         node("save", "tool", 300, 80, {"tool": "heimgeist.save_message_to_knowledge", "arguments": {
             "message_id": {"$ref": "run.target_message_id"}, "library_slug": {"$ref": "run.library_slug"}, "title": None, "edited_content": None,
         }}),
-        node("response", "template", 620, 80, {"template": "Saved the selected message to knowledge.", "values": {}}),
-        node("output", "output", 900, 80, {"value": {"content": {"$ref": "nodes.response.output"}, "sources": [], "usage": {}}}),
+        node("confirmed", "condition", 570, 80, {"value": {"$ref": "nodes.save.output.confirmed"}, "operation": "equals", "compare_to": True}),
+        node("saved", "template", 830, 20, {"template": "Saved the selected message to knowledge."}),
+        node("rejected", "template", 830, 150, {"template": "The knowledge save was cancelled."}),
+        node("response", "merge", 1080, 80, {"values": [{"$ref": "nodes.saved.output"}, {"$ref": "nodes.rejected.output"}], "allow_missing": True}),
+        node("output", "output", 1320, 80, {"value": {"content": {"$ref": "nodes.response.output.context_block"}, "sources": [], "usage": {}}}),
     ],
-    [edge("input", "save"), edge("save", "response"), edge("response", "output")],
+    [
+        edge("input", "save"), edge("save", "confirmed"),
+        edge("confirmed", "saved", "true"), edge("confirmed", "rejected", "false"),
+        edge("saved", "response"), edge("rejected", "response"), edge("response", "output"),
+    ],
 )
 
 SAVE_SOURCE = graph(
@@ -171,10 +178,17 @@ SAVE_SOURCE = graph(
         node("save", "tool", 300, 80, {"tool": "heimgeist.save_website_to_knowledge", "arguments": {
             "url": {"$ref": "run.target_url"}, "library_slug": {"$ref": "run.library_slug"}, "title": None,
         }}),
-        node("response", "template", 620, 80, {"template": "Saved the website snapshot to knowledge.", "values": {}}),
-        node("output", "output", 900, 80, {"value": {"content": {"$ref": "nodes.response.output"}, "sources": [], "usage": {}}}),
+        node("confirmed", "condition", 570, 80, {"value": {"$ref": "nodes.save.output.confirmed"}, "operation": "equals", "compare_to": True}),
+        node("saved", "template", 830, 20, {"template": "Saved the website snapshot to knowledge."}),
+        node("rejected", "template", 830, 150, {"template": "The website save was cancelled."}),
+        node("response", "merge", 1080, 80, {"values": [{"$ref": "nodes.saved.output"}, {"$ref": "nodes.rejected.output"}], "allow_missing": True}),
+        node("output", "output", 1320, 80, {"value": {"content": {"$ref": "nodes.response.output.context_block"}, "sources": [], "usage": {}}}),
     ],
-    [edge("input", "save"), edge("save", "response"), edge("response", "output")],
+    [
+        edge("input", "save"), edge("save", "confirmed"),
+        edge("confirmed", "saved", "true"), edge("confirmed", "rejected", "false"),
+        edge("saved", "response"), edge("rejected", "response"), edge("response", "output"),
+    ],
 )
 
 RESEARCH = graph(

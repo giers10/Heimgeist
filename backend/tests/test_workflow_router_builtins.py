@@ -63,6 +63,12 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
 
             result = await select_workflow(
                 db, message="hello", recent_messages=[], attachments=[],
+                library_slug="notes", router_model=None, chat_model="model", web_search_enabled=True,
+            )
+            self.assertEqual(result["workflow_slug"], "knowledge-web-answer")
+
+            result = await select_workflow(
+                db, message="hello", recent_messages=[], attachments=[],
                 library_slug=None, router_model=None, chat_model="model", web_search_enabled=False,
             )
             self.assertEqual(result["workflow_slug"], "input-output")

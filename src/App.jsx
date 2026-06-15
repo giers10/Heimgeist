@@ -2069,7 +2069,8 @@ async function createNewChat() {
                     type="button"
                     className={"websearch-toggle" + (webSearchEnabled ? " active" : "")}
                     onClick={toggleWebSearch}
-                    title="Toggle web search"
+                    title={webSearchEnabled ? "Web search forced" : "Web search automatic"}
+                    aria-label={webSearchEnabled ? "Web search forced" : "Web search automatic"}
                     aria-pressed={webSearchEnabled}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"

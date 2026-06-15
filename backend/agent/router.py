@@ -223,7 +223,6 @@ def _format_workflow_choices(manifests: List[Dict[str, Any]]) -> str:
         rows.append(
             f"- {item['name']} ({item['slug']}, id: {item['workflow_id']}): "
             f"{item.get('routing_description') or 'No description.'} "
-            f"Cost: {item.get('estimated_cost_class') or 'unknown'}. "
             f"Capabilities: {capabilities or 'none'}.{suffix}"
         )
     return "\n".join(rows)
@@ -243,6 +242,11 @@ def _router_prompt(
     attachment_line = "No attachments." if not attachments else f"{len(attachments)} attachment(s) are present."
     return (
         "You are Heimgeist's workflow router. Your job is to understand the current user message in the context of the recent conversation, choose exactly one allowed workflow, and provide any inputs that workflow needs.\n\n"
+        "Workflow choice rules:\n"
+        "- Input -> Output is only for conversation, writing, reasoning, or stable knowledge that does not require fresh external information.\n"
+        "- Never choose Input -> Output for weather, news, politics today, recent events, latest information, current prices, schedules, or anything the user expects to be up to date.\n"
+        "- Web Answer is for straightforward current lookups: weather today, news today, latest facts, simple online questions, or follow-up questions about current web information.\n"
+        "- Research is for explicit deeper investigation, comparing sources, multi-step synthesis, disputed claims, or broad research requests. Do not choose Research for a simple weather/news lookup.\n\n"
         "Important context rules:\n"
         "- Treat short follow-ups as continuing the topic from recent messages unless the user clearly changes topic.\n"
         "- Words like 'and', 'also', 'what about', 'politically', 'there', 'that', or 'it' usually inherit the previous entity, location, source, or subject.\n"

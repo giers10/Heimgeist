@@ -4,10 +4,8 @@ import asyncio
 from datetime import datetime, timezone
 import hashlib
 import json
-import re
 from typing import Any, Dict, List
-from urllib.parse import unquote, urlparse
-import unicodedata
+from urllib.parse import urlparse
 
 import httpx
 
@@ -33,122 +31,10 @@ QUERY_FORMAT = {
 
 FETCH_TEXT_LIMIT = 12_000
 
-GENERIC_QUERY_TERMS = {
-    "a",
-    "about",
-    "actual",
-    "aktuell",
-    "aktuelle",
-    "aktuellen",
-    "an",
-    "and",
-    "are",
-    "article",
-    "articles",
-    "auf",
-    "bericht",
-    "berichte",
-    "current",
-    "das",
-    "dem",
-    "den",
-    "der",
-    "describe",
-    "described",
-    "deutsch",
-    "developments",
-    "die",
-    "end",
-    "ending",
-    "english",
-    "ereignisse",
-    "event",
-    "events",
-    "for",
-    "from",
-    "got",
-    "happen",
-    "happened",
-    "happening",
-    "happens",
-    "heute",
-    "headline",
-    "headlines",
-    "in",
-    "ist",
-    "latest",
-    "look",
-    "media",
-    "mean",
-    "meaning",
-    "meant",
-    "more",
-    "nachrichten",
-    "nah",
-    "news",
-    "neueste",
-    "of",
-    "on",
-    "online",
-    "outlet",
-    "outlets",
-    "recent",
-    "quote",
-    "quoted",
-    "said",
-    "say",
-    "search",
-    "story",
-    "stories",
-    "the",
-    "this",
-    "today",
-    "told",
-    "top",
-    "ubersetzung",
-    "uebersetzung",
-    "und",
-    "was",
-    "weather",
-    "what",
-    "whats",
-    "wie",
-    "you",
-    "your",
-    "zur",
-}
-
-CURRENT_LOOKUP_TERMS = {
-    "actual",
-    "aktuell",
-    "aktuelle",
-    "aktuellen",
-    "breaking",
-    "current",
-    "forecast",
-    "happen",
-    "happened",
-    "happening",
-    "happens",
-    "headline",
-    "headlines",
-    "heute",
-    "latest",
-    "nachrichten",
-    "news",
-    "neueste",
-    "recent",
-    "today",
-    "weather",
-}
-
-CONSENT_OR_UNUSABLE_HOSTS = (
-    "consent.google.",
+NOISE_HOSTS = (
     "accounts.google.",
-)
-
-CURRENT_LOOKUP_NOISE_HOSTS = (
     "collinsdictionary.com",
+    "consent.google.",
     "de.langenscheidt.com",
     "dict.cc",
     "dict.leo.org",
@@ -161,140 +47,55 @@ CURRENT_LOOKUP_NOISE_HOSTS = (
     "news.google.",
 )
 
-CURRENT_LOOKUP_NOISE_TITLE_PATTERNS = (
+NOISE_TITLE_MARKERS = (
+    "before you continue",
     "deutsch-ubersetzung",
     "deutsch ubersetzung",
     "deutsch-uebersetzung",
     "deutsch uebersetzung",
-    "dictionary",
     "englisch-deutsch",
     "english-german",
-    "meaning",
-    "what does",
+    "google consent",
     "worterbuch",
 )
 
 
-def _normalize_text(value: Any) -> str:
-    text = unquote(str(value or ""))
-    text = unicodedata.normalize("NFKD", text)
-    return text.encode("ascii", "ignore").decode("ascii").lower()
-
-
-def _word_tokens(value: Any) -> List[str]:
-    return [item for item in re.findall(r"[a-z0-9]+", _normalize_text(value)) if len(item) >= 2]
-
-
-def _topic_terms(prompt: str) -> List[str]:
-    seen = set()
-    terms: List[str] = []
-    for token in _word_tokens(prompt):
-        if token in GENERIC_QUERY_TERMS or len(token) < 3:
-            continue
-        if token not in seen:
-            seen.add(token)
-            terms.append(token)
-    return terms[:8]
-
-
-def _term_aliases(term: str) -> List[str]:
-    aliases = [term]
-    if term.endswith("ian") and len(term) > 5:
-        aliases.append(term[:-3])
-    if term.endswith("isch") and len(term) > 6:
-        aliases.append(term[:-4])
-    if term == "libanon":
-        aliases.append("lebanon")
-    if term == "lebanese":
-        aliases.append("lebanon")
-    if term == "agreement":
-        aliases.extend(["deal", "accord", "framework"])
-    if term == "war":
-        aliases.extend(["fighting", "conflict", "ceasefire", "cessation"])
-    return [alias for alias in aliases if len(alias) >= 3]
-
-
-def _matches_topic(prompt: str, value: str) -> bool:
-    terms = _topic_terms(prompt)
-    if not terms:
-        return True
-    haystack = _normalize_text(value)
-    matches = 0
-    for term in terms:
-        if any(alias in haystack for alias in _term_aliases(term)):
-            matches += 1
-    required = 1 if len(terms) == 1 else min(2, len(terms))
-    return matches >= required
-
-
-def _is_current_lookup(value: str) -> bool:
-    tokens = set(_word_tokens(value))
-    return bool(tokens & CURRENT_LOOKUP_TERMS)
-
-
 def _host_for(url: str) -> str:
     try:
-        return _normalize_text(urlparse(url).netloc)
+        return str(urlparse(url).netloc or "").lower()
     except Exception:
         return ""
 
 
-def _is_noise_result(url: str, title: str = "", topic_text: str = "") -> bool:
+def _is_noise_result(url: str, title: str = "") -> bool:
     host = _host_for(url)
-    title_norm = _normalize_text(title)
-    if any(marker in host for marker in CONSENT_OR_UNUSABLE_HOSTS):
+    title_norm = str(title or "").lower()
+    url_norm = str(url or "").lower()
+    if any(marker in host for marker in NOISE_HOSTS):
         return True
-    if "before you continue" in title_norm or "google consent" in title_norm:
+    if any(marker in title_norm for marker in NOISE_TITLE_MARKERS):
         return True
-    if not _is_current_lookup(topic_text):
-        return False
-    if any(marker in host for marker in CURRENT_LOOKUP_NOISE_HOSTS):
-        return True
-    return any(pattern in title_norm for pattern in CURRENT_LOOKUP_NOISE_TITLE_PATTERNS)
-
-
-def _fallback_queries(prompt: str) -> List[str]:
-    cleaned_prompt = " ".join(str(prompt or "").split()).strip()
-    terms = _topic_terms(cleaned_prompt)
-    topic = " ".join(terms[:4])
-    tokens = set(_word_tokens(cleaned_prompt))
-    queries: List[str] = []
-    if topic and (tokens & CURRENT_LOOKUP_TERMS or tokens & {"news", "nachrichten", "headlines"}):
-        queries.extend([f"{topic} news today", f"{topic} latest news", f"{topic} current events"])
-    elif topic and tokens & {"weather", "forecast"}:
-        queries.extend([f"{topic} weather today", f"{topic} current weather", f"{topic} weather forecast"])
-    if cleaned_prompt:
-        queries.append(cleaned_prompt)
-    return queries
-
-
-def _query_is_too_generic(query: str, prompt: str) -> bool:
-    query_terms = _topic_terms(query)
-    prompt_terms = _topic_terms(prompt)
-    if not query_terms:
-        return True
-    if prompt_terms and not _matches_topic(prompt, query):
+    if "nah-meaning" in url_norm or "what-does-nah-mean" in url_norm:
         return True
     return False
 
 
-def _clean_queries(prompt: str, generated: List[Any]) -> List[str]:
+def _clean_queries(generated: List[Any], fallback: str) -> List[str]:
     cleaned: List[str] = []
     seen = set()
-    fallback = _fallback_queries(prompt)
-    ordered = [*fallback, *generated] if _is_current_lookup(prompt) else [*generated, *fallback]
-    for query in ordered:
+    for query in [*generated, fallback]:
         text = " ".join(str(query or "").split()).strip()
-        if not text or _query_is_too_generic(text, prompt):
+        if not text:
             continue
-        key = _normalize_text(text)
+        key = text.casefold()
         if key in seen:
             continue
         seen.add(key)
         cleaned.append(text[:300])
         if len(cleaned) >= 5:
             break
-    return cleaned or [str(prompt or "")[:300]]
+    fallback_text = " ".join(str(fallback or "").split()).strip()
+    return cleaned or ([fallback_text[:300]] if fallback_text else [])
 
 
 async def generate_queries_handler(arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
@@ -318,7 +119,7 @@ async def generate_queries_handler(arguments: Dict[str, Any], context: ToolExecu
         queries = parsed.get("queries") if isinstance(parsed, dict) else None
     except Exception:
         queries = None
-    return {"queries": _clean_queries(arguments["prompt"], queries or [])}
+    return {"queries": _clean_queries(queries or [], arguments["prompt"])}
 
 
 async def web_search_handler(arguments: Dict[str, Any], _context: ToolExecutionContext) -> Dict[str, Any]:
@@ -354,12 +155,9 @@ async def web_search_handler(arguments: Dict[str, Any], _context: ToolExecutionC
         for item in items:
             url = str(item.get("url") or "")
             title = str(item.get("title") or "")
-            result_blob = f"{title} {url}"
             if not url or url in seen:
                 continue
-            if _is_noise_result(url, title, query):
-                continue
-            if not _matches_topic(query, result_blob):
+            if _is_noise_result(url, title):
                 continue
             seen.add(url)
             results.append({"query": query, "url": url, "title": title, "engine": item.get("engine")})
@@ -379,7 +177,7 @@ async def web_fetch_handler(arguments: Dict[str, Any], _context: ToolExecutionCo
         url = str(url or "").strip()
         title = str(item.get("title") or "") if isinstance(item, dict) else ""
         query = str(item.get("query") or "") if isinstance(item, dict) else ""
-        if url and url not in unique and not _is_noise_result(url, title, query):
+        if url and url not in unique and not _is_noise_result(url, title):
             unique.append(url)
     semaphore = asyncio.Semaphore(4)
 
@@ -391,7 +189,7 @@ async def web_fetch_handler(arguments: Dict[str, Any], _context: ToolExecutionCo
             text = full_text[:FETCH_TEXT_LIMIT]
             canonical_url = snapshot.get("url") or snapshot.get("final_url") or url
             title = snapshot.get("title") or ""
-            if _is_noise_result(str(canonical_url), str(title), ""):
+            if _is_noise_result(str(canonical_url), str(title)):
                 return {
                     "requested_url": snapshot.get("requested_url") or url,
                     "canonical_url": canonical_url,
@@ -433,9 +231,7 @@ async def web_rerank_handler(arguments: Dict[str, Any], _context: ToolExecutionC
         url = str(page.get("canonical_url") or page.get("requested_url") or "")
         title = str(page.get("title") or "")
         text = str(page.get("cleaned_text") or "")
-        if _is_noise_result(url, title, arguments["prompt"]):
-            continue
-        if not _matches_topic(arguments["prompt"], f"{title} {url} {text[:2400]}"):
+        if _is_noise_result(url, title):
             continue
         docs.append((url, text))
     ranked = await rerank(
@@ -457,9 +253,7 @@ async def web_rerank_handler(arguments: Dict[str, Any], _context: ToolExecutionC
             continue
         page = page_by_url.get(url) or {}
         title = str(page.get("title") or "")
-        if _is_noise_result(url, title, arguments["prompt"]):
-            continue
-        if not _matches_topic(arguments["prompt"], f"{title} {url} {text[:2400]}"):
+        if _is_noise_result(url, title):
             continue
         selected.append({
             "type": "web",

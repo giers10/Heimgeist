@@ -86,7 +86,19 @@ export function createChatGenerationHandlers({
   visionModel,
   webSearchEnabled,
   workflowRouterModel,
+  workflowSelectionMode,
 }) {
+  function getEffectiveWorkflowSelection(sessionId) {
+    if (workflowSelectionMode !== 'manual') {
+      return { mode: 'automatic', workflowId: null }
+    }
+    const selection = getChatWorkflowForSession?.(sessionId)
+    if (selection?.mode === 'explicit') {
+      return selection
+    }
+    return { mode: 'direct', workflowId: null }
+  }
+
   async function executeWorkflowRun({
     sessionId,
     userMessage,
@@ -106,7 +118,7 @@ export function createChatGenerationHandlers({
       workflow_id: selection.workflowId || null,
       workflow_revision_id: workflowRevisionId,
       library_slug: selectedLibrary?.slug || null,
-      web_search_enabled: selection.mode === 'direct' ? webSearchEnabled : false,
+      web_search_enabled: Boolean(webSearchEnabled),
       searx_url: searxUrl || null,
       searx_engines: searxEngines || [],
       attachments,
@@ -215,7 +227,7 @@ export function createChatGenerationHandlers({
 
     if (getChatWorkflowForSession) {
       try {
-        const currentSelection = getChatWorkflowForSession(sessionId) || { mode: 'direct', workflowId: null }
+        const currentSelection = getEffectiveWorkflowSelection(sessionId)
         const originalAssistant = msgs.slice(lastUserIdx + 1).find(message => message?.role === 'assistant')
         const originalWorkflowId = originalAssistant?.workflow_id || null
         const originalSelectionMode = originalAssistant?.agent_summary?.selection_mode || null
@@ -477,7 +489,7 @@ export function createChatGenerationHandlers({
     const requestController = beginCancelableRequest(targetSessionId)
     try {
       if (getChatWorkflowForSession) {
-        const selection = getChatWorkflowForSession(targetSessionId) || { mode: 'direct', workflowId: null }
+        const selection = getEffectiveWorkflowSelection(targetSessionId)
         await executeWorkflowRun({
           sessionId: targetSessionId,
           userMessage: userMsg,

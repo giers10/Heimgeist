@@ -41,6 +41,15 @@ def ensure_sources_column(engine):
                 conn.execute(text("ALTER TABLE chat_messages ADD COLUMN sources_json TEXT DEFAULT '[]'"))
             if "attachments_json" not in cols:
                 conn.execute(text("ALTER TABLE chat_messages ADD COLUMN attachments_json TEXT DEFAULT '[]'"))
+            for column_name, definition in (
+                ("workflow_id", "TEXT"),
+                ("workflow_revision_id", "TEXT"),
+                ("workflow_run_id", "TEXT"),
+                ("agent_summary_json", "TEXT DEFAULT '{}'"),
+                ("usage_json", "TEXT DEFAULT '{}'"),
+            ):
+                if column_name not in cols:
+                    conn.execute(text(f"ALTER TABLE chat_messages ADD COLUMN {column_name} {definition}"))
             missing_ids = conn.execute(
                 text("SELECT id FROM chat_messages WHERE message_id IS NULL OR message_id = ''")
             ).fetchall()
@@ -52,6 +61,10 @@ def ensure_sources_column(engine):
             conn.execute(text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ix_chat_messages_message_id "
                 "ON chat_messages (message_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_chat_messages_workflow_run_id "
+                "ON chat_messages (workflow_run_id)"
             ))
     except Exception as e:
         print("[db] ensure_sources_column error:", e)

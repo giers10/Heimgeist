@@ -14,6 +14,7 @@ DEFAULT_EMBED_MODEL = "nomic-embed-text:latest"
 DEFAULT_RERANK_MODEL = DEFAULT_EMBED_MODEL
 DEFAULT_ENRICHMENT_MODEL = "qwen3:4b"
 DEFAULT_TRANSCRIPTION_MODEL = "base"
+DEFAULT_WORKFLOW_ROUTER_MODEL = ""
 DEFAULT_AUTO_DEEP_ENRICHMENT = True
 BGE_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_SETTINGS: Dict[str, Any] = {
@@ -25,6 +26,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "rerankModel": DEFAULT_RERANK_MODEL,
     "enrichmentModel": DEFAULT_ENRICHMENT_MODEL,
     "transcriptionModel": DEFAULT_TRANSCRIPTION_MODEL,
+    "workflowRouterModel": DEFAULT_WORKFLOW_ROUTER_MODEL,
     "autoDeepEnrichment": DEFAULT_AUTO_DEEP_ENRICHMENT,
 }
 
@@ -148,6 +150,7 @@ def load_app_settings() -> Dict[str, Any]:
     settings["chatModel"] = normalize_model_name(settings.get("chatModel"))
     settings["visionModel"] = normalize_model_name(settings.get("visionModel"))
     settings["transcriptionModel"] = normalize_transcription_model(settings.get("transcriptionModel"))
+    settings["workflowRouterModel"] = normalize_model_name(settings.get("workflowRouterModel"))
     settings["autoDeepEnrichment"] = normalize_boolean(
         settings.get("autoDeepEnrichment"),
         DEFAULT_AUTO_DEEP_ENRICHMENT,
@@ -179,6 +182,11 @@ def get_enrichment_model_preference() -> str:
 def get_transcription_model_preference() -> str:
     settings = load_app_settings()
     return normalize_transcription_model(settings.get("transcriptionModel"))
+
+
+def get_workflow_router_model_preference() -> str:
+    settings = load_app_settings()
+    return normalize_model_name(settings.get("workflowRouterModel"))
 
 
 def get_auto_deep_enrichment_preference() -> bool:

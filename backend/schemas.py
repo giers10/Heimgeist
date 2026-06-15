@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 class ChatAttachment(BaseModel):
@@ -16,8 +16,13 @@ class Message(BaseModel):
     message_id: Optional[str] = None
     role: str
     content: str
-    sources: Optional[List[str]] = None
+    sources: Optional[List[Any]] = None
     attachments: Optional[List[ChatAttachment]] = None
+    workflow_id: Optional[str] = None
+    workflow_revision_id: Optional[str] = None
+    workflow_run_id: Optional[str] = None
+    agent_summary: Optional[Dict[str, Any]] = None
+    usage: Optional[Dict[str, Any]] = None
 
 class ChatRequest(BaseModel):
     session_id: str

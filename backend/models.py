@@ -26,6 +26,11 @@ class ChatMessage(Base):
     sources_json = Column(Text, nullable=True, default='[]')
     # JSON-encoded list of inline image attachments for user messages.
     attachments_json = Column(Text, nullable=True, default='[]')
+    workflow_id = Column(String(36), nullable=True)
+    workflow_revision_id = Column(String(36), nullable=True)
+    workflow_run_id = Column(String(36), nullable=True, index=True)
+    agent_summary_json = Column(Text, nullable=True, default='{}')
+    usage_json = Column(Text, nullable=True, default='{}')
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("ChatSession", back_populates="messages")

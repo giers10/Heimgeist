@@ -93,6 +93,17 @@ def _allowed_manifests(
     return allowed
 
 
+def _filter_for_interface_settings(
+    manifests: List[Dict[str, Any]],
+    *,
+    web_search_enabled: bool,
+) -> List[Dict[str, Any]]:
+    if not web_search_enabled:
+        return manifests
+    web_capable = [item for item in manifests if "web" in (item.get("required_capabilities") or [])]
+    return web_capable or manifests
+
+
 _REMEMBER_RE = re.compile(
     r"\b(remember\s+(this|that)|save\s+(this|that)|merk\s+dir\s+(das|:)?|speicher(e)?\s+(das|dies|diese|diesen)?)\b",
     re.IGNORECASE,
@@ -190,6 +201,72 @@ def _forced_web_manifest(manifests: List[Dict[str, Any]], *, library_slug: Optio
         if combined:
             return combined
     return _manifest_by_slug(manifests, "web-answer")
+
+
+def _format_recent_messages(recent_messages: List[Dict[str, Any]], *, char_limit: int) -> str:
+    rows: List[str] = []
+    for index, item in enumerate(recent_messages[-4:], 1):
+        role = str(item.get("role") or "message").strip().title()
+        content = " ".join(str(item.get("content") or "").split())
+        if len(content) > char_limit:
+            content = content[:char_limit].rstrip() + "..."
+        rows.append(f"{index}. {role}: {content}")
+    return "\n".join(rows) if rows else "(none)"
+
+
+def _format_workflow_choices(manifests: List[Dict[str, Any]]) -> str:
+    rows: List[str] = []
+    for item in manifests:
+        examples = "; ".join(str(value) for value in (item.get("examples") or [])[:2])
+        capabilities = ", ".join(str(value) for value in (item.get("required_capabilities") or []))
+        suffix = f" Examples: {examples}." if examples else ""
+        rows.append(
+            f"- {item['name']} ({item['slug']}, id: {item['workflow_id']}): "
+            f"{item.get('routing_description') or 'No description.'} "
+            f"Cost: {item.get('estimated_cost_class') or 'unknown'}. "
+            f"Capabilities: {capabilities or 'none'}.{suffix}"
+        )
+    return "\n".join(rows)
+
+
+def _router_prompt(
+    *,
+    message: str,
+    recent_messages: List[Dict[str, Any]],
+    attachments: List[Dict[str, Any]],
+    manifests: List[Dict[str, Any]],
+) -> str:
+    message_excerpt = str(message or "")
+    if len(message_excerpt) > 1800:
+        message_excerpt = message_excerpt[:1800] + "..."
+    history_chars = 300 if len(message_excerpt) > 1000 else 500
+    attachment_line = "No attachments." if not attachments else f"{len(attachments)} attachment(s) are present."
+    return (
+        "You are Heimgeist's workflow router. Your job is to understand the current user message in the context of the recent conversation, choose exactly one allowed workflow, and provide any inputs that workflow needs.\n\n"
+        "Important context rules:\n"
+        "- Treat short follow-ups as continuing the topic from recent messages unless the user clearly changes topic.\n"
+        "- Words like 'and', 'also', 'what about', 'politically', 'there', 'that', or 'it' usually inherit the previous entity, location, source, or subject.\n"
+        "- If the previous turn asked about a place or entity and the current turn asks for another aspect, carry that place or entity into the resolved request.\n"
+        "- For web workflows, write search queries for the resolved factual request, not the literal conversational fragment.\n"
+        "- Example: previous user asked 'what is the weather in Iran today' and current user asks 'and what is the news politically?' -> search for 'Iran political news today'.\n\n"
+        f"Recent conversation:\n{_format_recent_messages(recent_messages, char_limit=history_chars)}\n\n"
+        f"Current user message:\n{message_excerpt}\n\n"
+        f"Attachments:\n{attachment_line}\n\n"
+        "Allowed workflows. This list is already filtered by interface settings and available capabilities; choose only from this list:\n"
+        f"{_format_workflow_choices(manifests)}\n\n"
+        "Return JSON only with this shape:\n"
+        "{\n"
+        '  "workflow_id": "<id or slug from allowed workflows>",\n'
+        '  "confidence": 0.0,\n'
+        '  "reason": "<brief reason>",\n'
+        '  "inputs": {\n'
+        '    "resolved_request": "<standalone interpretation of the current request>",\n'
+        '    "web_search_query": "<required for web workflows>",\n'
+        '    "web_search_queries": ["<required for web workflows, 1-5 concise queries>"]\n'
+        "  }\n"
+        "}\n"
+        "For non-web workflows, inputs may be empty unless useful. For web workflows, web_search_query and web_search_queries are required."
+    )
 
 
 async def select_workflow(

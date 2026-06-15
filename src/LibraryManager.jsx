@@ -19,7 +19,7 @@ function itemSyncMeta(item) {
       status,
       progress: 100,
       label: 'Available',
-      detail: detail || (enrichEnabled ? 'Ready in chat with enrichment enabled.' : 'Ready in chat with raw indexing only.')
+      detail: detail || (enrichEnabled ? 'Ready with standard metadata and deep enrichment.' : 'Ready with standard metadata.')
     }
   }
   if (status === 'failed') {
@@ -287,7 +287,17 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
           body: JSON.stringify({ rel: item.rel, enabled })
         })
         return expectJson(response)
-      })
+      }, enabled ? 'Deep enrichment enabled. Metadata is being updated.' : 'Using standard metadata only.')
+    } catch {}
+  }
+
+  async function generateMetadata() {
+    if (!library) return
+    try {
+      await runAction(async () => {
+        const response = await fetch(`${apiBase}/libraries/${library.slug}/jobs/prepare`, { method: 'POST' })
+        return expectJson(response)
+      }, 'Generating metadata for this database.')
     } catch {}
   }
 
@@ -311,9 +321,20 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase()
     if (!term) return items
-    return items.filter(item => [item.title, item.name, item.path, item.url, item.kind]
+    return items.filter(item => [
+      item.title,
+      item.name,
+      item.path,
+      item.url,
+      item.kind,
+      item.metadata?.headline,
+      item.metadata?.summary,
+      ...(item.metadata?.keywords || []),
+      ...(item.metadata?.entities || []).map(entity => entity?.name)
+    ]
       .some(value => String(value || '').toLowerCase().includes(term)))
   }, [items, search])
+  const hasMissingMetadata = items.some(item => !['ready', 'fallback'].includes(item?.metadata?.status))
 
   useEffect(() => {
     if (!library?.slug) {
@@ -415,6 +436,9 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
               const itemId = item.item_id || item.sha256 || item.rel
               const isExpanded = expandedItemId === itemId
               const preview = contentPreviews[itemId]
+              const metadata = item.metadata || {}
+              const keywords = Array.isArray(metadata.keywords) ? metadata.keywords.slice(0, 6) : []
+              const entities = Array.isArray(metadata.entities) ? metadata.entities.slice(0, 4) : []
               return (
                 <article key={itemId} className={`library-content-card kind-${item.kind || 'file'} ${isExpanded ? 'expanded' : ''}`}>
                   <div className="library-content-card-header">
@@ -424,7 +448,29 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                   <div className="library-file-name">{item.title || item.name || item.path}</div>
                   <div className="library-file-path">{source}</div>
                   <div className={`library-file-mode ${item.enrich_enabled ? 'enabled' : ''}`}>
-                    {item.enrich_enabled ? 'Enrichment on' : 'Raw only'}
+                    {item.enrich_enabled ? 'Deep enrichment' : 'Standard'}
+                  </div>
+                  <div className={`library-item-metadata status-${metadata.status || 'missing'}`}>
+                    {metadata.summary ? (
+                      <p>{metadata.summary}</p>
+                    ) : (
+                      <p className="muted-copy">
+                        {metadata.status === 'pending' ? 'Metadata is being generated.' : 'No automatic metadata has been generated yet.'}
+                      </p>
+                    )}
+                    {keywords.length > 0 && (
+                      <div className="library-metadata-chips" aria-label="Keywords">
+                        {keywords.map(keyword => <span key={keyword}>{keyword}</span>)}
+                      </div>
+                    )}
+                    {entities.length > 0 && (
+                      <div className="library-metadata-entities">
+                        {entities.map(entity => (
+                          <span key={`${entity.name}-${entity.type}`}>{entity.name}{entity.type ? ` · ${entity.type}` : ''}</span>
+                        ))}
+                      </div>
+                    )}
+                    {metadata.status === 'fallback' && <div className="library-metadata-warning">Local model metadata was unavailable; Heimgeist used a text fallback.</div>}
                   </div>
                   <div className="library-file-sync">
                     <div className="library-file-sync-detail">{sync.detail}</div>
@@ -456,7 +502,7 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
                     {item.kind === 'website' && <button className="button ghost" disabled={busy} onClick={() => refreshWebsite(item)}>Refresh</button>}
                     {(!item.kind || item.kind === 'file') && <button className="button ghost" onClick={() => desktopApi.openPath(item.path)}>Open</button>}
                     <button className="button ghost" disabled={busy || isSyncing} onClick={() => updateEnrichment(item, !item.enrich_enabled)}>
-                      {item.enrich_enabled ? 'Use Raw Only' : 'Enable Enrich'}
+                      {item.enrich_enabled ? 'Use Standard' : 'Enable Deep'}
                     </button>
                     <button className="button ghost" disabled={busy || isSyncing} onClick={() => removeItem(item)}>Remove</button>
                   </div>
@@ -473,6 +519,9 @@ export default function LibraryManager({ apiBase, library, jobs, onRefresh }) {
         <button className="button" disabled={busy} onClick={addPaths}>Add Files</button>
         <button className="button" disabled={busy} onClick={() => { closeForm(); setFormMode('text') }}>Add Text</button>
         <button className="button" disabled={busy} onClick={() => { closeForm(); setFormMode('website') }}>Add Website</button>
+        {items.length > 0 && hasMissingMetadata && !isSyncing && isReadyForChat && (
+          <button className="button ghost" disabled={busy} onClick={generateMetadata}>Generate Metadata</button>
+        )}
         {items.length > 0 && !isSyncing && !isReadyForChat && (
           <button className="button ghost" disabled={busy} onClick={retrySync}>Retry Sync</button>
         )}

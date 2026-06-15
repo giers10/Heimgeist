@@ -127,6 +127,7 @@ fn default_settings() -> SettingsMap {
         "transcriptionModel".into(),
         json!(DEFAULT_TRANSCRIPTION_MODEL),
     );
+    settings.insert("workflowSelectionMode".into(), json!("auto"));
     settings.insert("autoDeepEnrichment".into(), json!(true));
     settings.insert("colorScheme".into(), json!("Default"));
     settings.insert("uiScale".into(), json!(DEFAULT_UI_SCALE));
@@ -265,6 +266,11 @@ fn migrate_settings(source: Option<SettingsMap>) -> (SettingsMap, bool) {
         migrated = true;
     }
 
+    if !source.contains_key("workflowSelectionMode") {
+        next.insert("workflowSelectionMode".into(), json!("auto"));
+        migrated = true;
+    }
+
     normalize_settings(&mut next);
     (next, migrated)
 }
@@ -282,6 +288,12 @@ fn normalize_settings(settings: &mut SettingsMap) {
         settings.get("transcriptionModel"),
         DEFAULT_TRANSCRIPTION_MODEL,
     );
+    let workflow_selection_mode =
+        if value_to_trimmed_string(settings.get("workflowSelectionMode")).eq_ignore_ascii_case("manual") {
+            "manual"
+        } else {
+            "auto"
+        };
     let auto_deep_enrichment = normalize_boolean_setting(settings.get("autoDeepEnrichment"));
     let ui_scale = normalize_ui_scale(settings.get("uiScale"));
     let open_devtools_on_startup = normalize_boolean_setting(settings.get("openDevToolsOnStartup"));
@@ -298,6 +310,7 @@ fn normalize_settings(settings: &mut SettingsMap) {
     settings.insert("rerankModel".into(), json!(rerank_model));
     settings.insert("enrichmentModel".into(), json!(enrichment_model));
     settings.insert("transcriptionModel".into(), json!(transcription_model));
+    settings.insert("workflowSelectionMode".into(), json!(workflow_selection_mode));
     settings.insert("autoDeepEnrichment".into(), json!(auto_deep_enrichment));
     settings.insert("uiScale".into(), json!(ui_scale));
     settings.insert(

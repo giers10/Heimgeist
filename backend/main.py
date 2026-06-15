@@ -13,6 +13,8 @@ import shutil
 import tempfile
 from pathlib import Path
 from . import models, schemas
+from .agent import models as agent_models
+from .agent.api import initialize_agent_system, router as agent_router
 from .database import Base, engine, SessionLocal, ensure_sources_column
 from .local_rag import router as local_rag_router, save_chat_message_snapshot
 from .ollama_admin import inspect_ollama_startup, prepare_startup_models, pull_local_model, start_local_ollama
@@ -29,6 +31,7 @@ from .websearch import enrich_prompt
 # Create tables + ensure migration
 Base.metadata.create_all(bind=engine)
 ensure_sources_column(engine)
+initialize_agent_system()
 
 app = FastAPI(title="LLM Desktop Backend", version="0.1.0" )
 
@@ -58,6 +61,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(local_rag_router)
+app.include_router(agent_router)
 
 _IMAGE_DATA_URL_RE = re.compile(r"^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$", re.IGNORECASE)
 _CHAT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".heic", ".avif"}
@@ -522,7 +526,15 @@ def _row_to_history_message(row: models.ChatMessage) -> dict:
         "role": row.role,
         "content": row.content,
         "sources": sources,
+        "workflow_id": getattr(row, "workflow_id", None),
+        "workflow_revision_id": getattr(row, "workflow_revision_id", None),
+        "workflow_run_id": getattr(row, "workflow_run_id", None),
     }
+    for field_name, payload_name in (("agent_summary_json", "agent_summary"), ("usage_json", "usage")):
+        try:
+            payload[payload_name] = json.loads(getattr(row, field_name, None) or "{}")
+        except Exception:
+            payload[payload_name] = {}
     if attachments:
         payload["attachments"] = [_attachment_history_payload(attachment) for attachment in attachments]
     return payload
@@ -756,9 +768,28 @@ async def save_message_to_knowledge(
     req: schemas.SaveMessageToKnowledgeRequest,
     db: Session = Depends(get_db),
 ):
+    return await _save_message_to_knowledge_impl(
+        slug,
+        req.message_id,
+        db,
+        title=req.title,
+        content=req.content,
+        saved_by="user",
+    )
+
+
+async def _save_message_to_knowledge_impl(
+    slug: str,
+    message_id: str,
+    db: Session,
+    *,
+    title: Optional[str] = None,
+    content: Optional[str] = None,
+    saved_by: str = "user",
+):
     row = (
         db.query(models.ChatMessage)
-        .filter(models.ChatMessage.message_id == str(req.message_id or "").strip())
+        .filter(models.ChatMessage.message_id == str(message_id or "").strip())
         .first()
     )
     if not row:
@@ -794,8 +825,8 @@ async def save_message_to_knowledge(
             f"Assistant response:\n{row.content.strip()}"
         )
 
-    content = str(req.content if req.content is not None else default_content).strip()
-    title = str(req.title or _default_knowledge_title(row.content, row.role)).strip()
+    content = str(content if content is not None else default_content).strip()
+    title = str(title or _default_knowledge_title(row.content, row.role)).strip()
     return await save_chat_message_snapshot(
         slug,
         title=title,
@@ -806,7 +837,7 @@ async def save_message_to_knowledge(
         source_role=row.role,
         source_created_at=row.created_at.isoformat() if row.created_at else None,
         sources=[str(source) for source in sources if str(source).strip()],
-        saved_by="user",
+        saved_by=saved_by,
     )
 
 @app.post("/chat")

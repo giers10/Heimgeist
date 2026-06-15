@@ -32,6 +32,7 @@ export function SettingsPanel({
   onTranscriptionModelChange,
   onVisionModelChange,
   onWorkflowRouterModelChange,
+  onWorkflowSelectionModeChange,
   searxEngines,
   searxUrl,
   setSearxEngines,
@@ -56,6 +57,7 @@ export function SettingsPanel({
           onModelChange={onModelChange}
           onVisionModelChange={onVisionModelChange}
           onWorkflowRouterModelChange={onWorkflowRouterModelChange}
+          onWorkflowSelectionModeChange={onWorkflowSelectionModeChange}
           onTranscriptionModelChange={onTranscriptionModelChange}
           onLibrariesPurged={onLibrariesPurged}
         />

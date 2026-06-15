@@ -1111,6 +1111,18 @@ export default function App() {
         startedAt: Date.now(),
         events: [],
       }
+      if (event.type === 'client_run_started' && current.runId !== event.run_id) {
+        return {
+          ...previous,
+          [sessionId]: {
+            runId: event.run_id,
+            workflowName: event.payload?.workflow?.name || 'Workflow',
+            status: 'running',
+            startedAt: Date.now(),
+            events: [event],
+          },
+        }
+      }
       let status = current.status
       let finishedAt = current.finishedAt
       if (event.type === 'client_run_started') {

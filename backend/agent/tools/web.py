@@ -53,9 +53,13 @@ GENERIC_QUERY_TERMS = {
     "dem",
     "den",
     "der",
+    "describe",
+    "described",
     "deutsch",
     "developments",
     "die",
+    "end",
+    "ending",
     "english",
     "ereignisse",
     "event",
@@ -70,7 +74,11 @@ GENERIC_QUERY_TERMS = {
     "latest",
     "look",
     "media",
+    "mean",
+    "meaning",
+    "meant",
     "nachrichten",
+    "nah",
     "news",
     "neueste",
     "of",
@@ -79,11 +87,15 @@ GENERIC_QUERY_TERMS = {
     "outlet",
     "outlets",
     "recent",
+    "said",
+    "say",
     "search",
     "story",
     "stories",
     "the",
+    "this",
     "today",
+    "told",
     "top",
     "ubersetzung",
     "uebersetzung",
@@ -93,6 +105,8 @@ GENERIC_QUERY_TERMS = {
     "what",
     "whats",
     "wie",
+    "you",
+    "your",
     "zur",
 }
 
@@ -143,6 +157,8 @@ CURRENT_LOOKUP_NOISE_TITLE_PATTERNS = (
     "dictionary",
     "englisch-deutsch",
     "english-german",
+    "meaning",
+    "what does",
     "worterbuch",
 )
 
@@ -175,6 +191,14 @@ def _term_aliases(term: str) -> List[str]:
         aliases.append(term[:-3])
     if term.endswith("isch") and len(term) > 6:
         aliases.append(term[:-4])
+    if term == "libanon":
+        aliases.append("lebanon")
+    if term == "lebanese":
+        aliases.append("lebanon")
+    if term == "agreement":
+        aliases.extend(["deal", "accord", "framework"])
+    if term == "war":
+        aliases.extend(["fighting", "conflict", "ceasefire", "cessation"])
     return [alias for alias in aliases if len(alias) >= 3]
 
 
@@ -244,7 +268,7 @@ def _query_is_too_generic(query: str, prompt: str) -> bool:
 def _clean_queries(prompt: str, generated: List[Any]) -> List[str]:
     cleaned: List[str] = []
     seen = set()
-    for query in [*_fallback_queries(prompt), *generated]:
+    for query in [*generated, *_fallback_queries(prompt)]:
         text = " ".join(str(query or "").split()).strip()
         if not text or _query_is_too_generic(text, prompt):
             continue

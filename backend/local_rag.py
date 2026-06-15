@@ -41,6 +41,7 @@ DEFAULT_ENRICH_MODEL = DEFAULT_ENRICHMENT_MODEL
 DEFAULT_ENRICH_MIN_CHARS = 240
 DEFAULT_ENRICH_MAX_TEXT = 6000
 DEFAULT_ENRICH_CONCURRENCY = max(1, min(4, (os.cpu_count() or 4) // 2))
+ITEM_METADATA_VERSION = 2
 
 JOB_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 JOBS: Dict[str, Dict[str, Any]] = {}
@@ -173,7 +174,18 @@ def read_library(slug: str) -> Dict[str, Any]:
     path = lib_json(slug)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Library not found")
-    return _read_json(path)
+    data = _read_json(path)
+    needs_metadata_upgrade = any(
+        isinstance(entry.get("metadata"), dict)
+        and entry["metadata"].get("status") in {"ready", "fallback"}
+        and int(entry["metadata"].get("version") or 0) < ITEM_METADATA_VERSION
+        for entry in data.get("files", [])
+    )
+    enhanced_path = lib_dir(slug) / "corpus.enhanced.jsonl"
+    if needs_metadata_upgrade and enhanced_path.exists():
+        _persist_item_metadata(slug, enhanced_path)
+        data = _read_json(path)
+    return data
 
 
 def write_library(slug: str, data: Dict[str, Any]) -> None:
@@ -634,6 +646,7 @@ def _persist_item_metadata(slug: str, enhanced_path: Path) -> None:
             enrichment_meta = record.get("enrichment_meta") if isinstance(record.get("enrichment_meta"), dict) else {}
             ok = bool(enrichment_meta.get("ok", True))
             entry["metadata"] = {
+                "version": ITEM_METADATA_VERSION,
                 "status": "ready" if ok else "fallback",
                 "headline": str(record.get("headline") or ""),
                 "summary": str(record.get("summary") or ""),

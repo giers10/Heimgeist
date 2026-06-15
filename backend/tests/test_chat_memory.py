@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timedelta
+import json
 import tempfile
 import unittest
 
@@ -39,6 +40,21 @@ class ChatMemoryTests(unittest.TestCase):
         db.add(ChatMessage(session_pk=session.id, role="user", content=user_content, created_at=created_at))
         db.flush()
         db.add(ChatMessage(session_pk=session.id, role="assistant", content=assistant_content, created_at=created_at + timedelta(seconds=1)))
+        db.flush()
+        return session
+
+    def _turn_with_sources(self, db, session_id, title, user_content, assistant_content, sources):
+        session = ChatSession(session_id=session_id, name=title)
+        db.add(session)
+        db.flush()
+        db.add(ChatMessage(session_pk=session.id, role="user", content=user_content))
+        db.flush()
+        db.add(ChatMessage(
+            session_pk=session.id,
+            role="assistant",
+            content=assistant_content,
+            sources_json=json.dumps(sources),
+        ))
         db.flush()
         return session
 
@@ -147,3 +163,23 @@ class ChatMemoryTests(unittest.TestCase):
 
         self.assertIn("song", context["context_block"].casefold())
         self.assertIn("lied", context["context_block"].casefold())
+
+    def test_memory_only_answers_are_not_reindexed(self):
+        db = self.Session()
+        try:
+            self._turn_with_sources(
+                db,
+                "poison",
+                "Backfire Basics",
+                "erzähl mir über backfire basics",
+                "Backfire Basics is a hallucinated project description.",
+                [{"type": "chat_memory", "source_session_id": "older", "source_message_id": "m1"}],
+            )
+            db.commit()
+            sync_all_chat_memory(db)
+
+            context = build_chat_memory_context(db, "backfire basics")
+        finally:
+            db.close()
+
+        self.assertEqual(context["context_block"], "")

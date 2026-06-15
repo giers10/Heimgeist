@@ -794,6 +794,22 @@ def _mark_pending_files_failed(slug: str, error: Optional[str]) -> None:
         write_library(slug, data)
 
 
+def _mark_unfinished_metadata_failed(slug: str, error: Optional[str]) -> None:
+    path = lib_json(slug)
+    if not path.exists():
+        return
+    data = _read_json(path)
+    changed = False
+    for entry in data.get("files", []):
+        metadata = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
+        if metadata.get("status") in {"ready", "fallback"}:
+            continue
+        entry["metadata"] = {**metadata, "status": "failed", "error": error or "Metadata generation failed."}
+        changed = True
+    if changed:
+        write_library(slug, data)
+
+
 async def _ensure_prepare_job(slug: str) -> Optional[str]:
     path = lib_json(slug)
     if not path.exists():
@@ -1121,6 +1137,8 @@ async def _run_job(job_id: str, fn_name: str, **kwargs):
     except Exception as exc:
         job["status"] = "failed"
         job["error"] = f"{type(exc).__name__}: {exc}"
+        if fn_name in {"enrich", "prepare"} and job.get("phase") in {"load", "enrich"}:
+            _mark_unfinished_metadata_failed(job["slug"], job["error"])
     finally:
         job["finished_at"] = now_iso()
         try:
@@ -1577,6 +1595,9 @@ async def update_file_enrichment(slug: str, req: UpdateFileEnrichmentRequest):
     target["sync_status"] = "pending"
     target.pop("sync_error", None)
     target.pop("synced_at", None)
+    metadata = target.get("metadata") if isinstance(target.get("metadata"), dict) else {}
+    target["metadata"] = {**metadata, "status": "pending"}
+    target["metadata"].pop("error", None)
 
     prepare_signature = _prepare_signature(files)
     _set_pending_prepare_signature(data, prepare_signature)

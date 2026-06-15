@@ -157,7 +157,7 @@ REMEMBER = graph(
     [
         node("input", "input", 0, 80),
         node("save", "tool", 300, 80, {"tool": "heimgeist.save_message_to_knowledge", "arguments": {
-            "message_id": {"$ref": "run.target_message_id"}, "library_slug": {"$ref": "run.library_slug"}, "title": None, "edited_content": None,
+            "message_id": {"$ref": "run.target_message_id"}, "library_slug": {"$ref": "run.library_slug"}, "title": None, "edited_content": {"$ref": "run.target_message_content"},
         }}),
         node("confirmed", "condition", 570, 80, {"value": {"$ref": "nodes.save.output.confirmed"}, "operation": "equals", "compare_to": True}),
         node("saved", "template", 830, 20, {"template": "Saved the selected message to knowledge."}),

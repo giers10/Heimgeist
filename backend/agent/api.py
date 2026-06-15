@@ -84,6 +84,42 @@ def _extract_remember_content(message: str) -> Optional[str]:
     return None
 
 
+def _clean_search_queries(raw: Any, fallback: str) -> list[str]:
+    values = raw if isinstance(raw, list) else [raw]
+    cleaned: list[str] = []
+    seen = set()
+    for item in values:
+        text = " ".join(str(item or "").split()).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text[:300])
+        if len(cleaned) >= 5:
+            break
+    fallback_text = " ".join(str(fallback or "").split()).strip()
+    if fallback_text and not cleaned:
+        cleaned.append(fallback_text[:300])
+    return cleaned
+
+
+def _resolve_web_search_inputs(sample_inputs: Dict[str, Any], message: str) -> tuple[str, list[str]]:
+    raw_queries = sample_inputs.get("web_search_queries")
+    if raw_queries is None:
+        raw_queries = sample_inputs.get("search_queries")
+    raw_query = sample_inputs.get("web_search_query") or sample_inputs.get("search_query")
+    queries = _clean_search_queries(raw_queries if raw_queries is not None else raw_query, message)
+    if raw_query:
+        raw_query_text = " ".join(str(raw_query).split()).strip()
+        if raw_query_text and raw_query_text.casefold() not in {item.casefold() for item in queries}:
+            queries.insert(0, raw_query_text[:300])
+    queries = queries[:5]
+    query = queries[0] if queries else str(message or "")[:300]
+    return query, queries or [query]
+
+
 def initialize_agent_system() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()

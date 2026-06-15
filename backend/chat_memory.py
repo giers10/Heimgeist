@@ -556,34 +556,16 @@ def _dedupe_hits(candidates: Sequence[Dict[str, Any]], top_k: int, *, minimum_sc
     return hits
 
 
-def build_chat_memory_context(
-    db: Session,
-    prompt: str,
+def _context_payload_from_hits(
+    hits: Sequence[Dict[str, Any]],
     *,
-    exclude_session_id: Optional[str] = None,
-    top_k: int = DEFAULT_MEMORY_TOP_K,
-    context_character_budget: int = DEFAULT_MEMORY_CONTEXT_CHARS,
+    context_character_budget: int,
+    intro: str,
 ) -> Dict[str, Any]:
-    tokens = _query_tokens(prompt)
-    if not tokens:
-        return {"context_block": "", "sources": [], "hits": []}
-
-    candidate_limit = max(80, top_k * 24)
-    candidates = _load_fts_candidates(db, tokens, exclude_session_id=exclude_session_id, limit=candidate_limit)
-    if len(candidates) < top_k:
-        candidates.extend(_load_table_candidates(db, tokens, exclude_session_id=exclude_session_id, limit=max(300, candidate_limit)))
-    if len(candidates) < top_k:
-        candidates.extend(_load_live_candidates(db, tokens, exclude_session_id=exclude_session_id, limit=1500))
-
-    hits = _dedupe_hits(candidates, max(1, top_k))
     if not hits:
         return {"context_block": "", "sources": [], "hits": []}
 
-    header = (
-        "<chat_memory_context>\n"
-        "Relevant excerpts from previous chats. Use these only when they help answer the current request; "
-        "they may be outdated and should not override explicit current context or fresh retrieved evidence."
-    )
+    header = f"<chat_memory_context>\n{intro}"
     blocks = [header]
     sources: List[Dict[str, Any]] = []
     remaining = max(600, int(context_character_budget)) - len(header) - len("</chat_memory_context>")
@@ -617,4 +599,128 @@ def build_chat_memory_context(
         if remaining <= 0:
             break
     blocks.append("</chat_memory_context>")
-    return {"context_block": "\n\n".join(blocks), "sources": sources, "hits": hits[:len(sources)]}
+    return {"context_block": "\n\n".join(blocks), "sources": sources, "hits": list(hits[:len(sources)])}
+
+
+def _load_previous_session_hits(
+    db: Session,
+    *,
+    exclude_session_id: Optional[str],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    current_created_at = None
+    if exclude_session_id:
+        try:
+            current_created_at = db.execute(
+                text("SELECT created_at FROM chat_sessions WHERE session_id = :session_id"),
+                {"session_id": exclude_session_id},
+            ).scalar()
+        except Exception:
+            current_created_at = None
+
+    try:
+        previous_session_id = db.execute(text(
+            """
+            SELECT t.session_id
+            FROM chat_memory_turns t
+            JOIN chat_sessions s ON s.session_id = t.session_id
+            WHERE (:exclude_session_id IS NULL OR t.session_id != :exclude_session_id)
+              AND (:current_created_at IS NULL OR s.created_at < :current_created_at)
+            GROUP BY t.session_id, s.created_at
+            ORDER BY s.created_at DESC
+            LIMIT 1
+            """
+        ), {
+            "exclude_session_id": exclude_session_id,
+            "current_created_at": current_created_at,
+        }).scalar()
+    except Exception:
+        previous_session_id = None
+    if not previous_session_id:
+        return []
+
+    try:
+        rows = db.execute(text(
+            """
+            SELECT
+                turn_key, session_id, session_name, user_message_id, assistant_message_id,
+                user_message_row_id, assistant_message_row_id, user_content, assistant_content,
+                attachment_summary, search_text, created_at
+            FROM chat_memory_turns
+            WHERE session_id = :session_id
+            ORDER BY assistant_message_row_id ASC
+            LIMIT :limit
+            """
+        ), {
+            "session_id": previous_session_id,
+            "limit": max(1, limit),
+        }).mappings().all()
+    except Exception:
+        return []
+    hits: List[Dict[str, Any]] = []
+    for row in rows:
+        item = _row_mapping(row)
+        item["_score"] = 1.0
+        hits.append(item)
+    return hits
+
+
+def build_chat_memory_context(
+    db: Session,
+    prompt: str,
+    *,
+    exclude_session_id: Optional[str] = None,
+    top_k: int = DEFAULT_MEMORY_TOP_K,
+    context_character_budget: int = DEFAULT_MEMORY_CONTEXT_CHARS,
+) -> Dict[str, Any]:
+    if _LAST_CONVERSATION_RE.search(str(prompt or "")):
+        hits = _load_previous_session_hits(db, exclude_session_id=exclude_session_id, limit=max(1, top_k))
+        return _context_payload_from_hits(
+            hits,
+            context_character_budget=context_character_budget,
+            intro=(
+                "Most recent previous chat. Use this to answer questions about the last or previous conversation; "
+                "do not treat it as fresh external evidence."
+            ),
+        )
+
+    core_tokens = _query_tokens(prompt)
+    if not core_tokens:
+        return {"context_block": "", "sources": [], "hits": []}
+    tokens = _expanded_query_tokens(core_tokens)
+    minimum_score = _minimum_memory_score(len(core_tokens))
+
+    candidate_limit = max(80, top_k * 24)
+    candidates = _load_fts_candidates(
+        db,
+        tokens,
+        exclude_session_id=exclude_session_id,
+        limit=candidate_limit,
+        query_token_count=len(core_tokens),
+    )
+    if len(candidates) < top_k:
+        candidates.extend(_load_table_candidates(
+            db,
+            tokens,
+            exclude_session_id=exclude_session_id,
+            limit=max(300, candidate_limit),
+            query_token_count=len(core_tokens),
+        ))
+    if len(candidates) < top_k:
+        candidates.extend(_load_live_candidates(
+            db,
+            tokens,
+            exclude_session_id=exclude_session_id,
+            limit=1500,
+            query_token_count=len(core_tokens),
+        ))
+
+    hits = _dedupe_hits(candidates, max(1, top_k), minimum_score=minimum_score)
+    return _context_payload_from_hits(
+        hits,
+        context_character_budget=context_character_budget,
+        intro=(
+            "Relevant excerpts from previous chats. Use these only when they help answer the current request; "
+            "they may be outdated and should not override explicit current context or fresh retrieved evidence."
+        ),
+    )

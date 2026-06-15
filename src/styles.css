@@ -1829,6 +1829,17 @@ input:checked + .slider:before {
   line-height: 1.5;
 }
 
+.library-video-source {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.library-video-thumbnail {
+  margin-top: 8px;
+}
+
 .library-content-card.kind-chat_message {
   border-color: color-mix(in srgb, #e9c46a 48%, var(--border));
 }

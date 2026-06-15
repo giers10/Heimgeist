@@ -152,7 +152,7 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
         db.close()
 
         with patch.object(api, "SessionLocal", self.Session):
-            response = api.get_workflow_events(run_id)
+            response = api.get_workflow_events(run_id, after_sequence=0, follow=True)
             body = b""
             async for chunk in response.body_iterator:
                 body += chunk.encode("utf-8") if isinstance(chunk, str) else chunk

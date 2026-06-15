@@ -2128,6 +2128,7 @@ async function createNewChat() {
             onTranscriptionModelChange={setTranscriptionModel}
             onVisionModelChange={setVisionModel}
             onWorkflowRouterModelChange={setWorkflowRouterModel}
+            onWorkflowSelectionModeChange={setWorkflowSelectionMode}
             searxEngines={searxEngines}
             searxUrl={searxUrl}
             setSearxEngines={setSearxEngines}

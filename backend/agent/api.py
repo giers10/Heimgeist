@@ -402,6 +402,11 @@ async def create_workflow_run(request: WorkflowRunRequest):
         user_message = None
         run_attachments = request.attachments
         sample_inputs = dict(request.sample_inputs)
+        router_inputs = router_result.get("inputs") if isinstance(router_result, dict) else None
+        if isinstance(router_inputs, dict):
+            merged_inputs = dict(router_inputs)
+            merged_inputs.update(sample_inputs)
+            sample_inputs = merged_inputs
         target_message_id = sample_inputs.get("target_message_id") or sample_inputs.get("message_id")
         target_message_content = sample_inputs.get("target_message_content") or sample_inputs.get("edited_content")
         target_url = sample_inputs.get("target_url") or sample_inputs.get("url")
@@ -470,6 +475,7 @@ async def create_workflow_run(request: WorkflowRunRequest):
             messages = [{"role": "user", "content": request.message}]
         sample_inputs.setdefault("prompt", request.message)
         sample_inputs.setdefault("session_id", request.session_id)
+        web_search_query, web_search_queries = _resolve_web_search_inputs(sample_inputs, request.message)
         run_values = {
             "session_id": request.session_id,
             "chat_model": request.model,
@@ -485,6 +491,8 @@ async def create_workflow_run(request: WorkflowRunRequest):
             "context_blocks": [],
             "manual_library_enabled": bool(request.library_slug),
             "web_search_enabled": request.web_search_enabled,
+            "web_search_query": web_search_query,
+            "web_search_queries": web_search_queries,
             "show_thinking": request.show_thinking,
             "target_message_id": target_message_id,
             "target_message_content": target_message_content,

@@ -47,31 +47,64 @@ class RouterAndBuiltinTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_fast_paths_auto_select_or_force_web(self):
         db = self.Session()
-        with patch("backend.agent.router.chat_typed", new=AsyncMock()) as mocked:
+        web = db.query(WorkflowDefinition).filter_by(slug="web-answer").one()
+        combined = db.query(WorkflowDefinition).filter_by(slug="knowledge-web-answer").one()
+        with patch(
+            "backend.agent.router.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({
+                "workflow_id": web.id,
+                "confidence": 0.95,
+                "reason": "forced web",
+                "inputs": {"web_search_query": "Iran news today", "web_search_queries": ["Iran news today", "Iran latest news"]},
+            }))),
+        ) as mocked:
             result = await select_workflow(
                 db, message="hello", recent_messages=[], attachments=[],
                 library_slug=None, router_model=None, chat_model="model", web_search_enabled=True,
             )
             self.assertEqual(result["workflow_slug"], "web-answer")
-            mocked.assert_not_awaited()
+            self.assertEqual(result["inputs"]["web_search_query"], "Iran news today")
+            mocked.assert_awaited()
 
+        with patch(
+            "backend.agent.router.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({
+                "workflow_id": web.id,
+                "confidence": 0.95,
+                "reason": "current",
+                "inputs": {"web_search_queries": ["latest Iran news"]},
+            }))),
+        ):
             result = await select_workflow(
                 db, message="latest news today", recent_messages=[], attachments=[],
                 library_slug=None, router_model=None, chat_model="model", web_search_enabled=False,
             )
             self.assertEqual(result["workflow_slug"], "web-answer")
+            self.assertEqual(result["inputs"]["web_search_query"], "latest Iran news")
 
+        with patch(
+            "backend.agent.router.chat_typed",
+            new=AsyncMock(return_value=OllamaChatResult(content=json.dumps({
+                "workflow_id": combined.id,
+                "confidence": 0.95,
+                "reason": "forced web with knowledge",
+                "inputs": {"web_search_query": "compare notes with latest docs", "web_search_queries": ["compare notes with latest docs"]},
+            }))),
+        ):
             result = await select_workflow(
                 db, message="hello", recent_messages=[], attachments=[],
                 library_slug="notes", router_model=None, chat_model="model", web_search_enabled=True,
             )
             self.assertEqual(result["workflow_slug"], "knowledge-web-answer")
+            self.assertEqual(result["inputs"]["web_search_query"], "compare notes with latest docs")
 
+        with patch("backend.agent.router.chat_typed", new=AsyncMock()) as mocked:
             result = await select_workflow(
                 db, message="hello", recent_messages=[], attachments=[],
                 library_slug=None, router_model=None, chat_model="model", web_search_enabled=False,
             )
             self.assertEqual(result["workflow_slug"], "input-output")
+            mocked.assert_not_awaited()
 
             result = await select_workflow(
                 db, message="remember this: I prefer short answers", recent_messages=[], attachments=[],

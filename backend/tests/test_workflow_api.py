@@ -33,15 +33,18 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
         user = ChatMessage(session_pk=chat.id, role="user", content="original")
         db.add(user)
         db.flush()
-        db.add(ChatMessage(
+        assistant = ChatMessage(
             session_pk=chat.id,
             role="assistant",
             content="old answer",
             workflow_id=direct.id,
             workflow_revision_id=direct.current_revision_id,
-        ))
+        )
+        db.add(assistant)
+        db.flush()
         db.commit()
         self.user_message_id = user.message_id
+        self.assistant_message_id = assistant.message_id
         self.direct_revision_id = direct.current_revision_id
         db.close()
 
@@ -71,4 +74,27 @@ class WorkflowApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[0].content, "edited")
         run = db.query(WorkflowRun).filter_by(id=response["run_id"]).one()
         self.assertEqual(run.user_message_id, self.user_message_id)
+        db.close()
+
+    async def test_run_resolves_previous_assistant_and_message_url_targets(self):
+        db = self.Session()
+        remember = db.query(WorkflowDefinition).filter_by(slug="remember-this").one()
+        remember_id = remember.id
+        db.close()
+        fake_runtime = SimpleNamespace(start=lambda _run_id: None)
+        request = WorkflowRunRequest(
+            session_id="regenerate-chat",
+            message="Save https://example.com/source for later.",
+            model="test-model",
+            selection_mode="explicit",
+            workflow_id=remember_id,
+        )
+        with patch.object(api, "SessionLocal", self.Session), patch.object(api, "runtime", fake_runtime):
+            response = await api.create_workflow_run(request)
+
+        db = self.Session()
+        run = db.query(WorkflowRun).filter_by(id=response["run_id"]).one()
+        run_values = __import__("json").loads(run.inputs_json)["run"]
+        self.assertEqual(run_values["target_message_id"], self.assistant_message_id)
+        self.assertEqual(run_values["target_url"], "https://example.com/source")
         db.close()

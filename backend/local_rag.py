@@ -707,7 +707,7 @@ def _migrate_entry_to_global(
     key = _entry_dedupe_key(entry)
     if key and key in dedupe:
         _merge_entry_origin(dedupe[key], source_library)
-        return False
+        return True
 
     migrated = dict(entry)
     original_item_id = str(migrated.get("item_id") or migrated.get("sha256") or migrated.get("rel") or "").strip()

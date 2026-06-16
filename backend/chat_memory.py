@@ -300,34 +300,18 @@ def safe_delete_chat_memory_for_session(db: Session, session_id: Optional[str]) 
         print("[chat-memory] session delete failed:", exc)
 
 
-def _query_tokens(prompt: str, limit: int = 16) -> List[str]:
+def _query_tokens(prompt: str, limit: int = 24) -> List[str]:
     tokens: List[str] = []
     seen = set()
     for raw in _TOKEN_RE.findall(str(prompt or "").casefold()):
         token = raw.strip("'_-")
-        if len(token) < 3 or token in _STOPWORDS or token in seen:
+        if len(token) < 2 or token in seen:
             continue
         seen.add(token)
         tokens.append(token)
         if len(tokens) >= limit:
             break
     return tokens
-
-
-def _expanded_query_tokens(tokens: Sequence[str], limit: int = 24) -> List[str]:
-    expanded: List[str] = []
-    seen = set()
-    for token in tokens:
-        values = [token, *_QUERY_EXPANSIONS.get(token, [])]
-        for value in values:
-            cleaned = str(value or "").casefold().strip()
-            if not cleaned or cleaned in seen:
-                continue
-            seen.add(cleaned)
-            expanded.append(cleaned)
-            if len(expanded) >= limit:
-                return expanded
-    return expanded
 
 
 def _fts_match_query(tokens: Sequence[str]) -> str:
@@ -337,14 +321,6 @@ def _fts_match_query(tokens: Sequence[str]) -> str:
         if cleaned:
             safe_terms.append(f'"{cleaned}"')
     return " OR ".join(safe_terms)
-
-
-def _minimum_memory_score(token_count: int) -> float:
-    if token_count <= 1:
-        return 0.85
-    if token_count == 2:
-        return 0.9
-    return 0.65
 
 
 def _row_mapping(row: Any) -> Dict[str, Any]:
@@ -360,8 +336,6 @@ def _score_hit(
     row: Dict[str, Any],
     tokens: Sequence[str],
     fts_rank: Optional[float] = None,
-    *,
-    query_token_count: Optional[int] = None,
 ) -> float:
     title = str(row.get("session_name") or "").casefold()
     user_text = str(row.get("user_content") or "").casefold()
@@ -371,10 +345,7 @@ def _score_hit(
     hits = [token for token in tokens if token in combined]
     if not hits:
         return 0.0
-    core_count = max(1, int(query_token_count or len(tokens) or 1))
-    if core_count >= 2 and len(hits) < 2:
-        return 0.0
-    score = len(hits) / max(1, min(core_count, 4))
+    score = len(hits) / max(1, min(len(tokens), 8))
     score += 0.18 * sum(1 for token in hits if token in title)
     score += 0.10 * sum(1 for token in hits if token in user_text)
     if fts_rank is not None:
@@ -396,7 +367,6 @@ def _load_fts_candidates(
     *,
     exclude_session_id: Optional[str],
     limit: int,
-    query_token_count: int,
 ) -> List[Dict[str, Any]]:
     match = _fts_match_query(tokens)
     if not match:
@@ -426,7 +396,7 @@ def _load_fts_candidates(
     candidates: List[Dict[str, Any]] = []
     for row in rows:
         item = _row_mapping(row)
-        item["_score"] = _score_hit(item, tokens, item.get("fts_rank"), query_token_count=query_token_count)
+        item["_score"] = _score_hit(item, tokens, item.get("fts_rank"))
         if item["_score"] > 0:
             candidates.append(item)
     return candidates
@@ -438,7 +408,6 @@ def _load_table_candidates(
     *,
     exclude_session_id: Optional[str],
     limit: int,
-    query_token_count: int,
 ) -> List[Dict[str, Any]]:
     try:
         rows = db.execute(text(
@@ -461,7 +430,7 @@ def _load_table_candidates(
     candidates: List[Dict[str, Any]] = []
     for row in rows:
         item = _row_mapping(row)
-        item["_score"] = _score_hit(item, tokens, query_token_count=query_token_count)
+        item["_score"] = _score_hit(item, tokens)
         if item["_score"] > 0:
             candidates.append(item)
     return candidates
@@ -473,7 +442,6 @@ def _load_live_candidates(
     *,
     exclude_session_id: Optional[str],
     limit: int,
-    query_token_count: int,
 ) -> List[Dict[str, Any]]:
     try:
         rows = db.execute(text(
@@ -527,7 +495,7 @@ def _load_live_candidates(
             "attachment_summary": attachments,
             "created_at": str(item.get("created_at") or ""),
         }
-        turn["_score"] = _score_hit(turn, tokens, query_token_count=query_token_count)
+        turn["_score"] = _score_hit(turn, tokens)
         if turn["_score"] > 0:
             turns.append(turn)
     return turns

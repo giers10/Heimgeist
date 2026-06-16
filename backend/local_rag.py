@@ -1394,7 +1394,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
         _mark_pipeline_stage(slug, "embed", prepare_signature)
 
     if on_progress:
-        on_progress("done", 1.0, "Database is ready for chat.")
+        on_progress("done", 1.0, "Knowledge is ready for chat.")
 
     return {
         "status": "ok",

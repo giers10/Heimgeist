@@ -1510,41 +1510,114 @@ def _build_local_context(prompt: str, results: Dict[str, Any], top_k: int = 5) -
     return {"context_block": "\n".join(blocks), "sources": file_sources}
 
 
+async def _synced_library_payload(slug: str) -> Dict[str, Any]:
+    data = read_library(slug)
+    payload = library_payload(data)
+    if (
+        payload["states"].get("is_indexed")
+        and not _has_active_job(data["slug"])
+        and _enable_automatic_deep_enrichment(data["slug"], data)
+    ):
+        await _ensure_prepare_job(data["slug"])
+        data = read_library(data["slug"])
+        payload = library_payload(data)
+    has_failed_item = any(
+        str(entry.get("sync_status") or "") == "failed"
+        for entry in data.get("files", [])
+    )
+    if (
+        _pipeline_meta(data).get("pending_prepare_signature")
+        and not _has_active_job(data["slug"])
+        and (payload["states"].get("is_indexed") or not has_failed_item)
+    ):
+        await _ensure_prepare_job(data["slug"])
+    return library_payload(read_library(slug))
+
+
+async def _global_library_payload() -> Dict[str, Any]:
+    ensure_global_knowledge_store()
+    return await _synced_library_payload(GLOBAL_LIBRARY_SLUG)
+
+
 @router.get("/libraries")
 async def list_libraries():
-    libraries: List[Dict[str, Any]] = []
-    for path in LIB_ROOT.iterdir():
-        if not path.is_dir():
-            continue
-        meta = path / "library.json"
-        if not meta.exists():
-            continue
-        try:
-            data = _read_json(meta)
-            payload = library_payload(data)
-            if (
-                payload["states"].get("is_indexed")
-                and not _has_active_job(data["slug"])
-                and _enable_automatic_deep_enrichment(data["slug"], data)
-            ):
-                await _ensure_prepare_job(data["slug"])
-                data = read_library(data["slug"])
-                payload = library_payload(data)
-            has_failed_item = any(
-                str(entry.get("sync_status") or "") == "failed"
-                for entry in data.get("files", [])
-            )
-            if (
-                _pipeline_meta(data).get("pending_prepare_signature")
-                and not _has_active_job(data["slug"])
-                and (payload["states"].get("is_indexed") or not has_failed_item)
-            ):
-                await _ensure_prepare_job(data["slug"])
-            libraries.append(library_payload(read_library(data["slug"])))
-        except Exception:
-            continue
-    libraries.sort(key=lambda item: item.get("created_at", ""), reverse=True)
-    return {"libraries": libraries}
+    return {"libraries": [await _global_library_payload()]}
+
+
+@router.get("/knowledge")
+async def get_knowledge():
+    return await _global_library_payload()
+
+
+@router.post("/knowledge/files/register")
+async def register_knowledge_paths(req: RegisterPathsRequest):
+    ensure_global_knowledge_store()
+    return await register_paths(GLOBAL_LIBRARY_SLUG, req)
+
+
+@router.get("/knowledge/items/{item_id}")
+def get_knowledge_item(item_id: str):
+    ensure_global_knowledge_store()
+    return get_library_item(GLOBAL_LIBRARY_SLUG, item_id)
+
+
+@router.post("/knowledge/texts")
+async def create_knowledge_text(req: CreateTextRequest):
+    ensure_global_knowledge_store()
+    return await create_library_text(GLOBAL_LIBRARY_SLUG, req)
+
+
+@router.patch("/knowledge/texts/{item_id}")
+async def update_knowledge_text(item_id: str, req: UpdateTextRequest):
+    ensure_global_knowledge_store()
+    return await update_library_text(GLOBAL_LIBRARY_SLUG, item_id, req)
+
+
+@router.post("/knowledge/websites")
+async def create_knowledge_website(req: CreateWebsiteRequest):
+    ensure_global_knowledge_store()
+    return await create_library_website(GLOBAL_LIBRARY_SLUG, req)
+
+
+@router.post("/knowledge/videos/{item_id}/refresh")
+async def refresh_knowledge_video(item_id: str):
+    ensure_global_knowledge_store()
+    return await refresh_library_video(GLOBAL_LIBRARY_SLUG, item_id)
+
+
+@router.post("/knowledge/websites/{item_id}/refresh")
+async def refresh_knowledge_website(item_id: str):
+    ensure_global_knowledge_store()
+    return await refresh_library_website(GLOBAL_LIBRARY_SLUG, item_id)
+
+
+@router.delete("/knowledge/files")
+async def remove_knowledge_file(req: RemoveFileRequest):
+    ensure_global_knowledge_store()
+    return await remove_file(GLOBAL_LIBRARY_SLUG, req)
+
+
+@router.patch("/knowledge/files/enrichment")
+async def update_knowledge_file_enrichment(req: UpdateFileEnrichmentRequest):
+    ensure_global_knowledge_store()
+    return await update_file_enrichment(GLOBAL_LIBRARY_SLUG, req)
+
+
+@router.post("/knowledge/jobs/prepare")
+async def prepare_knowledge():
+    ensure_global_knowledge_store()
+    return await prepare_library(GLOBAL_LIBRARY_SLUG)
+
+
+@router.post("/knowledge/context")
+def knowledge_context(req: LibraryContextRequest):
+    ensure_global_knowledge_store()
+    return library_context(GLOBAL_LIBRARY_SLUG, req)
+
+
+@router.post("/knowledge/purge")
+def purge_knowledge():
+    return purge_libraries()
 
 
 @router.post("/libraries")

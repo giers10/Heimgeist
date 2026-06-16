@@ -877,17 +877,10 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         vision_model=req.vision_model,
         transcription_model=req.transcription_model,
     )
-    memory_context = _chat_memory_context(db, req.message, req.session_id)
-    enriched_message = _merge_enriched_context(
-        req.message,
-        req.enriched_message,
-        [memory_context.get("context_block")],
-    )
-
     current_user_message, user_attachments = await _build_ollama_user_message(
         req.message,
         req.attachments or [],
-        enriched_message=enriched_message,
+        enriched_message=req.enriched_message,
         request_model_supports_vision=request_model_supports_vision,
         vision_model=req.vision_model,
         transcription_model=req.transcription_model,
@@ -907,7 +900,7 @@ async def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
     messages = [*history_messages, current_user_message]
 
     # Sources to persist with the assistant reply
-    sources = _dedupe_sources([*(req.sources or []), *(memory_context.get("sources") or [])])
+    sources = req.sources or []
 
     if req.stream:
         async def stream_generator():
@@ -1066,21 +1059,15 @@ async def regenerate(session_id: str, req: schemas.RegenerateRequest, db: Sessio
             break
 
     request_model_supports_vision = await _model_supports_vision(model)
-    memory_context = _chat_memory_context(db, msgs[last_user_idx].content, session_id)
-    enriched_message = _merge_enriched_context(
-        msgs[last_user_idx].content,
-        req.enriched_message,
-        [memory_context.get("context_block")],
-    )
     conversation = await _build_ollama_messages_from_rows(
         msgs[: last_user_idx + 1],
         request_model_supports_vision=request_model_supports_vision,
         vision_model=req.vision_model,
         transcription_model=req.transcription_model,
         override_user_row_index=last_user_idx,
-        override_user_content=enriched_message,
+        override_user_content=req.enriched_message,
     )
-    sources = _dedupe_sources([*(req.sources or []), *(memory_context.get("sources") or [])])
+    sources = req.sources or []
 
     # prune after that user only after conversation building succeeds
     if last_user_idx < len(msgs) - 1:

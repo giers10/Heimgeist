@@ -47,7 +47,7 @@ SAVE_OUTPUT = {
 def register_saving_tools(registry: NativeToolProvider) -> None:
     registry.register(ToolDefinition(
         name="heimgeist.save_message_to_knowledge",
-        description="Save a stable chat message snapshot to a Heimgeist knowledge library.",
+        description="Save a stable chat message snapshot to Heimgeist's local Knowledge store.",
         input_schema={
             "type": "object",
             "properties": {
@@ -67,7 +67,7 @@ def register_saving_tools(registry: NativeToolProvider) -> None:
     ))
     registry.register(ToolDefinition(
         name="heimgeist.save_website_to_knowledge",
-        description="Fetch and save a durable website snapshot to a Heimgeist knowledge library.",
+        description="Fetch and save a durable website snapshot to Heimgeist's local Knowledge store.",
         input_schema={
             "type": "object",
             "properties": {

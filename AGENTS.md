@@ -2,6 +2,7 @@
 
 ## Project Overview
 
+
 Heimgeist is a local desktop chat app for Ollama. It uses a React/Vite renderer, a Tauri desktop shell, a FastAPI backend, SQLite chat storage, Whisper transcription, optional SearXNG web search, and local RAG libraries under the backend.
 
 ## Important Directories and Entry Points

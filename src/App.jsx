@@ -84,28 +84,17 @@ export default function App() {
   const activeSidebarModeRef = useRef(activeSidebarMode)
   const [activeSettingsSubmenu, setActiveSettingsSubmenu] = useState('General');
   const [editingSessionId, setEditingSessionId] = useState(null); // ID of the session being edited
-  const [editingLibrarySlug, setEditingLibrarySlug] = useState(null)
   const [libraries, setLibraries] = useState([])
   const [libraryJobs, setLibraryJobs] = useState([])
-  const [activeLibrarySlug, setActiveLibrarySlug] = useState(null)
-  const [isCreatingLibrary, setIsCreatingLibrary] = useState(false)
-  const [newLibraryName, setNewLibraryName] = useState('')
-  const [libraryCreateError, setLibraryCreateError] = useState('')
   const [workflows, setWorkflows] = useState([])
   const [workflowTools, setWorkflowTools] = useState([])
   const [activeWorkflowId, setActiveWorkflowId] = useState(null)
   const [activeWorkflow, setActiveWorkflow] = useState(null)
   const [workflowError, setWorkflowError] = useState('')
-  const {
-    chatLibrary,
-    chatLibrarySlug,
-    chatLibraryStatusSuffix,
-    clearChatLibrarySelections,
-    getChatLibraryForSession,
-    isLibrarySyncing,
-    removeLibraryFromChatSelections,
-    setChatLibraryForSession,
-  } = useChatLibrarySelection({ activeSessionId, libraries, libraryJobs })
+  function isLibrarySyncing(slug) {
+    if (!slug) return false
+    return libraryJobs.some(job => job.slug === slug && (job.status === 'queued' || job.status === 'running'))
+  }
   const {
     getSelectionForSession: getChatWorkflowForSession,
     selectedWorkflow,

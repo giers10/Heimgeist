@@ -1130,7 +1130,7 @@ export default function App() {
     setKnowledgeSaveTarget(null)
     await refreshLibraries()
     await refreshLibraryJobs()
-    showKnowledgeSaveToast(result?.already_saved ? 'This message is already saved in that database.' : 'Message saved to knowledge.')
+    showKnowledgeSaveToast(result?.already_saved ? 'This message is already saved in Knowledge.' : 'Message saved to Knowledge.')
   }
 
   function openChatMessageSource(item) {
@@ -1431,7 +1431,7 @@ async function createNewChat() {
             className={`sidebar-tab ${activeSidebarMode === 'dbs' ? 'active' : ''}`}
             onClick={() => handleSidebarClick('dbs')}
           >
-            DBs
+            Knowledge
           </div>
           <div
             className={`sidebar-tab ${activeSidebarMode === 'workflows' ? 'active' : ''}`}

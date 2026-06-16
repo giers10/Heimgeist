@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { splitThinkBlocks } from './chatText'
 
 function cleanAssistantContent(content) {
@@ -46,18 +46,11 @@ async function expectJson(response) {
 
 export default function SaveMessageToKnowledgeDialog({
   apiBase,
-  defaultLibrarySlug,
-  libraries,
   message,
   onClose,
   onSaved,
   precedingUserMessage,
 }) {
-  const initialLibrarySlug = useMemo(() => {
-    if (libraries.some(library => library.slug === defaultLibrarySlug)) return defaultLibrarySlug
-    return libraries[0]?.slug || ''
-  }, [defaultLibrarySlug, libraries])
-  const [librarySlug, setLibrarySlug] = useState(initialLibrarySlug)
   const [title, setTitle] = useState(() => defaultTitle(message))
   const [content, setContent] = useState(() => defaultKnowledgeContent(message, precedingUserMessage))
   const [busy, setBusy] = useState(false)
@@ -73,11 +66,11 @@ export default function SaveMessageToKnowledgeDialog({
 
   async function submit(event) {
     event.preventDefault()
-    if (!librarySlug || !message?.message_id) return
+    if (!message?.message_id) return
     setBusy(true)
     setError('')
     try {
-      const response = await fetch(`${apiBase}/libraries/${librarySlug}/chat-messages`, {
+      const response = await fetch(`${apiBase}/knowledge/chat-messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -103,39 +96,27 @@ export default function SaveMessageToKnowledgeDialog({
         <div className="knowledge-save-header">
           <div>
             <strong id="knowledge-save-title">Save message to knowledge</strong>
-            <p>The saved snapshot becomes a normal RAG item in the selected database.</p>
+            <p>The saved snapshot becomes a normal item in Knowledge.</p>
           </div>
           <button type="button" className="icon-button" title="Close" aria-label="Close" onClick={onClose} disabled={busy}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
 
-        {libraries.length === 0 ? (
-          <div className="form-error">Create a database before saving chat knowledge.</div>
-        ) : (
-          <>
-            <label>
-              Database
-              <select value={librarySlug} onChange={event => setLibrarySlug(event.target.value)} disabled={busy}>
-                {libraries.map(library => <option key={library.slug} value={library.slug}>{library.name}</option>)}
-              </select>
-            </label>
-            <label>
-              Title
-              <input value={title} onChange={event => setTitle(event.target.value)} required autoFocus disabled={busy} />
-            </label>
-            <label>
-              Knowledge content
-              <textarea value={content} onChange={event => setContent(event.target.value)} rows={12} required disabled={busy} />
-            </label>
-          </>
-        )}
+        <label>
+          Title
+          <input value={title} onChange={event => setTitle(event.target.value)} required autoFocus disabled={busy} />
+        </label>
+        <label>
+          Knowledge content
+          <textarea value={content} onChange={event => setContent(event.target.value)} rows={12} required disabled={busy} />
+        </label>
 
         {error && <div className="form-error">{error}</div>}
         <div className="knowledge-save-actions">
           <button type="button" className="button ghost" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="submit" className="button" disabled={busy || libraries.length === 0 || !librarySlug || !title.trim() || !content.trim()}>
-            {busy ? 'Saving...' : 'Save to Database'}
+          <button type="submit" className="button" disabled={busy || !title.trim() || !content.trim()}>
+            {busy ? 'Saving...' : 'Save to Knowledge'}
           </button>
         </div>
       </form>

@@ -560,7 +560,7 @@ export default function GeneralSettings({
 
   const handlePurgeLibraries = async () => {
     const confirmed = window.confirm(
-      'Delete all Heimgeist databases, staged files, and indexes from local storage? Chat history will be kept.'
+      'Delete Heimgeist Knowledge, staged files, and indexes from local storage? Chat history will be kept.'
     );
     if (!confirmed) {
       return;
@@ -570,7 +570,7 @@ export default function GeneralSettings({
     setLibraryPurgeStatus({ tone: 'neutral', message: '' });
 
     try {
-      const response = await fetch(`${backendApiUrl}/libraries/purge`, {
+      const response = await fetch(`${backendApiUrl}/knowledge/purge`, {
         method: 'POST',
       });
       const data = await response.json().catch(() => null);
@@ -583,8 +583,8 @@ export default function GeneralSettings({
       setLibraryPurgeStatus({
         tone: 'success',
         message: count > 0
-          ? `Removed ${count} database${count === 1 ? '' : 's'} from local storage.`
-          : 'No local databases were found to remove.',
+          ? 'Removed local Knowledge data from storage.'
+          : 'No local Knowledge data was found to remove.',
       });
 
       if (onLibrariesPurged) {
@@ -593,7 +593,7 @@ export default function GeneralSettings({
     } catch (error) {
       setLibraryPurgeStatus({
         tone: 'error',
-        message: `Database purge failed: ${error.message || String(error)}`,
+        message: `Knowledge purge failed: ${error.message || String(error)}`,
       });
     } finally {
       setIsPurgingLibraries(false);
@@ -693,7 +693,7 @@ export default function GeneralSettings({
             ))}
           </select>
           <p className="setting-description">
-            Heimgeist uses this model for building or rebuilding local database embeddings.
+            Heimgeist uses this model for building or rebuilding local Knowledge embeddings.
           </p>
         </div>
         <div className="setting-section">
@@ -917,7 +917,7 @@ export default function GeneralSettings({
           </p>
         </div>
         <div className="setting-section danger-zone">
-          <h3>Purge Databases</h3>
+          <h3>Purge Knowledge</h3>
           <div className="setting-control-row">
             <button
               type="button"
@@ -925,11 +925,11 @@ export default function GeneralSettings({
               onClick={handlePurgeLibraries}
               disabled={isPurgingLibraries || !backendApiUrl}
             >
-              {isPurgingLibraries ? 'Purging...' : 'Delete All Databases'}
+              {isPurgingLibraries ? 'Purging...' : 'Delete Knowledge'}
             </button>
           </div>
           <p className="setting-description">
-            Removes every local Heimgeist database, including staged files, corpora, and indexes. This is meant as a recovery action when the DB panel becomes unusable. Chat history stays intact.
+            Removes local Heimgeist Knowledge, including staged files, corpora, and indexes. This is meant as a recovery action when the Knowledge panel becomes unusable. Chat history stays intact.
           </p>
           {libraryPurgeStatus.message && (
             <p className={`setting-status ${libraryPurgeStatus.tone}`}>

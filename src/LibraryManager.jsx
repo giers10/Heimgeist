@@ -40,7 +40,7 @@ function itemSyncMeta(item) {
       status,
       progress,
       label: progress > 0 ? `Syncing ${Math.round(progress)}%` : 'Syncing',
-      detail: detail || 'Rebuilding the database search indexes.'
+      detail: detail || 'Rebuilding Knowledge search indexes.'
     }
   }
   return {
@@ -145,7 +145,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     if (contentPreviews[itemId]) return
     setContentPreviews(current => ({ ...current, [itemId]: { loading: true } }))
     try {
-      const response = await fetch(`${apiBase}/libraries/${library.slug}/items/${itemId}`)
+      const response = await fetch(`${apiBase}/knowledge/items/${itemId}`)
       const data = await expectJson(response)
       setContentPreviews(current => ({ ...current, [itemId]: { data } }))
     } catch (error) {
@@ -178,13 +178,13 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     if (!Array.isArray(paths) || paths.length === 0) return
     try {
       await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/files/register`, {
+        const response = await fetch(`${apiBase}/knowledge/files/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paths })
         })
         return expectJson(response)
-      }, 'Files added. Heimgeist is updating the database.')
+      }, 'Files added. Heimgeist is updating Knowledge.')
     } catch {}
   }
 
@@ -196,8 +196,8 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
         const editing = Boolean(editingItemId)
         const response = await fetch(
           editing
-            ? `${apiBase}/libraries/${library.slug}/texts/${editingItemId}`
-            : `${apiBase}/libraries/${library.slug}/texts`,
+            ? `${apiBase}/knowledge/texts/${editingItemId}`
+            : `${apiBase}/knowledge/texts`,
           {
             method: editing ? 'PATCH' : 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -205,7 +205,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
           }
         )
         return expectJson(response)
-      }, editingItemId ? 'Text updated.' : 'Text added to the database.')
+      }, editingItemId ? 'Text updated.' : 'Text added to Knowledge.')
       if (editingItemId) {
         setContentPreviews(current => {
           const next = { ...current }
@@ -223,7 +223,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     setBusy(true)
     setErrorMessage('')
     try {
-      const response = await fetch(`${apiBase}/libraries/${library.slug}/items/${item.item_id}`)
+      const response = await fetch(`${apiBase}/knowledge/items/${item.item_id}`)
       const data = await expectJson(response)
       setEditingItemId(item.item_id)
       setTextTitle(data.title || item.title || item.name || '')
@@ -242,7 +242,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     setWebsiteProcessing(true)
     try {
       const result = await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/websites`, {
+        const response = await fetch(`${apiBase}/knowledge/websites`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: websiteUrl, title: websiteTitle || null })
@@ -266,7 +266,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     if (!library || !item?.item_id) return
     try {
       const result = await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/websites/${item.item_id}/refresh`, {
+        const response = await fetch(`${apiBase}/knowledge/websites/${item.item_id}/refresh`, {
           method: 'POST'
         })
         return expectJson(response)
@@ -286,7 +286,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     setWebsiteProcessing(true)
     try {
       const result = await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/videos/${item.item_id}/refresh`, {
+        const response = await fetch(`${apiBase}/knowledge/videos/${item.item_id}/refresh`, {
           method: 'POST'
         })
         return expectJson(response)
@@ -308,7 +308,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     if (!library) return
     try {
       await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/files`, {
+        const response = await fetch(`${apiBase}/knowledge/files`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rel: item.rel })
@@ -322,7 +322,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     if (!library) return
     try {
       await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/files/enrichment`, {
+        const response = await fetch(`${apiBase}/knowledge/files/enrichment`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rel: item.rel, enabled })
@@ -336,9 +336,9 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     if (!library) return
     try {
       await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/jobs/prepare`, { method: 'POST' })
+        const response = await fetch(`${apiBase}/knowledge/jobs/prepare`, { method: 'POST' })
         return expectJson(response)
-      }, 'Generating metadata for this database.')
+      }, 'Generating metadata for Knowledge.')
     } catch {}
   }
 
@@ -346,7 +346,7 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
     if (!library) return
     try {
       await runAction(async () => {
-        const response = await fetch(`${apiBase}/libraries/${library.slug}/jobs/prepare`, { method: 'POST' })
+        const response = await fetch(`${apiBase}/knowledge/jobs/prepare`, { method: 'POST' })
         return expectJson(response)
       })
     } catch {}
@@ -400,16 +400,16 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
       return
     }
     if (!previousState.isSyncing && nextState.isSyncing) {
-      queueToast('Syncing this database. Heimgeist is rebuilding its search indexes.')
+      queueToast('Syncing Knowledge. Heimgeist is rebuilding its search indexes.')
     } else if (previousState.isSyncing && !nextState.isSyncing) {
       if (nextState.hasFailedItems) queueToast('Some content did not finish syncing.', 'warning')
-      else if (nextState.isReadyForChat) queueToast('Sync complete. This database is ready in chat.', 'success')
+      else if (nextState.isReadyForChat) queueToast('Sync complete. Knowledge is ready in chat.', 'success')
     }
     previousLibraryStateRef.current = nextState
   }, [library?.slug, items.length, hasFailedItems, isReadyForChat, isSyncing])
 
   if (!library) {
-    return <div className="placeholder-view"><p>Create a database, then add files, your own texts, or websites.</p></div>
+    return <div className="placeholder-view"><p>Add files, your own texts, or websites to Knowledge.</p></div>
   }
 
   return (
@@ -465,14 +465,14 @@ export default function LibraryManager({ apiBase, library, jobs, onOpenChatMessa
         <div className="library-content-heading">
           <div>
             <h2>Contents</h2>
-            <p className="muted-copy">Files, texts, website snapshots, videos, and saved chat messages are searched together when this database is selected.</p>
+            <p className="muted-copy">Files, texts, website snapshots, videos, and saved chat messages are searched together through Knowledge workflows.</p>
           </div>
           <input
             className="library-search"
             value={search}
             onChange={event => setSearch(event.target.value)}
             placeholder="Search contents"
-            aria-label="Search database contents"
+            aria-label="Search Knowledge contents"
           />
         </div>
 

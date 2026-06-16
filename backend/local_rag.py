@@ -619,7 +619,7 @@ def _entry_dedupe_key(entry: Dict[str, Any]) -> Optional[tuple[str, str]]:
 
 def _merge_entry_origin(entry: Dict[str, Any], source_library: Dict[str, Any]) -> None:
     slug = str(source_library.get("slug") or "").strip()
-    name = str(source_library.get("name") or slug or "Imported database").strip()
+    name = str(source_library.get("name") or slug or "Imported collection").strip()
     if not slug:
         return
     entry.setdefault("origin_library_slug", slug)
@@ -1326,7 +1326,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
     corpus_signature = payload.get("corpus_signature")
     prepare_signature = payload.get("prepare_signature")
     if not files or not source_signature or not corpus_signature or not prepare_signature:
-        raise RuntimeError("Add files before preparing this database.")
+        raise RuntimeError("Add files before preparing Knowledge.")
 
     paths = _collect_library_paths(slug)
     states = dict(payload.get("states") or {})
@@ -1337,7 +1337,7 @@ def _run_prepare_pipeline(slug: str, on_progress=None, **opts):
     embed_model = opts.get("embed_model") or _default_embed_model() or pipeline.get("embed_model") or DEFAULT_EMBED_MODEL
 
     if on_progress:
-        on_progress("prepare", 0.01, "Preparing database for chat...")
+        on_progress("prepare", 0.01, "Preparing Knowledge for chat...")
 
     if not states.get("has_corpus"):
         build_progress = _scaled_progress(on_progress, 0.02, 0.34, "Reading files") if on_progress else None
@@ -1643,9 +1643,9 @@ def purge_libraries():
     ]
     if active_jobs:
         active_slugs = sorted({str(job.get("slug") or "") for job in active_jobs if job.get("slug")})
-        detail = "Cannot purge databases while library sync jobs are still running."
+        detail = "Cannot purge Knowledge while sync jobs are still running."
         if active_slugs:
-            detail = f"{detail} Active databases: {', '.join(active_slugs)}."
+            detail = f"{detail} Active jobs: {', '.join(active_slugs)}."
         raise HTTPException(status_code=409, detail=detail)
 
     removed: List[str] = []
@@ -1669,7 +1669,7 @@ def purge_libraries():
         preview = "; ".join(failures[:3])
         if len(failures) > 3:
             preview = f"{preview}; ..."
-        raise HTTPException(status_code=500, detail=f"Failed to purge some databases. {preview}")
+        raise HTTPException(status_code=500, detail=f"Failed to purge some Knowledge data. {preview}")
 
     return {
         "ok": True,
@@ -1959,7 +1959,7 @@ async def create_library_website(slug: str, req: CreateWebsiteRequest):
             None,
         )
         if duplicate:
-            raise HTTPException(status_code=409, detail="This video is already saved in the database.")
+            raise HTTPException(status_code=409, detail="This video is already saved in Knowledge.")
 
         item_id = uuid.uuid4().hex
         source_path = _managed_source_path(slug, item_id)
@@ -2027,7 +2027,7 @@ async def create_library_website(slug: str, req: CreateWebsiteRequest):
         None,
     )
     if duplicate:
-        raise HTTPException(status_code=409, detail="This website is already saved in the database.")
+        raise HTTPException(status_code=409, detail="This website is already saved in Knowledge.")
 
     item_id = uuid.uuid4().hex
     source_path = _managed_source_path(slug, item_id)
@@ -2305,7 +2305,7 @@ async def prepare_library(slug: str):
     data = read_library(slug)
     payload = library_payload(data)
     if not payload["states"].get("has_files"):
-        raise HTTPException(status_code=400, detail="Add files before preparing this database.")
+        raise HTTPException(status_code=400, detail="Add files before preparing Knowledge.")
     lock = LIB_LOCKS.setdefault(slug, asyncio.Lock())
     async with lock:
         if _has_active_job(slug):

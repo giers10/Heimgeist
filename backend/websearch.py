@@ -171,6 +171,7 @@ def fallback_rerank(
     print(f"[web] embedding rerank unavailable ({reason}); using lexical fallback over {len(docs)} docs")
     return scored
 
+
 def _is_probably_html_url(url: str) -> bool:
     try:
         path = urlparse(url).path.lower()

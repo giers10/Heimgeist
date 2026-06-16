@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from .. import models as chat_models
 from ..chat_memory import safe_sync_chat_memory_for_session
 from ..database import Base, SessionLocal, engine
+from ..local_rag import ensure_global_knowledge_store, global_library_slug
 from .events import EventWriter
 from .models import (
     WorkflowConfirmation,
@@ -359,6 +360,8 @@ async def _select_for_run(
 ) -> tuple[WorkflowDefinition, Optional[Dict[str, Any]]]:
     router_result = None
     if request.selection_mode == "automatic":
+        ensure_global_knowledge_store()
+        router_library_slug = request.library_slug or global_library_slug()
         recent_messages = []
         if request.session_id:
             session = db.query(chat_models.ChatSession).filter(chat_models.ChatSession.session_id == request.session_id).first()
@@ -367,7 +370,7 @@ async def _select_for_run(
                 recent_messages = [{"role": row.role, "content": row.content} for row in reversed(rows)]
         router_result = await select_workflow(
             db, message=request.message, recent_messages=recent_messages, attachments=request.attachments,
-            library_slug=request.library_slug, router_model=request.router_model, chat_model=request.model,
+            library_slug=router_library_slug, router_model=request.router_model, chat_model=request.model,
             web_search_enabled=request.web_search_enabled,
         )
         workflow = _find_workflow(db, router_result["workflow_id"])
@@ -484,13 +487,18 @@ async def create_workflow_run(request: WorkflowRunRequest):
             required_capabilities = set(json.loads(workflow.required_capabilities_json or "[]"))
         except Exception:
             required_capabilities = set()
+        knowledge_required = bool({"rag", "knowledge_write"} & required_capabilities)
+        effective_library_slug = request.library_slug
+        if knowledge_required:
+            ensure_global_knowledge_store()
+            effective_library_slug = effective_library_slug or global_library_slug()
         run_values = {
             "session_id": request.session_id,
             "chat_model": request.model,
             "router_model": request.router_model or request.model,
             "vision_model": request.vision_model,
             "transcription_model": request.transcription_model,
-            "library_slug": request.library_slug,
+            "library_slug": effective_library_slug,
             "searx_url": request.searx_url,
             "searx_engines": request.searx_engines,
             "messages": messages,

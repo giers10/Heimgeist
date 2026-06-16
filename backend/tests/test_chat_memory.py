@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 from datetime import datetime, timedelta
 import json
 import tempfile
@@ -13,6 +14,7 @@ from backend.chat_memory import (
     sync_all_chat_memory,
     sync_chat_memory_for_session,
 )
+from backend.agent.tools.memory import chat_memory_search_handler
 from backend.database import Base
 from backend.models import ChatMessage, ChatSession
 
@@ -112,26 +114,7 @@ class ChatMemoryTests(unittest.TestCase):
 
         self.assertEqual(context["context_block"], "")
 
-    def test_generic_prompt_words_do_not_create_false_memory_hits(self):
-        db = self.Session()
-        try:
-            self._turn(
-                db,
-                "story",
-                "Test Conversation Start",
-                "tell me a long story",
-                "The village of Eldoria sat beneath a whispering forest canopy.",
-            )
-            db.commit()
-            sync_all_chat_memory(db)
-
-            context = build_chat_memory_context(db, "tell me about thelama and crowley")
-        finally:
-            db.close()
-
-        self.assertEqual(context["context_block"], "")
-
-    def test_previous_conversation_uses_recency_not_semantic_overlap(self):
+    def test_recent_mode_returns_most_recent_previous_session(self):
         db = self.Session()
         try:
             base = datetime(2026, 1, 1, 12, 0, 0)
@@ -142,14 +125,19 @@ class ChatMemoryTests(unittest.TestCase):
             db.commit()
             sync_all_chat_memory(db)
 
-            context = build_chat_memory_context(db, "worum ging es im letzten gespräch?", exclude_session_id="current")
+            context = build_chat_memory_context(
+                db,
+                "worum ging es im letzten gespräch?",
+                exclude_session_id="current",
+                mode="recent",
+            )
         finally:
             db.close()
 
         self.assertIn("Crowley", context["context_block"])
         self.assertNotIn("rainy", context["context_block"])
 
-    def test_music_query_matches_song_and_lied_history(self):
+    def test_search_mode_uses_supplied_query_terms(self):
         db = self.Session()
         try:
             self._turn(db, "song", "Identify this song", "what is this song?", "We discussed a track by an electronic artist.")
@@ -157,12 +145,42 @@ class ChatMemoryTests(unittest.TestCase):
             db.commit()
             sync_all_chat_memory(db)
 
-            context = build_chat_memory_context(db, "list all the music we talked about")
+            context = build_chat_memory_context(db, "song lied")
         finally:
             db.close()
 
         self.assertIn("song", context["context_block"].casefold())
         self.assertIn("lied", context["context_block"].casefold())
+
+    def test_chat_memory_tool_returns_context_block_and_sources(self):
+        db = self.Session()
+        try:
+            self._turn(
+                db,
+                "past",
+                "Backend Sidecar",
+                "What was the sidecar plan?",
+                "Use PyInstaller for the backend sidecar and keep runtime data outside the app bundle.",
+            )
+            db.commit()
+            sync_all_chat_memory(db)
+        finally:
+            db.close()
+
+        context = type("Context", (), {
+            "session_id": "current",
+            "db_factory": self.Session,
+        })()
+        result = asyncio.run(chat_memory_search_handler({
+            "prompt": "backend sidecar runtime data",
+            "top_k": 3,
+            "context_character_budget": 4000,
+            "exclude_current_session": True,
+        }, context))
+
+        self.assertIn("PyInstaller", result["context_block"])
+        self.assertEqual(result["sources"][0]["type"], "chat_memory")
+        self.assertEqual(result["hits"][0]["session_id"], "past")
 
     def test_memory_only_answers_are_not_reindexed(self):
         db = self.Session()

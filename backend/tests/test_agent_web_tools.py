@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 from backend.agent.registry import NativeToolProvider, ToolExecutionContext
 from backend.agent.tools.web import FETCH_TEXT_LIMIT, register_web_tools
 from backend.ollama_client import OllamaChatResult
+from backend.websearch import build_enriched_prompt, rerank
 
 
 def context(registry):
@@ -181,3 +182,81 @@ class WebToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(result["results"]), 1)
         self.assertEqual(result["results"][0]["url"], "https://www.reuters.com/world/middle-east/iran-example")
+
+    async def test_rerank_falls_back_when_embedding_model_is_unavailable(self):
+        class FailingAsyncClient:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def post(self, *_args, **_kwargs):
+                raise RuntimeError("model not found")
+
+        docs = [
+            (
+                "https://example.test/weather",
+                "A general weather page with forecasts and temperatures.",
+            ),
+            (
+                "https://www.reuters.com/world/middle-east/iran-example",
+                "Iran officials reported new sanctions and regional developments today.",
+            ),
+        ]
+
+        with patch("backend.websearch.httpx.AsyncClient", FailingAsyncClient):
+            ranked = await rerank(
+                "latest Iran sanctions news",
+                docs,
+                model="chat-model",
+                context_excerpt="",
+                embed_model="missing-embed:latest",
+            )
+
+        enriched, sources = build_enriched_prompt("latest Iran sanctions news", ranked, top_k=3)
+        self.assertEqual(ranked[0][0], "https://www.reuters.com/world/middle-east/iran-example")
+        self.assertIn("https://www.reuters.com/world/middle-east/iran-example", sources)
+        self.assertIn("<websearch_context>", enriched)
+
+    async def test_rerank_tool_uses_fallback_when_rerank_errors(self):
+        registry = NativeToolProvider()
+        register_web_tools(registry)
+        pages = [
+            {
+                "requested_url": "https://example.test/weather",
+                "canonical_url": "https://example.test/weather",
+                "title": "Weather",
+                "cleaned_text": "A general weather page with forecasts and temperatures.",
+                "error": None,
+            },
+            {
+                "requested_url": "https://www.reuters.com/world/middle-east/iran-example",
+                "canonical_url": "https://www.reuters.com/world/middle-east/iran-example",
+                "title": "Iran latest news",
+                "cleaned_text": "Iran officials reported new sanctions and regional developments today.",
+                "error": None,
+            },
+        ]
+
+        with patch("backend.agent.tools.web.rerank", new=AsyncMock(side_effect=RuntimeError("missing model"))):
+            result = await registry.call_tool(
+                "heimgeist.web_rerank",
+                {
+                    "prompt": "latest Iran sanctions news",
+                    "pages": pages,
+                    "model": "model",
+                    "rerank_model": None,
+                    "context_excerpt": "",
+                    "maximum_results": 6,
+                    "minimum_score": 55,
+                },
+                context(registry),
+            )
+
+        self.assertGreaterEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["url"], "https://www.reuters.com/world/middle-east/iran-example")
+        self.assertIn("<websearch_context>", result["context_block"])

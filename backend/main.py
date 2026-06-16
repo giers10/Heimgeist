@@ -22,7 +22,12 @@ from .chat_memory import (
     safe_sync_chat_memory_for_session,
 )
 from .database import Base, engine, SessionLocal, ensure_sources_column
-from .local_rag import router as local_rag_router, save_chat_message_snapshot
+from .local_rag import (
+    ensure_global_knowledge_store,
+    global_library_slug,
+    router as local_rag_router,
+    save_chat_message_snapshot,
+)
 from .ollama_admin import inspect_ollama_startup, prepare_startup_models, pull_local_model, start_local_ollama
 from .ollama_client import (
     list_model_catalog as ollama_list_model_catalog,
@@ -783,6 +788,22 @@ async def save_message_to_knowledge(
 ):
     return await _save_message_to_knowledge_impl(
         slug,
+        req.message_id,
+        db,
+        title=req.title,
+        content=req.content,
+        saved_by="user",
+    )
+
+
+@app.post("/knowledge/chat-messages")
+async def save_message_to_global_knowledge(
+    req: schemas.SaveMessageToKnowledgeRequest,
+    db: Session = Depends(get_db),
+):
+    ensure_global_knowledge_store()
+    return await _save_message_to_knowledge_impl(
+        global_library_slug(),
         req.message_id,
         db,
         title=req.title,

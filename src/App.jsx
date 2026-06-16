@@ -1582,48 +1582,12 @@ async function createNewChat() {
           )}
           {activeSidebarMode === 'dbs' && (
             <div className="db-list">
-              {libraries.length === 0 ? (
-                <div className="empty-list-message">No databases yet.</div>
-              ) : (
-                libraries.map(library => (
-                  <div
-                    key={library.slug}
-                    className={`chat-item ${library.slug === activeLibrarySlug ? 'active' : ''}`}
-                    onClick={() => setActiveLibrarySlug(library.slug)}
-                  >
-                    {editingLibrarySlug === library.slug ? (
-                      <input
-                        type="text"
-                        className="rename-input"
-                        defaultValue={library.name}
-                        onBlur={() => setEditingLibrarySlug(null)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleLibraryRename(library.slug, e.target.value)
-                          } else if (e.key === 'Escape') {
-                            setEditingLibrarySlug(null)
-                          }
-                        }}
-                        autoFocus
-                      />
-                    ) : (
-                      <>
-                        <span>{library.name}</span>
-                        <div className="chat-item-buttons">
-                          {chatLibrarySlug === library.slug && <div className="db-active-badge">Chat</div>}
-                          {isLibrarySyncing(library.slug) && <div className="db-active-badge">Syncing</div>}
-                          <button className="icon-button" onClick={(e) => { e.stopPropagation(); setEditingLibrarySlug(library.slug) }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-edit-2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                          </button>
-                          <button className="icon-button" onClick={(e) => { e.stopPropagation(); handleLibraryDelete(library.slug) }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))
-              )}
+              <div className="chat-item active">
+                <span>Knowledge</span>
+                <div className="chat-item-buttons">
+                  {isLibrarySyncing(activeLibrary?.slug) && <div className="db-active-badge">Syncing</div>}
+                </div>
+              </div>
             </div>
           )}
           {activeSidebarMode === 'settings' && (
@@ -1643,58 +1607,9 @@ async function createNewChat() {
             />
           )}
         </div>
-        {(activeSidebarMode === 'chats' || activeSidebarMode === 'dbs') && (
+        {activeSidebarMode === 'chats' && (
           <div className="sidebar-footer">
-            {activeSidebarMode === 'chats' && (
-              <button className="button new-chat-button" onClick={createNewChat}>New Chat</button>
-            )}
-            {activeSidebarMode === 'dbs' && (
-              isCreatingLibrary ? (
-                <div className="new-db-form">
-                  <input
-                    type="text"
-                    className="rename-input"
-                    value={newLibraryName}
-                    onChange={(e) => setNewLibraryName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        createLibrary()
-                      } else if (e.key === 'Escape') {
-                        setIsCreatingLibrary(false)
-                        setNewLibraryName('')
-                        setLibraryCreateError('')
-                      }
-                    }}
-                    placeholder="Database name"
-                    autoFocus
-                  />
-                  {libraryCreateError && <div className="form-error">{libraryCreateError}</div>}
-                  <div className="new-db-actions">
-                    <button className="button new-db-button" onClick={() => createLibrary()}>Create</button>
-                    <button
-                      className="button ghost"
-                      onClick={() => {
-                        setIsCreatingLibrary(false)
-                        setNewLibraryName('')
-                        setLibraryCreateError('')
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  className="button new-db-button"
-                  onClick={() => {
-                    setIsCreatingLibrary(true)
-                    setLibraryCreateError('')
-                  }}
-                >
-                  New Database
-                </button>
-              )
-            )}
+            <button className="button new-chat-button" onClick={createNewChat}>New Chat</button>
           </div>
         )}
         <div className="resizer" onMouseDown={startResizing}></div>

@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import TextareaAutosize from 'react-textarea-autosize';
 import AssistantMessageContent from './AssistantMessageContent'
-import ChatDatabasePicker from './ChatDatabasePicker'
 import LibraryManager from './LibraryManager'
 import SaveMessageToKnowledgeDialog from './SaveMessageToKnowledgeDialog'
 import { SettingsPanel, SettingsSidebar } from './SettingsPanels'
@@ -47,7 +46,6 @@ import {
   normalizeWebsearchEngines,
 } from './websearchEngines'
 import { formatRecordingDuration, useAudioInput } from './useAudioInput'
-import { useChatLibrarySelection } from './useChatLibrarySelection'
 import { useChatWorkflowSelection } from './useChatWorkflowSelection'
 import { useChatScroll } from './useChatScroll'
 import desktopApi from './desktop/desktopApi'

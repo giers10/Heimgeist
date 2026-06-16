@@ -1271,7 +1271,6 @@ export default function App() {
     composerAttachments,
     createNewChat,
     finishCancelableRequest,
-    getChatLibraryForSession,
     getChatWorkflowForSession,
     imageAttachmentUnavailableReason,
     input,
@@ -1453,7 +1452,6 @@ async function createNewChat() {
     .then(() => {
       const newSessions = chatSessions.filter(s => s.session_id !== sessionId);
       setChatSessions(newSessions);
-      setChatLibraryForSession(sessionId, null)
       if (activeSessionId === sessionId) {
         setActiveSessionId(newSessions.length > 0 ? newSessions[0].session_id : null);
       }

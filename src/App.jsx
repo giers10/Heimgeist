@@ -944,21 +944,12 @@ export default function App() {
   async function refreshLibraries() {
     if (!backendApiUrl) return;
     try {
-      const response = await fetch(`${backendApiUrl}/libraries`);
+      const response = await fetch(`${backendApiUrl}/knowledge`);
       const data = await response.json();
-      const nextLibraries = Array.isArray(data.libraries) ? data.libraries : [];
+      const nextLibraries = data && data.slug ? [data] : [];
       setLibraries(nextLibraries);
-
-      if (nextLibraries.length === 0) {
-        setActiveLibrarySlug(null);
-        return;
-      }
-
-      if (!nextLibraries.some(lib => lib.slug === activeLibrarySlug)) {
-        setActiveLibrarySlug(nextLibraries[0].slug);
-      }
     } catch (error) {
-      console.warn('Failed to load libraries', error);
+      console.warn('Failed to load knowledge store', error);
     }
   }
 
@@ -973,43 +964,9 @@ export default function App() {
     }
   }
 
-  async function createLibrary(nameOverride = null) {
-    const rawName = typeof nameOverride === 'string' ? nameOverride : newLibraryName
-    const name = rawName.trim()
-    if (!name) {
-      setLibraryCreateError('Name is required.')
-      return
-    }
-    try {
-      setLibraryCreateError('')
-      const response = await fetch(`${backendApiUrl}/libraries`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      if (!response.ok) {
-        const detail = await response.text()
-        throw new Error(detail || `HTTP ${response.status}`)
-      }
-      const data = await response.json();
-      setIsCreatingLibrary(false)
-      setNewLibraryName('')
-      await refreshLibraries();
-      if (data?.slug) {
-        setActiveLibrarySlug(data.slug);
-      }
-    } catch (error) {
-      console.error('Failed to create library', error);
-      setLibraryCreateError(String(error?.message || error))
-    }
-  }
-
   async function handleLibrariesPurged() {
     setLibraries([])
     setLibraryJobs([])
-    setActiveLibrarySlug(null)
-    setEditingLibrarySlug(null)
-    clearChatLibrarySelections()
     await refreshLibraries()
     await refreshLibraryJobs()
   }
@@ -1052,7 +1009,7 @@ export default function App() {
       refreshLibraryJobs();
     }, 3000);
     return () => clearInterval(interval);
-  }, [backendApiUrl, activeSidebarMode, activeLibrarySlug]);
+  }, [backendApiUrl, activeSidebarMode]);
 
   // Load messages for the active session
   useEffect(() => {
@@ -1144,8 +1101,8 @@ export default function App() {
   }, [activeSessionId, chatSessions])
 
   const activeLibrary = useMemo(() => {
-    return libraries.find(lib => lib.slug === activeLibrarySlug) || null;
-  }, [activeLibrarySlug, libraries]);
+    return libraries[0] || null;
+  }, [libraries]);
 
   function showKnowledgeSaveToast(message) {
     setKnowledgeSaveToast(message)
@@ -1420,33 +1377,6 @@ async function createNewChat() {
     });
   }
 
-  function handleLibraryRename(slug, newName) {
-    const name = (newName || '').trim()
-    const library = libraries.find(item => item.slug === slug)
-    if (!library) {
-      setEditingLibrarySlug(null)
-      return
-    }
-    if (!name || name === library.name) {
-      setEditingLibrarySlug(null)
-      return
-    }
-
-    fetch(`${backendApiUrl}/libraries/${slug}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    })
-    .then(() => {
-      setLibraries(prevLibraries =>
-        prevLibraries.map(item =>
-          item.slug === slug ? { ...item, name } : item
-        )
-      )
-      setEditingLibrarySlug(null)
-    })
-  }
-
   function handleDelete(sessionId) {
     fetch(`${backendApiUrl}/sessions/${sessionId}`, { method: 'DELETE' })
     .then(() => {
@@ -1456,28 +1386,6 @@ async function createNewChat() {
         setActiveSessionId(newSessions.length > 0 ? newSessions[0].session_id : null);
       }
     });
-  }
-
-  function handleLibraryDelete(slug) {
-    fetch(`${backendApiUrl}/libraries/${slug}`, { method: 'DELETE' })
-    .then(async (response) => {
-      if (!response.ok) {
-        const detail = await response.text()
-        throw new Error(detail || `HTTP ${response.status}`)
-      }
-
-      const nextLibraries = libraries.filter(library => library.slug !== slug)
-      setLibraries(nextLibraries)
-      setLibraryJobs(prevJobs => prevJobs.filter(job => job.slug !== slug))
-      setEditingLibrarySlug(current => current === slug ? null : current)
-      if (activeLibrarySlug === slug) {
-        setActiveLibrarySlug(nextLibraries[0]?.slug || null)
-      }
-      removeLibraryFromChatSelections(slug)
-    })
-    .catch((error) => {
-      console.error('Failed to delete library', error)
-    })
   }
 
   // Auto-delete empty "New Chat" sessions
@@ -1634,11 +1542,6 @@ async function createNewChat() {
                 <strong className="header-title">
                   Chat - {activeChatSession?.name || 'New Chat'}
                 </strong>
-                {chatLibrary && (
-                  <span className="header-subtle">
-                    {`DB: ${chatLibrary.name}${chatLibraryStatusSuffix}`}
-                  </span>
-                )}
                 <span className="header-subtle">
                   {workflowSelectionMode !== 'manual'
                     ? 'Workflow: Auto'
@@ -1864,15 +1767,6 @@ async function createNewChat() {
                   placeholder="Ask any question..."
                   maxRows={13}
                 />
-                <ChatDatabasePicker
-                  activeSessionId={activeSessionId}
-                  chatLibrary={chatLibrary}
-                  chatLibrarySlug={chatLibrarySlug}
-                  chatLibraryStatusSuffix={chatLibraryStatusSuffix}
-                  isLibrarySyncing={isLibrarySyncing}
-                  libraries={libraries}
-                  setChatLibraryForSession={setChatLibraryForSession}
-                />
                 {workflowSelectionMode === 'manual' && (
                   <WorkflowSelector
                     disabled={isSending}
@@ -2006,12 +1900,7 @@ async function createNewChat() {
         {activeSidebarMode === 'dbs' && (
           <>
             <div className="header">
-              <strong>{activeLibrary?.name || 'Databases'}</strong>
-              {chatLibrary && (
-                <span className="header-subtle">
-                  {`Current chat DB: ${chatLibrary.name}${chatLibraryStatusSuffix}`}
-                </span>
-              )}
+              <strong>{activeLibrary?.name || 'Knowledge'}</strong>
             </div>
             <LibraryManager
               apiBase={backendApiUrl}
@@ -2058,8 +1947,6 @@ async function createNewChat() {
         {knowledgeSaveTarget && (
           <SaveMessageToKnowledgeDialog
             apiBase={backendApiUrl}
-            defaultLibrarySlug={chatLibrarySlug || activeLibrarySlug}
-            libraries={libraries}
             message={knowledgeSaveTarget.message}
             onClose={() => setKnowledgeSaveTarget(null)}
             onSaved={handleKnowledgeSaved}

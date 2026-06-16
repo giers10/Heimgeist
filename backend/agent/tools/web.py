@@ -14,6 +14,7 @@ from ...websearch import (
     DEFAULT_HEADERS,
     HTTP_LIMITS,
     HTTP_TIMEOUT,
+    fallback_rerank,
     fetch_website_snapshot,
     render_recent_context,
     rerank,
@@ -236,13 +237,22 @@ async def web_rerank_handler(arguments: Dict[str, Any], _context: ToolExecutionC
         if _is_noise_result(url, title):
             continue
         docs.append((url, text))
-    ranked = await rerank(
-        arguments["prompt"],
-        docs,
-        model=arguments.get("model") or "",
-        context_excerpt=arguments.get("context_excerpt") or "",
-        embed_model=arguments.get("rerank_model"),
-    )
+    context_excerpt = arguments.get("context_excerpt") or ""
+    try:
+        ranked = await rerank(
+            arguments["prompt"],
+            docs,
+            model=arguments.get("model") or "",
+            context_excerpt=context_excerpt,
+            embed_model=arguments.get("rerank_model"),
+        )
+    except Exception as exc:
+        ranked = fallback_rerank(
+            arguments["prompt"],
+            docs,
+            context_excerpt,
+            reason=f"rerank_exception:{type(exc).__name__}",
+        )
     maximum = max(1, min(int(arguments.get("maximum_results") or 6), 12))
     minimum_score = float(arguments.get("minimum_score") or 0)
     selected = []
@@ -341,7 +351,7 @@ def register_web_tools(registry: NativeToolProvider) -> None:
     ))
     registry.register(ToolDefinition(
         name="heimgeist.web_rerank",
-        description="Rank extracted web pages using Heimgeist's embedding-based reranker.",
+        description="Rank extracted web pages using Heimgeist's embedding-based reranker with lexical fallback.",
         input_schema={
             "type": "object",
             "properties": {

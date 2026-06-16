@@ -587,13 +587,18 @@ async def rerank(
                 embed_model = alt
             else:
                 print(f"[web] embed() FAILED (models tried={tried + [alt]}, meta={meta or meta2})")
-                return [(u, t, 0.0) for (u, t) in docs]
+                return fallback_rerank(
+                    prompt,
+                    docs,
+                    context_excerpt,
+                    reason=f"model_failed:{embed_model}",
+                )
 
     # split q vs passages and update cache
     q_emb = embeddings[0] if embeddings else []
     if not q_emb:
         print("[web] embed() empty query vector — aborting rerank")
-        return [(u, t, 0.0) for (u, t) in docs]
+        return fallback_rerank(prompt, docs, context_excerpt, reason="empty_query_vector")
 
     # positions >=1 correspond to passages (only those that weren’t cached)
     for pos, emb_vec in enumerate(embeddings[1:], start=1):
@@ -605,6 +610,9 @@ async def rerank(
 
     # build aligned passage vectors
     p_emb_list: List[List[float]] = [emb_cache.get(k, []) for k in keys]
+    if docs and not any(len(vec) for vec in p_emb_list):
+        print("[web] embed() empty passage vectors — aborting rerank")
+        return fallback_rerank(prompt, docs, context_excerpt, reason="empty_passage_vectors")
 
     # logging
     q_dim = len(q_emb)
@@ -796,8 +804,12 @@ async def enrich_prompt(
             pass
     except Exception:
         print("[web] ERROR in rerank:\n" + traceback.format_exc())
-        print(f"[web] enrich_prompt total: {time.perf_counter() - start_all:.3f}s")
-        return _no_results_enriched("rerank_failed", queries)
+        ranked = fallback_rerank(
+            user_prompt,
+            docs,
+            context_excerpt,
+            reason="rerank_exception",
+        )
 
     # 5) build prompt
     try:

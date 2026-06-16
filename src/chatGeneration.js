@@ -2,7 +2,6 @@ import { flushSync } from 'react-dom'
 import { attachmentIsImage, getAttachmentDisplayName } from './attachments'
 import { getErrorText, isAbortError, readBackendErrorText } from './backendApi'
 import {
-  fetchLocalLibraryContext,
   fetchWebSearchContext,
   postChatMessage,
   postRegenerateMessage,
@@ -59,7 +58,6 @@ export function createChatGenerationHandlers({
   composerAttachments,
   createNewChat,
   finishCancelableRequest,
-  getChatLibraryForSession,
   getChatWorkflowForSession,
   imageAttachmentUnavailableReason,
   input,
@@ -109,7 +107,6 @@ export function createChatGenerationHandlers({
     regenerateIndex = null,
     isNewChat = false,
   }) {
-    const selectedLibrary = getChatLibraryForSession(sessionId)
     const created = await createWorkflowRun(backendApiUrl, {
       session_id: sessionId,
       message: userMessage.content,
@@ -117,7 +114,6 @@ export function createChatGenerationHandlers({
       selection_mode: selection.mode,
       workflow_id: selection.workflowId || null,
       workflow_revision_id: workflowRevisionId,
-      library_slug: selectedLibrary?.slug || null,
       web_search_enabled: Boolean(webSearchEnabled),
       searx_url: searxUrl || null,
       searx_engines: searxEngines || [],
@@ -269,24 +265,8 @@ export function createChatGenerationHandlers({
     let citationSources = []
     const contextBlocks = []
     try {
-      const selectedLibrary = getChatLibraryForSession(sessionId)
       const promptText = overrideUserText != null ? overrideUserText : (msgs[lastUserIdx]?.content || '')
       const hasPromptText = Boolean((promptText || '').trim())
-
-      if (hasPromptText && selectedLibrary?.states?.is_indexed) {
-        try {
-          const localContext = await fetchLocalLibraryContext(backendApiUrl, selectedLibrary.slug, promptText, requestController.signal)
-          if (localContext.contextBlock) {
-            contextBlocks.push(localContext.contextBlock)
-          }
-          if (Array.isArray(localContext.sources)) {
-            citationSources.push(...localContext.sources)
-          }
-        } catch (error) {
-          if (isAbortError(error)) throw error
-          console.warn('local library enrichment (regenerate) failed', error)
-        }
-      }
 
       if (hasPromptText && webSearchEnabled) {
         try {
@@ -514,23 +494,6 @@ export function createChatGenerationHandlers({
       let enrichedPrompt = userMsg.content || null
       let citationSources = []
       const contextBlocks = []
-
-      const selectedLibrary = getChatLibraryForSession(targetSessionId)
-
-      if (userMsg.content && selectedLibrary?.states?.is_indexed) {
-        try {
-          const localContext = await fetchLocalLibraryContext(backendApiUrl, selectedLibrary.slug, userMsg.content, requestController.signal)
-          if (localContext.contextBlock) {
-            contextBlocks.push(localContext.contextBlock)
-          }
-          if (Array.isArray(localContext.sources)) {
-            citationSources.push(...localContext.sources)
-          }
-        } catch (error) {
-          if (isAbortError(error)) throw error
-          console.warn('local library enrichment failed', error)
-        }
-      }
 
       if (userMsg.content && webSearchEnabled) {
         try {

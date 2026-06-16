@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 import re
 import html
 import json
@@ -16,7 +16,6 @@ from . import models, schemas
 from .agent import models as agent_models
 from .agent.api import initialize_agent_system, router as agent_router
 from .chat_memory import (
-    build_chat_memory_context,
     ensure_chat_memory_schema,
     safe_backfill_chat_memory,
     safe_delete_chat_memory_for_session,
@@ -617,42 +616,6 @@ def get_db():
     finally:
         db.close()
 
-
-def _dedupe_sources(items: List[Any]) -> List[Any]:
-    sources: List[Any] = []
-    seen = set()
-    for item in items or []:
-        try:
-            key = json.dumps(item, sort_keys=True, ensure_ascii=False) if isinstance(item, dict) else str(item)
-        except Exception:
-            key = str(item)
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        sources.append(item)
-    return sources
-
-
-def _merge_enriched_context(message: str, enriched_message: Optional[str], context_blocks: List[str]) -> Optional[str]:
-    blocks = [str(block or "").strip() for block in context_blocks or [] if str(block or "").strip()]
-    if not blocks:
-        return enriched_message
-    base_content = str(enriched_message or "").strip() or str(message or "").strip()
-    return f"{base_content}\n\n" + "\n\n".join(blocks)
-
-
-def _chat_memory_context(db: Session, prompt: str, session_id: Optional[str]) -> Dict[str, Any]:
-    try:
-        return build_chat_memory_context(
-            db,
-            prompt,
-            exclude_session_id=session_id,
-            top_k=4,
-            context_character_budget=3600,
-        )
-    except Exception as exc:
-        print("[chat-memory] retrieval failed:", exc)
-        return {"context_block": "", "sources": [], "hits": []}
 
 @app.get("/health")
 def health():

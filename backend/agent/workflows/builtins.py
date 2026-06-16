@@ -40,6 +40,11 @@ EVIDENCE_FIRST_SYSTEM_PROMPT = (
     "If retrieved context conflicts with older chat history, prefer the retrieved context and explain the correction briefly. "
     "Do not recommend that the user consult external sources when relevant retrieved sources are already present."
 )
+CHAT_MEMORY_SYSTEM_PROMPT = (
+    "Answer using the supplied previous-chat context as the primary evidence. "
+    "Treat it as memory of earlier Heimgeist chats, not as fresh external evidence. "
+    "If the retrieved chat context is empty or does not answer the request, say that no matching previous chat was found."
+)
 
 
 def chat_arguments(context_blocks: List[Dict[str, str]] | None = None, system_prompt: str = "") -> Dict[str, Any]:
@@ -88,6 +93,32 @@ KNOWLEDGE = graph(
         node("output", "output", 960, 80, {"value": {"$ref": "nodes.chat.output"}}),
     ],
     [edge("input", "search"), edge("search", "chat"), edge("chat", "output")],
+)
+
+CHAT_MEMORY = graph(
+    [
+        node("input", "input", 0, 80),
+        node("memory", "tool", 280, 20, {"tool": "heimgeist.chat_memory_search", "arguments": {
+            "prompt": {"$ref": "input.prompt"}, "top_k": 6, "context_character_budget": 10000,
+            "mode": "search", "exclude_current_session": True,
+        }}),
+        node("chat", "tool", 620, 80, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.memory.output"}], CHAT_MEMORY_SYSTEM_PROMPT)}),
+        node("output", "output", 960, 80, {"value": {"$ref": "nodes.chat.output"}}),
+    ],
+    [edge("input", "memory"), edge("memory", "chat"), edge("chat", "output")],
+)
+
+RECENT_CHAT_MEMORY = graph(
+    [
+        node("input", "input", 0, 80),
+        node("memory", "tool", 280, 20, {"tool": "heimgeist.chat_memory_search", "arguments": {
+            "prompt": {"$ref": "input.prompt"}, "top_k": 6, "context_character_budget": 10000,
+            "mode": "recent", "exclude_current_session": True,
+        }}),
+        node("chat", "tool", 620, 80, {"tool": "heimgeist.chat", "arguments": chat_arguments([{"$ref": "nodes.memory.output"}], CHAT_MEMORY_SYSTEM_PROMPT)}),
+        node("output", "output", 960, 80, {"value": {"$ref": "nodes.chat.output"}}),
+    ],
+    [edge("input", "memory"), edge("memory", "chat"), edge("chat", "output")],
 )
 
 
@@ -244,6 +275,8 @@ RESEARCH = graph(
 
 BUILTIN_WORKFLOWS = [
     {"slug": "input-output", "name": "Input -> Output", "description": "Normal Heimgeist chat with optional compatibility context.", "routing_description": "Choose only when no external tool is needed: conversational replies, writing, editing, reasoning, brainstorming, explanation, or stable knowledge the model can answer without retrieval. Do not choose when the standalone request needs facts outside the conversation/model context, source grounding, live or recently changed information, local database retrieval, attachment analysis, or knowledge-saving actions.", "routing_examples": ["Explain this concept", "Draft a reply", "Rewrite this paragraph", "What do you mean by that?"], "estimated_cost_class": "low", "required_capabilities": ["chat"], "graph": DIRECT},
+    {"slug": "chat-memory-answer", "name": "Chat Memory Answer", "description": "Search previous Heimgeist chats and answer from matching turns.", "routing_description": "Choose when the standalone request asks Heimgeist to use past chats, earlier conversations, remembered discussion context, previous decisions, or topics discussed before. This workflow searches previous chat turns before answering. Do not choose for general factual questions that merely resemble something discussed before; choose Web Answer, Knowledge Answer, or direct chat based on the requested evidence.", "routing_examples": ["What music did we talk about before?", "What did we decide earlier about packaging?", "Use our previous chat about Ollama settings"], "estimated_cost_class": "medium", "required_capabilities": ["chat_memory", "chat"], "graph": CHAT_MEMORY},
+    {"slug": "recent-chat-memory-answer", "name": "Recent Chat Memory Answer", "description": "Answer from the most recent previous Heimgeist chat.", "routing_description": "Choose when the standalone request specifically asks about the last, previous, latest, or most recent earlier Heimgeist chat or conversation. This workflow retrieves the most recent previous chat turn instead of doing a relevance search.", "routing_examples": ["What was the last conversation about?", "Worum ging es im letzten Gespräch?", "Continue from the previous chat"], "estimated_cost_class": "medium", "required_capabilities": ["chat_memory", "chat"], "graph": RECENT_CHAT_MEMORY},
     {"slug": "knowledge-answer", "name": "Knowledge Answer", "description": "Answer from a selected local knowledge database.", "routing_description": "Choose when the standalone request asks about or should be grounded in the selected local knowledge database, and current web evidence is not required. This workflow retrieves local knowledge before answering.", "routing_examples": ["What do my notes say about this?", "Summarize the selected database entry"], "estimated_cost_class": "medium", "required_capabilities": ["rag"], "graph": KNOWLEDGE},
     {"slug": "web-answer", "name": "Web Answer", "description": "Search, fetch, rank, and answer from current web sources.", "routing_description": "Choose when the standalone request needs web evidence and can likely be answered by one bounded search/fetch/rank pass: facts outside the conversation/model context, source-grounded lookup, public information that may have changed, or a follow-up that inherits such a web-grounded topic. This is the default web workflow for direct answer requests. Prefer it over Research unless the request itself requires investigation, comparison, validation, or broad synthesis.", "routing_examples": ["Look this up online", "What is the current status?", "Find the latest information about this topic", "What happened with that since then?"], "estimated_cost_class": "medium", "required_capabilities": ["web"], "graph": web_graph()},
     {"slug": "vision-answer", "name": "Vision Answer", "description": "Analyze attachments and answer with a vision model.", "routing_description": "Use when image or document attachments must be analyzed.", "routing_examples": ["What is shown in this image?"], "estimated_cost_class": "medium", "required_capabilities": ["vision"], "graph": VISION},

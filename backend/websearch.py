@@ -84,6 +84,93 @@ SKIP_EXTS = {
 _PAGE_CACHE: Dict[str, str] = {}  # naive in-proc cache (speeds repeated calls)
 _EMB_CACHE: Dict[str, List[float]] = {}  # NEW: embedding cache by SHA1 of snippet
 
+_RANK_STOPWORDS = {
+    "about", "after", "again", "against", "also", "and", "any", "are", "because",
+    "been", "before", "being", "but", "can", "could", "current", "does", "for",
+    "from", "had", "has", "have", "how", "into", "its", "latest", "more", "most",
+    "new", "news", "not", "now", "off", "out", "over", "please", "should", "than",
+    "that", "the", "their", "them", "then", "there", "these", "they", "this",
+    "today", "was", "were", "what", "when", "where", "which", "while", "who",
+    "why", "will", "with", "would", "you", "your",
+}
+
+
+def _rank_tokens(text: str) -> List[str]:
+    return [
+        token.casefold()
+        for token in re.findall(r"\b[\w-]{3,}\b", text or "", flags=re.UNICODE)
+        if token.casefold() not in _RANK_STOPWORDS
+    ]
+
+
+def fallback_rerank(
+    prompt: str,
+    docs: List[Tuple[str, str]],
+    context_excerpt: str = "",
+    *,
+    reason: str = "embedding_unavailable",
+) -> List[Tuple[str, str, float]]:
+    """
+    Rank pages without embeddings so web search can still produce context when
+    the configured embedding/reranking model is missing or Ollama is offline.
+    """
+    if not docs:
+        return []
+
+    query_text = f"{prompt or ''} {context_excerpt[-600:] if context_excerpt else ''}"
+    query_terms = list(dict.fromkeys(_rank_tokens(query_text)))[:36]
+    prompt_phrase = " ".join(str(prompt or "").casefold().split())
+    if len(prompt_phrase) < 6 or len(prompt_phrase) > 160:
+        prompt_phrase = ""
+
+    scored: List[Tuple[str, str, float]] = []
+    doc_count = max(1, len(docs))
+    for index, (url, text) in enumerate(docs):
+        sample = f"{url} {(text or '')[:6000]}"
+        sample_lower = sample.casefold()
+        sample_tokens = _rank_tokens(sample)
+        sample_set = set(sample_tokens)
+
+        coverage = 0.0
+        frequency = 0.0
+        if query_terms:
+            matches = [term for term in query_terms if term in sample_set or term in sample_lower]
+            coverage = len(matches) / len(query_terms)
+            frequency = min(
+                1.0,
+                sum(min(sample_lower.count(term), 3) for term in query_terms)
+                / max(1, len(query_terms) * 2),
+            )
+
+        order_signal = 1.0 - (index / doc_count)
+        length_signal = min(1.0, len(text or "") / 2500.0)
+        phrase_signal = 1.0 if prompt_phrase and prompt_phrase in sample_lower else 0.0
+        raw = (
+            0.52 * coverage
+            + 0.18 * frequency
+            + 0.16 * order_signal
+            + 0.08 * length_signal
+            + 0.06 * phrase_signal
+        )
+        score = 58.0 + min(1.0, raw) * 34.0
+        if coverage > 0 or phrase_signal > 0:
+            score = max(score, 72.0 - min(index, 4) * 1.25)
+        scored.append((url, text, max(0.0, min(100.0, score))))
+
+    scored.sort(key=lambda item: item[2], reverse=True)
+
+    if scored and scored[0][2] < 70.0:
+        # SearXNG already ranked these URLs. If lexical signals are weak, keep
+        # web search usable by passing through a small ordered sample.
+        adjusted: List[Tuple[str, str, float]] = []
+        for rank, (url, text, score) in enumerate(scored):
+            passthrough_score = 72.0 - rank
+            adjusted.append((url, text, max(score, passthrough_score if rank < 3 else score)))
+        scored = adjusted
+
+    print(f"[web] embedding rerank unavailable ({reason}); using lexical fallback over {len(docs)} docs")
+    return scored
+
 def _is_probably_html_url(url: str) -> bool:
     try:
         path = urlparse(url).path.lower()

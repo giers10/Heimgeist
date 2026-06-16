@@ -559,6 +559,248 @@ def _read_indexed_file_text(slug: str, entry: Dict[str, Any], max_chars: int = 2
     return "\n\n".join(parts), truncated
 
 
+def _ensure_global_library() -> Dict[str, Any]:
+    if lib_json(GLOBAL_LIBRARY_SLUG).exists():
+        return read_library(GLOBAL_LIBRARY_SLUG)
+    data = default_library_data(GLOBAL_LIBRARY_NAME, GLOBAL_LIBRARY_SLUG)
+    data["system_managed"] = True
+    stage_dir(GLOBAL_LIBRARY_SLUG)
+    indexes_dir(GLOBAL_LIBRARY_SLUG)
+    sources_dir(GLOBAL_LIBRARY_SLUG)
+    write_library(GLOBAL_LIBRARY_SLUG, data)
+    return data
+
+
+def _source_library_dirs() -> List[Path]:
+    out: List[Path] = []
+    if not LIB_ROOT.exists():
+        return out
+    for path in LIB_ROOT.iterdir():
+        if not path.is_dir() or path.name in {GLOBAL_LIBRARY_SLUG, MIGRATED_LIBRARY_ARCHIVE}:
+            continue
+        if (path / "library.json").exists():
+            out.append(path)
+    return out
+
+
+def _migration_archive_root() -> Path:
+    path = LIB_ROOT / MIGRATED_LIBRARY_ARCHIVE
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _archive_library_dir(path: Path) -> None:
+    archive_root = _migration_archive_root()
+    target = archive_root / path.name
+    if target.exists():
+        stamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        target = archive_root / f"{path.name}-{stamp}"
+        index = 2
+        while target.exists():
+            target = archive_root / f"{path.name}-{stamp}-{index}"
+            index += 1
+    shutil.move(str(path), str(target))
+
+
+def _entry_dedupe_key(entry: Dict[str, Any]) -> Optional[tuple[str, str]]:
+    kind = str(entry.get("kind") or "file")
+    source_message_id = str(entry.get("source_message_id") or "").strip()
+    if kind == "chat_message" and source_message_id:
+        return ("chat_message", source_message_id)
+    url = str(entry.get("url") or entry.get("final_url") or entry.get("requested_url") or "").strip()
+    if kind in {"website", "video"} and url:
+        return (kind, url)
+    sha = str(entry.get("sha256") or "").strip()
+    path = str(entry.get("path") or "").strip()
+    if sha and path:
+        return (kind, f"{sha}:{path}")
+    return None
+
+
+def _merge_entry_origin(entry: Dict[str, Any], source_library: Dict[str, Any]) -> None:
+    slug = str(source_library.get("slug") or "").strip()
+    name = str(source_library.get("name") or slug or "Imported database").strip()
+    if not slug:
+        return
+    entry.setdefault("origin_library_slug", slug)
+    entry.setdefault("origin_library_name", name)
+
+    source_libraries = entry.get("source_libraries")
+    if not isinstance(source_libraries, list):
+        source_libraries = []
+    if not any(isinstance(item, dict) and item.get("slug") == slug for item in source_libraries):
+        source_libraries.append({"slug": slug, "name": name})
+    entry["source_libraries"] = source_libraries
+
+    collections = entry.get("collections")
+    if not isinstance(collections, list):
+        collections = []
+    if name and name not in collections:
+        collections.append(name)
+    entry["collections"] = collections
+
+
+def _existing_entry_indexes(files: List[Dict[str, Any]]) -> tuple[set[str], set[str], Dict[tuple[str, str], Dict[str, Any]]]:
+    item_ids = {str(entry.get("item_id") or "") for entry in files if str(entry.get("item_id") or "").strip()}
+    rels = {str(entry.get("rel") or "") for entry in files if str(entry.get("rel") or "").strip()}
+    dedupe: Dict[tuple[str, str], Dict[str, Any]] = {}
+    for entry in files:
+        key = _entry_dedupe_key(entry)
+        if key:
+            dedupe[key] = entry
+    return item_ids, rels, dedupe
+
+
+def _unique_item_id(existing_ids: set[str], preferred: Optional[str] = None) -> str:
+    value = str(preferred or "").strip() or uuid.uuid4().hex
+    while value in existing_ids:
+        value = uuid.uuid4().hex
+    existing_ids.add(value)
+    return value
+
+
+def _unique_rel(existing_rels: set[str], preferred: str) -> str:
+    rel = re.sub(r"[/\\]+", "_", str(preferred or "").strip()) or f"managed-{uuid.uuid4().hex}.md"
+    if rel not in existing_rels and not (stage_dir(GLOBAL_LIBRARY_SLUG) / rel).exists():
+        existing_rels.add(rel)
+        return rel
+    stem = Path(rel).stem or "source"
+    suffix = Path(rel).suffix
+    index = 2
+    while True:
+        candidate = f"{stem}-{index}{suffix}"
+        if candidate not in existing_rels and not (stage_dir(GLOBAL_LIBRARY_SLUG) / candidate).exists():
+            existing_rels.add(candidate)
+            return candidate
+        index += 1
+
+
+def _is_managed_source_from_library(source_slug: str, source_path: Path) -> bool:
+    try:
+        source_path.resolve().relative_to(sources_dir(source_slug).resolve())
+        return True
+    except Exception:
+        return False
+
+
+def _fallback_source_content(source_slug: str, entry: Dict[str, Any]) -> str:
+    kind = str(entry.get("kind") or "")
+    raw_path = Path(str(entry.get("path") or ""))
+    if kind in {"text", "website", "video", "chat_message"} and raw_path.exists():
+        try:
+            return raw_path.read_text(encoding="utf-8")
+        except Exception:
+            pass
+    content, _truncated = _read_indexed_file_text(source_slug, entry)
+    return content
+
+
+def _migrate_entry_to_global(
+    source_slug: str,
+    source_library: Dict[str, Any],
+    entry: Dict[str, Any],
+    global_files: List[Dict[str, Any]],
+    existing_ids: set[str],
+    existing_rels: set[str],
+    dedupe: Dict[tuple[str, str], Dict[str, Any]],
+) -> bool:
+    key = _entry_dedupe_key(entry)
+    if key and key in dedupe:
+        _merge_entry_origin(dedupe[key], source_library)
+        return False
+
+    migrated = dict(entry)
+    original_item_id = str(migrated.get("item_id") or migrated.get("sha256") or migrated.get("rel") or "").strip()
+    item_id = _unique_item_id(existing_ids, original_item_id)
+    if original_item_id and original_item_id != item_id:
+        migrated["source_item_id"] = original_item_id
+    migrated["item_id"] = item_id
+
+    source_path = Path(str(migrated.get("path") or ""))
+    source_exists = source_path.exists()
+    managed_source = bool(migrated.get("managed")) or (source_exists and _is_managed_source_from_library(source_slug, source_path))
+    fallback_content = "" if source_exists else _fallback_source_content(source_slug, migrated)
+
+    if managed_source or fallback_content:
+        suffix = source_path.suffix or ".md"
+        target_path = _managed_source_path(GLOBAL_LIBRARY_SLUG, item_id, suffix)
+        if source_exists:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+        elif fallback_content.strip():
+            _write_text_atomic(target_path, fallback_content)
+        else:
+            return False
+        rel = _unique_rel(existing_rels, _managed_stage_rel(item_id, suffix))
+        _ensure_stage_link(GLOBAL_LIBRARY_SLUG, target_path, rel)
+        migrated.update({
+            "path": str(target_path),
+            "rel": rel,
+            "managed": True,
+            "sha256": _sha256_file(target_path),
+            "size": target_path.stat().st_size,
+        })
+        if fallback_content and not source_exists:
+            migrated["migration_content_fallback"] = True
+    else:
+        if not source_exists:
+            return False
+        rel = _unique_rel(existing_rels, str(migrated.get("rel") or _stage_name(str(migrated.get("sha256") or ""), source_path)))
+        _ensure_stage_link(GLOBAL_LIBRARY_SLUG, source_path, rel)
+        migrated["rel"] = rel
+
+    _merge_entry_origin(migrated, source_library)
+    migrated["migrated_at"] = now_iso()
+    migrated["sync_status"] = "pending"
+    migrated.pop("sync_error", None)
+    migrated.pop("synced_at", None)
+    global_files.append(migrated)
+    if key:
+        dedupe[key] = migrated
+    return True
+
+
+def ensure_global_knowledge_store() -> Dict[str, Any]:
+    global_data = _ensure_global_library()
+    source_dirs = _source_library_dirs()
+    if not source_dirs:
+        return global_data
+
+    global_data = read_library(GLOBAL_LIBRARY_SLUG)
+    global_files = list(global_data.get("files", []))
+    existing_ids, existing_rels, dedupe = _existing_entry_indexes(global_files)
+    changed = False
+
+    for path in source_dirs:
+        try:
+            source_library = _read_json(path / "library.json")
+            source_slug = str(source_library.get("slug") or path.name)
+            source_library["slug"] = source_slug
+            source_library.setdefault("name", path.name)
+            for entry in source_library.get("files", []):
+                if isinstance(entry, dict):
+                    changed = _migrate_entry_to_global(
+                        source_slug,
+                        source_library,
+                        entry,
+                        global_files,
+                        existing_ids,
+                        existing_rels,
+                        dedupe,
+                    ) or changed
+            _archive_library_dir(path)
+        except Exception as exc:
+            print(f"[knowledge] failed to migrate library {path.name}: {exc}")
+
+    if changed:
+        global_data["files"] = global_files
+        global_data["updated_at"] = now_iso()
+        _set_pending_prepare_signature(global_data, _prepare_signature(global_files))
+        write_library(GLOBAL_LIBRARY_SLUG, global_data)
+        _cleanup_generated_artifacts(GLOBAL_LIBRARY_SLUG)
+    return read_library(GLOBAL_LIBRARY_SLUG)
+
+
 def _mark_entry_pending(entry: Dict[str, Any]) -> None:
     entry["sync_status"] = "pending"
     entry.pop("sync_error", None)

@@ -508,13 +508,11 @@ def _trim(value: Any, limit: int) -> str:
     return text_value[:limit].rstrip() + "..."
 
 
-def _dedupe_hits(candidates: Sequence[Dict[str, Any]], top_k: int, *, minimum_score: float) -> List[Dict[str, Any]]:
+def _dedupe_hits(candidates: Sequence[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
     seen = set()
     ordered = sorted(candidates, key=lambda item: (float(item.get("_score") or 0), int(item.get("assistant_message_row_id") or 0)), reverse=True)
     hits: List[Dict[str, Any]] = []
     for item in ordered:
-        if float(item.get("_score") or 0) < minimum_score:
-            continue
         key = item.get("turn_key") or (item.get("session_id"), item.get("assistant_message_id"))
         if key in seen:
             continue
@@ -617,8 +615,9 @@ def build_chat_memory_context(
     exclude_session_id: Optional[str] = None,
     top_k: int = DEFAULT_MEMORY_TOP_K,
     context_character_budget: int = DEFAULT_MEMORY_CONTEXT_CHARS,
+    mode: str = "search",
 ) -> Dict[str, Any]:
-    if _LAST_CONVERSATION_RE.search(str(prompt or "")):
+    if mode == "recent":
         hits = _load_previous_session_hits(db, exclude_session_id=exclude_session_id, limit=max(1, top_k))
         return _context_payload_from_hits(
             hits,
@@ -629,11 +628,9 @@ def build_chat_memory_context(
             ),
         )
 
-    core_tokens = _query_tokens(prompt)
-    if not core_tokens:
+    tokens = _query_tokens(prompt)
+    if not tokens:
         return {"context_block": "", "sources": [], "hits": []}
-    tokens = _expanded_query_tokens(core_tokens)
-    minimum_score = _minimum_memory_score(len(core_tokens))
 
     candidate_limit = max(80, top_k * 24)
     candidates = _load_fts_candidates(
@@ -641,7 +638,6 @@ def build_chat_memory_context(
         tokens,
         exclude_session_id=exclude_session_id,
         limit=candidate_limit,
-        query_token_count=len(core_tokens),
     )
     if len(candidates) < top_k:
         candidates.extend(_load_table_candidates(
@@ -649,7 +645,6 @@ def build_chat_memory_context(
             tokens,
             exclude_session_id=exclude_session_id,
             limit=max(300, candidate_limit),
-            query_token_count=len(core_tokens),
         ))
     if len(candidates) < top_k:
         candidates.extend(_load_live_candidates(
@@ -657,10 +652,9 @@ def build_chat_memory_context(
             tokens,
             exclude_session_id=exclude_session_id,
             limit=1500,
-            query_token_count=len(core_tokens),
         ))
 
-    hits = _dedupe_hits(candidates, max(1, top_k), minimum_score=minimum_score)
+    hits = _dedupe_hits(candidates, max(1, top_k))
     return _context_payload_from_hits(
         hits,
         context_character_budget=context_character_budget,

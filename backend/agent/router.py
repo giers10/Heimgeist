@@ -76,7 +76,7 @@ def _workflow_result(item: Dict[str, Any], *, confidence: float, reason: str, in
 
 
 def _capability_enabled(capability: str, *, library_slug: Optional[str], web_search_enabled: bool, has_attachments: bool) -> bool:
-    if capability in {"chat"}:
+    if capability in {"chat", "chat_memory"}:
         return True
     if capability == "web":
         return True

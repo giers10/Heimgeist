@@ -18,10 +18,8 @@ export async function prepareStartupModels(apiBase) {
   return expectBackendJson(response)
 }
 
-export async function fetchLocalLibraryContext(apiBase, slug, prompt, signal) {
-  if (!slug) return { contextBlock: null, sources: [] }
-
-  const response = await fetch(`${apiBase}/libraries/${slug}/context`, {
+export async function fetchLocalLibraryContext(apiBase, prompt, signal) {
+  const response = await fetch(`${apiBase}/knowledge/context`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,

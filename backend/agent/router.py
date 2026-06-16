@@ -154,7 +154,7 @@ def _fast_path(
     if library_slug and mentions_knowledge:
         knowledge = _manifest_by_slug(manifests, "knowledge-answer")
         if knowledge:
-            return _workflow_result(knowledge, confidence=0.95, reason="The request explicitly refers to the selected knowledge database.")
+            return _workflow_result(knowledge, confidence=0.95, reason="The request explicitly refers to local knowledge.")
 
     if _GREETING_RE.match(text):
         direct = _manifest_by_slug(manifests, "input-output")

@@ -84,7 +84,7 @@ async def knowledge_search_handler(arguments: Dict[str, Any], context: ToolExecu
 def register_knowledge_tools(registry: NativeToolProvider) -> None:
     registry.register(ToolDefinition(
         name="heimgeist.knowledge_search",
-        description="Retrieve structured evidence from an indexed Heimgeist knowledge library.",
+        description="Retrieve structured evidence from Heimgeist's indexed local Knowledge store.",
         input_schema={
             "type": "object",
             "properties": {

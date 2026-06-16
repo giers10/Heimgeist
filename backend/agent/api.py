@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import models as chat_models
-from ..chat_memory import build_chat_memory_context, safe_sync_chat_memory_for_session
+from ..chat_memory import safe_sync_chat_memory_for_session
 from ..database import Base, SessionLocal, engine
 from .events import EventWriter
 from .models import (
@@ -353,24 +353,9 @@ def delete_workflow(workflow_id: str):
         db.close()
 
 
-def _memory_context_for_request(db: Session, request: WorkflowRunRequest) -> Dict[str, Any]:
-    try:
-        return build_chat_memory_context(
-            db,
-            request.message,
-            exclude_session_id=request.session_id,
-            top_k=4,
-            context_character_budget=3600,
-        )
-    except Exception as exc:
-        print("[chat-memory] workflow retrieval failed:", exc)
-        return {"context_block": "", "sources": [], "hits": []}
-
-
 async def _select_for_run(
     db: Session,
     request: WorkflowRunRequest,
-    memory_context: Optional[Dict[str, Any]] = None,
 ) -> tuple[WorkflowDefinition, Optional[Dict[str, Any]]]:
     router_result = None
     if request.selection_mode == "automatic":
@@ -401,8 +386,7 @@ async def _select_for_run(
 async def create_workflow_run(request: WorkflowRunRequest):
     db = SessionLocal()
     try:
-        memory_context = _memory_context_for_request(db, request)
-        workflow, router_result = await _select_for_run(db, request, memory_context)
+        workflow, router_result = await _select_for_run(db, request)
         revision_id = request.workflow_revision_id or workflow.current_revision_id
         if (
             request.workflow_revision_id
@@ -496,7 +480,6 @@ async def create_workflow_run(request: WorkflowRunRequest):
         sample_inputs.setdefault("prompt", request.message)
         sample_inputs.setdefault("session_id", request.session_id)
         web_search_query, web_search_queries = _resolve_web_search_inputs(sample_inputs, request.message)
-        memory_blocks = [memory_context] if memory_context.get("context_block") else []
         try:
             required_capabilities = set(json.loads(workflow.required_capabilities_json or "[]"))
         except Exception:
@@ -513,7 +496,7 @@ async def create_workflow_run(request: WorkflowRunRequest):
             "messages": messages,
             "attachments": run_attachments,
             "generation_options": request.generation_options,
-            "context_blocks": memory_blocks,
+            "context_blocks": [],
             "manual_library_enabled": bool(request.library_slug),
             "web_search_enabled": request.web_search_enabled,
             "compatibility_rag_enabled": bool(request.library_slug and "rag" not in required_capabilities),

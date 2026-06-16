@@ -631,9 +631,10 @@ def respond_to_confirmation(run_id: str, confirmation_id: str, request: Confirma
 async def route_workflow(request: RouterSelectRequest):
     db = SessionLocal()
     try:
+        ensure_global_knowledge_store()
         return await select_workflow(
             db, message=request.message, recent_messages=request.recent_messages[-4:], attachments=request.attachments,
-            library_slug=request.library_slug, router_model=request.model, chat_model=request.chat_model,
+            library_slug=request.library_slug or global_library_slug(), router_model=request.model, chat_model=request.chat_model,
             web_search_enabled=request.web_search_enabled,
             confidence_threshold=request.confidence_threshold,
         )

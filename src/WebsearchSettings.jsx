@@ -70,7 +70,7 @@ return (
         onChange={handleBackendUrlChange}
         placeholder={`e.g., ${DEFAULT_BACKEND_API_URL}`}
       />
-      <p className="setting-description">Internal UI requests like chats, sessions, and databases go to this URL.</p>
+      <p className="setting-description">Internal UI requests like chats, sessions, and Knowledge go to this URL.</p>
     </div>
 
     <div className="setting-section">

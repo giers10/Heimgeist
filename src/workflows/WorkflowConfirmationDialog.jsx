@@ -8,7 +8,7 @@ export default function WorkflowConfirmationDialog({ confirmation, onRespond }) 
       <div className="workflow-confirmation-dialog">
         <h3>Confirm workflow action</h3>
         <p>This workflow wants to run <code>{confirmation.payload?.tool}</code>.</p>
-        {args.library_slug && <p><strong>Destination:</strong> {args.library_slug}</p>}
+        {args.library_slug && <p><strong>Destination:</strong> Knowledge</p>}
         {args.title && <p><strong>Title:</strong> {args.title}</p>}
         {args.message_id && <p><strong>Message:</strong> {args.message_id}</p>}
         {args.url && <p><strong>URL:</strong> {args.url}</p>}

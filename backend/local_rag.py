@@ -41,6 +41,9 @@ router = APIRouter(tags=["local-rag"])
 
 LIB_ROOT = library_root()
 
+GLOBAL_LIBRARY_SLUG = "_global"
+GLOBAL_LIBRARY_NAME = "Knowledge"
+MIGRATED_LIBRARY_ARCHIVE = "_migrated_libraries"
 RAW_CORPUS_PROFILE = "per-file-default-v1"
 PREPARE_PROFILE = "selective-enrich-v2"
 DEFAULT_EMBED_MODEL = DEFAULT_EMBED_MODEL_SETTING
@@ -143,6 +146,10 @@ def lib_dir(slug: str) -> Path:
 
 def lib_json(slug: str) -> Path:
     return lib_dir(slug) / "library.json"
+
+
+def global_library_slug() -> str:
+    return GLOBAL_LIBRARY_SLUG
 
 
 def stage_dir(slug: str) -> Path:

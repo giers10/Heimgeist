@@ -62,6 +62,48 @@ def _collect_sources(blocks: List[Any]) -> List[Any]:
     return sources
 
 
+def _model_error_summary(exc: Exception) -> str:
+    message = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+    return f"{type(exc).__name__}: {message}"
+
+
+def _fallback_content_from_context(model: str, exc: Exception, context_blocks: List[Any], context_text: str) -> str:
+    sources = _collect_sources(context_blocks)
+    if not sources and not context_text.strip():
+        return ""
+
+    lines = [
+        f"The selected chat model failed before it could compose an answer ({_model_error_summary(exc)}).",
+        "Retrieved context is still available:",
+    ]
+    if sources:
+        for index, source in enumerate(sources[:6], 1):
+            if isinstance(source, dict):
+                title = str(source.get("title") or source.get("url") or f"Source {index}").strip()
+                snippet = str(source.get("snippet") or source.get("text") or "").strip()
+                url = str(source.get("url") or "").strip()
+                lines.append(f"[{index}] {title}")
+                if snippet:
+                    lines.append(snippet[:900])
+                if url:
+                    lines.append(f"Source: {url}")
+            else:
+                lines.append(f"[{index}] {source}")
+        return "\n\n".join(lines)
+
+    cleaned_context = (
+        context_text
+        .replace("<websearch_context>", "")
+        .replace("</websearch_context>", "")
+        .replace("<chat_memory_context>", "")
+        .replace("</chat_memory_context>", "")
+        .strip()
+    )
+    if cleaned_context:
+        lines.append(cleaned_context[:5000])
+    return "\n\n".join(lines)
+
+
 def _drop_superseded_trailing_user_rows(rows: List[Any]) -> List[Any]:
     if not rows or getattr(rows[-1], "role", None) != "user":
         return rows
@@ -85,7 +127,8 @@ def _append_context_to_last_user_message(messages: List[Dict[str, Any]], context
 
 async def chat_handler(arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
     messages = [dict(item) for item in arguments.get("messages") or []]
-    context_text = _context_text(arguments.get("context_blocks") or [])
+    context_blocks = arguments.get("context_blocks") or []
+    context_text = _context_text(context_blocks)
     context_applied = False
     if context.session_id:
         db = context.db_factory()
@@ -124,25 +167,32 @@ async def chat_handler(arguments: Dict[str, Any], context: ToolExecutionContext)
     full_content = ""
     full_thinking = ""
     usage: Dict[str, int] = {}
-    async for chunk in chat_stream_typed(
-        arguments["model"],
-        messages,
-        options=arguments.get("generation_options") or {},
-        think=bool(arguments.get("reasoning")),
-        cancellation_event=context.cancellation_event,
-    ):
-        if chunk.thinking:
-            full_thinking += chunk.thinking
-            if context.show_thinking:
-                await context.emit("model_thinking", {"text": chunk.thinking})
-        if chunk.content:
-            full_content += chunk.content
-            await context.emit("model_token", {"text": chunk.content})
-        if chunk.done:
-            usage = _usage_dict(chunk.usage)
+    try:
+        async for chunk in chat_stream_typed(
+            arguments["model"],
+            messages,
+            options=arguments.get("generation_options") or {},
+            think=bool(arguments.get("reasoning")),
+            cancellation_event=context.cancellation_event,
+        ):
+            if chunk.thinking:
+                full_thinking += chunk.thinking
+                if context.show_thinking:
+                    await context.emit("model_thinking", {"text": chunk.thinking})
+            if chunk.content:
+                full_content += chunk.content
+                await context.emit("model_token", {"text": chunk.content})
+            if chunk.done:
+                usage = _usage_dict(chunk.usage)
+    except Exception as exc:
+        fallback_content = _fallback_content_from_context(arguments["model"], exc, context_blocks, context_text)
+        if not fallback_content:
+            raise
+        full_content = fallback_content
+        await context.emit("model_token", {"text": full_content})
     return {
         "content": full_content,
-        "sources": _collect_sources(arguments.get("context_blocks") or []),
+        "sources": _collect_sources(context_blocks),
         "usage": usage,
         "thinking_available": bool(full_thinking),
     }

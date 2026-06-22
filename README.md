@@ -40,7 +40,6 @@ Packaged Tauri builds launch the bundled backend with app-managed data paths so 
 
 Requirements:
 
-- Python 3.13
 - Ollama running locally
 - Optional: SearXNG on `http://127.0.0.1:8888`
 
@@ -50,7 +49,17 @@ Quick start:
 ./run.sh
 ```
 
-This creates or refreshes `backend/.venv`, installs Python dependencies, installs npm dependencies, and starts the dev stack. If Node.js 18+ and npm are missing, `run.sh` downloads the current Node.js 22 LTS binary for Linux or macOS into the user cache and verifies its SHA-256 checksum. Set `HEIMGEIST_NODE_MAJOR` or `HEIMGEIST_NODE_DIR` to override that bootstrap.
+This bootstraps the development environment and starts the dev stack. On a fresh machine it installs:
+
+- the native Tauri prerequisites through `pacman` on Arch/SteamOS or `apt-get` on Debian/Ubuntu
+- stable Rust and Cargo through `rustup`
+- Python 3.13 through `uv`
+- Node.js 22 LTS and npm from the official Node.js binaries
+- the project's Python and npm dependencies
+
+SteamOS temporarily requires a writable root filesystem while native packages are installed. `run.sh` disables the read-only mode only around `pacman`, restores it afterward, and may ask for the user's sudo password. SteamOS system updates can remove manually installed system packages; rerunning `./run.sh` restores any missing prerequisites.
+
+Downloads and package installation are skipped when usable dependencies already exist. Node.js archives are verified with their published SHA-256 checksum. Use `HEIMGEIST_BOOTSTRAP_ONLY=1 ./run.sh` to install/check dependencies without launching Heimgeist, or `HEIMGEIST_SKIP_SYSTEM_DEPS=1 ./run.sh` when native Tauri dependencies are managed externally. `HEIMGEIST_NODE_MAJOR`, `HEIMGEIST_NODE_DIR`, `HEIMGEIST_TOOL_BIN_DIR`, `CARGO_HOME`, `RUSTUP_HOME`, and `PYTHON_BIN` provide explicit runtime overrides.
 
 On Linux `x86_64`, `run.sh` now selects a PyTorch flavor before installing `openai-whisper`:
 

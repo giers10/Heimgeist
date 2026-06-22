@@ -644,4 +644,9 @@ if [ "$NEED_NODE_DEPS_INSTALL" -eq 1 ]; then
   write_state "$NODE_DEPS_STATE_FILE" package.json package-lock.json
 fi
 
+if [ "$HEIMGEIST_BOOTSTRAP_ONLY" = "1" ]; then
+  echo "Heimgeist development dependencies are ready."
+  exit 0
+fi
+
 npm run dev

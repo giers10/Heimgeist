@@ -72,7 +72,7 @@ prepare_steamos_package_install() {
     return
   fi
 
-  readonly_status="$(as_root steamos-readonly status 2>/dev/null || true)"
+  readonly_status="$(as_root steamos-readonly status || true)"
   if printf '%s\n' "$readonly_status" | grep -Eqi '(^|[[:space:]])enable(d)?($|[[:space:]])'; then
     echo "Temporarily disabling the SteamOS read-only filesystem"
     as_root steamos-readonly disable

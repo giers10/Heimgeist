@@ -4,6 +4,10 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+PYTHON_BIN_WAS_SET=0
+if [ -n "${PYTHON_BIN:-}" ]; then
+  PYTHON_BIN_WAS_SET=1
+fi
 PYTHON_BIN="${PYTHON_BIN:-python3.13}"
 VENV_DIR="backend/.venv"
 TORCH_FLAVOR_FILE="$VENV_DIR/.heimgeist-torch-flavor"
@@ -12,9 +16,169 @@ PYTHON_DEPS_STATE_FILE="$VENV_DIR/.heimgeist-python-deps-state"
 NODE_DEPS_STATE_FILE="node_modules/.heimgeist-node-deps-state"
 HEIMGEIST_NODE_MAJOR="${HEIMGEIST_NODE_MAJOR:-22}"
 HEIMGEIST_NODE_DIR="${HEIMGEIST_NODE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/heimgeist/node-v$HEIMGEIST_NODE_MAJOR}"
+HEIMGEIST_TOOL_BIN_DIR="${HEIMGEIST_TOOL_BIN_DIR:-$HOME/.local/bin}"
+HEIMGEIST_SKIP_SYSTEM_DEPS="${HEIMGEIST_SKIP_SYSTEM_DEPS:-0}"
+HEIMGEIST_BOOTSTRAP_ONLY="${HEIMGEIST_BOOTSTRAP_ONLY:-0}"
 HEIMGEIST_TORCH_FLAVOR="${HEIMGEIST_TORCH_FLAVOR:-auto}"
 HEIMGEIST_TORCH_INDEX_URL="${HEIMGEIST_TORCH_INDEX_URL:-}"
 HEIMGEIST_FORCE_BOOTSTRAP="${HEIMGEIST_FORCE_BOOTSTRAP:-0}"
+CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
+PATH="$HEIMGEIST_TOOL_BIN_DIR:$CARGO_HOME/bin:$PATH"
+export CARGO_HOME RUSTUP_HOME PATH
+
+as_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+    return
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Installing native build dependencies requires root access, but sudo is unavailable." >&2
+    exit 1
+  fi
+  sudo "$@"
+}
+
+is_steamos() {
+  [ -r /etc/os-release ] \
+    && grep -Eiq '(^ID=steamos$|^NAME=.*SteamOS|^PRETTY_NAME=.*SteamOS)' /etc/os-release
+}
+
+linux_native_deps_usable() {
+  command -v cc >/dev/null 2>&1 \
+    && command -v file >/dev/null 2>&1 \
+    && command -v pkg-config >/dev/null 2>&1 \
+    && pkg-config --exists webkit2gtk-4.1 gtk+-3.0 openssl librsvg-2.0
+}
+
+STEAMOS_RESTORE_READONLY=0
+
+restore_steamos_readonly() {
+  if [ "$STEAMOS_RESTORE_READONLY" -eq 1 ]; then
+    echo "Re-enabling the SteamOS read-only filesystem"
+    as_root steamos-readonly enable
+    STEAMOS_RESTORE_READONLY=0
+  fi
+}
+
+prepare_steamos_package_install() {
+  if ! is_steamos || ! command -v steamos-readonly >/dev/null 2>&1; then
+    return
+  fi
+
+  readonly_status="$(steamos-readonly status 2>/dev/null || true)"
+  if printf '%s\n' "$readonly_status" | grep -qi enabled; then
+    echo "Temporarily disabling the SteamOS read-only filesystem"
+    as_root steamos-readonly disable
+    STEAMOS_RESTORE_READONLY=1
+  fi
+}
+
+install_arch_native_deps() {
+  set -- \
+    webkit2gtk-4.1 \
+    base-devel \
+    curl \
+    wget \
+    file \
+    openssl \
+    appmenu-gtk-module \
+    libappindicator-gtk3 \
+    librsvg \
+    xdotool
+
+  missing_packages=""
+  for package_name in "$@"; do
+    if ! pacman -Q "$package_name" >/dev/null 2>&1; then
+      missing_packages="$missing_packages $package_name"
+    fi
+  done
+  if [ -z "$missing_packages" ]; then
+    return
+  fi
+
+  echo "Installing missing Tauri/Arch packages:$missing_packages"
+  echo "SteamOS/Arch may ask for your sudo password."
+  prepare_steamos_package_install
+  trap 'restore_steamos_readonly' EXIT
+  trap 'restore_steamos_readonly; exit 130' HUP INT TERM
+
+  install_status=0
+  if is_steamos; then
+    # SteamOS system updates own the base image, so only install missing packages.
+    as_root pacman -S --needed --noconfirm $missing_packages || install_status=$?
+  else
+    # Arch requires a full upgrade when synchronizing/installing packages.
+    as_root pacman -Syu --needed --noconfirm $missing_packages || install_status=$?
+  fi
+
+  restore_steamos_readonly
+  trap - EXIT HUP INT TERM
+  return "$install_status"
+}
+
+install_debian_native_deps() {
+  set -- \
+    libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev \
+    pkg-config
+
+  missing_packages=""
+  for package_name in "$@"; do
+    if ! dpkg-query -W -f='${Status}' "$package_name" 2>/dev/null | grep -q 'ok installed'; then
+      missing_packages="$missing_packages $package_name"
+    fi
+  done
+  if [ -z "$missing_packages" ]; then
+    return
+  fi
+
+  echo "Installing missing Tauri/Debian packages:$missing_packages"
+  as_root apt-get update
+  as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y $missing_packages
+}
+
+ensure_native_build_dependencies() {
+  if [ "$HEIMGEIST_SKIP_SYSTEM_DEPS" = "1" ]; then
+    return
+  fi
+
+  case "$(uname -s)" in
+    Darwin)
+      if ! xcode-select -p >/dev/null 2>&1; then
+        echo "Installing the Xcode Command Line Tools required by Tauri."
+        xcode-select --install || true
+        echo "Complete the Xcode Command Line Tools installation, then run ./run.sh again." >&2
+        exit 1
+      fi
+      ;;
+    Linux)
+      if linux_native_deps_usable; then
+        return
+      fi
+      if command -v pacman >/dev/null 2>&1; then
+        install_arch_native_deps
+      elif command -v apt-get >/dev/null 2>&1 && command -v dpkg-query >/dev/null 2>&1; then
+        install_debian_native_deps
+      else
+        echo "Native dependency installation currently supports Arch/SteamOS and Debian/Ubuntu." >&2
+        echo "Install your distribution's Tauri 2 system prerequisites, then run ./run.sh again." >&2
+        exit 1
+      fi
+      if ! linux_native_deps_usable; then
+        echo "The native Tauri dependencies are still incomplete after package installation." >&2
+        exit 1
+      fi
+      ;;
+  esac
+}
 
 node_runtime_usable() {
   command -v node >/dev/null 2>&1 \

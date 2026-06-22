@@ -199,7 +199,7 @@ download_file() {
     return
   fi
 
-  echo "Node.js is missing and neither curl nor wget is available to download it." >&2
+  echo "A required tool is missing and neither curl nor wget is available to download it." >&2
   echo "Install curl or wget, then run ./run.sh again." >&2
   exit 1
 }
@@ -218,6 +218,98 @@ file_sha256() {
 
   echo "Cannot verify the Node.js download because sha256sum/shasum is unavailable." >&2
   exit 1
+}
+
+install_uv() {
+  uv_tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/heimgeist-uv.XXXXXX")"
+  trap 'rm -rf "$uv_tmp_dir"' EXIT HUP INT TERM
+
+  echo "Python 3.13 is missing; installing the uv runtime manager locally"
+  download_file "https://astral.sh/uv/install.sh" "$uv_tmp_dir/install.sh"
+  mkdir -p "$HEIMGEIST_TOOL_BIN_DIR"
+  UV_UNMANAGED_INSTALL="$HEIMGEIST_TOOL_BIN_DIR" UV_NO_MODIFY_PATH=1 sh "$uv_tmp_dir/install.sh"
+
+  rm -rf "$uv_tmp_dir"
+  trap - EXIT HUP INT TERM
+}
+
+ensure_uv() {
+  if command -v uv >/dev/null 2>&1; then
+    return
+  fi
+
+  install_uv
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "The local uv installation did not provide an executable." >&2
+    exit 1
+  fi
+}
+
+python_runtime_usable() {
+  command -v "$PYTHON_BIN" >/dev/null 2>&1 \
+    && "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' >/dev/null 2>&1
+}
+
+ensure_python_runtime() {
+  if python_runtime_usable; then
+    return
+  fi
+  if [ "$PYTHON_BIN_WAS_SET" -eq 1 ]; then
+    echo "PYTHON_BIN '$PYTHON_BIN' is unavailable or is not Python 3.13." >&2
+    exit 1
+  fi
+
+  ensure_uv
+  echo "Installing Python 3.13 locally"
+  uv python install 3.13
+  PYTHON_BIN="$(uv python find 3.13)"
+
+  if ! python_runtime_usable; then
+    echo "The local Python 3.13 installation is incomplete." >&2
+    exit 1
+  fi
+}
+
+rust_runtime_usable() {
+  command -v cargo >/dev/null 2>&1 \
+    && command -v rustc >/dev/null 2>&1 \
+    && rustc --version | awk '
+      {
+        split($2, version, ".")
+        exit !((version[1] > 1) || (version[1] == 1 && version[2] >= 77))
+      }
+    '
+}
+
+install_rustup() {
+  rustup_tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/heimgeist-rustup.XXXXXX")"
+  trap 'rm -rf "$rustup_tmp_dir"' EXIT HUP INT TERM
+
+  echo "Rust/Cargo 1.77+ was not found; installing the stable Rust toolchain locally"
+  download_file "https://sh.rustup.rs" "$rustup_tmp_dir/rustup-init.sh"
+  sh "$rustup_tmp_dir/rustup-init.sh" -y --profile minimal --default-toolchain stable --no-modify-path
+
+  rm -rf "$rustup_tmp_dir"
+  trap - EXIT HUP INT TERM
+}
+
+ensure_rust_runtime() {
+  if rust_runtime_usable; then
+    return
+  fi
+
+  if command -v rustup >/dev/null 2>&1; then
+    echo "Installing/updating the stable Rust toolchain"
+    rustup toolchain install stable --profile minimal
+    rustup default stable
+  else
+    install_rustup
+  fi
+
+  if ! rust_runtime_usable; then
+    echo "The Rust installation is incomplete; cargo and rustc 1.77+ are required." >&2
+    exit 1
+  fi
 }
 
 install_project_node() {
@@ -454,12 +546,10 @@ install_selected_torch() {
   esac
 }
 
+ensure_native_build_dependencies
 ensure_node_runtime
-
-if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
-  echo "Python 3.13 is required. Set PYTHON_BIN to a Python 3.13 executable if needed." >&2
-  exit 1
-fi
+ensure_python_runtime
+ensure_rust_runtime
 
 TORCH_FLAVOR="$(resolve_torch_flavor)"
 RECREATE_VENV=0

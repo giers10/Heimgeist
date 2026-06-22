@@ -36,6 +36,12 @@ as_root() {
     echo "Installing native build dependencies requires root access, but sudo is unavailable." >&2
     exit 1
   fi
+  if ! sudo -v; then
+    if is_steamos; then
+      echo "SteamOS needs a local user password for sudo. Run 'passwd', then rerun ./run.sh." >&2
+    fi
+    exit 1
+  fi
   sudo "$@"
 }
 

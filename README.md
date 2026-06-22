@@ -40,7 +40,6 @@ Packaged Tauri builds launch the bundled backend with app-managed data paths so 
 
 Requirements:
 
-- Node.js 18+
 - Python 3.13
 - Ollama running locally
 - Optional: SearXNG on `http://127.0.0.1:8888`
@@ -51,7 +50,7 @@ Quick start:
 ./run.sh
 ```
 
-This creates or refreshes `backend/.venv`, installs Python dependencies, installs npm dependencies, and starts the dev stack.
+This creates or refreshes `backend/.venv`, installs Python dependencies, installs npm dependencies, and starts the dev stack. If Node.js 18+ and npm are missing, `run.sh` downloads the current Node.js 22 LTS binary for Linux or macOS into the user cache and verifies its SHA-256 checksum. Set `HEIMGEIST_NODE_MAJOR` or `HEIMGEIST_NODE_DIR` to override that bootstrap.
 
 On Linux `x86_64`, `run.sh` now selects a PyTorch flavor before installing `openai-whisper`:
 

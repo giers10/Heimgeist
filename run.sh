@@ -19,6 +19,7 @@ HEIMGEIST_NODE_DIR="${HEIMGEIST_NODE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/heimge
 HEIMGEIST_TOOL_BIN_DIR="${HEIMGEIST_TOOL_BIN_DIR:-$HOME/.local/bin}"
 HEIMGEIST_SKIP_SYSTEM_DEPS="${HEIMGEIST_SKIP_SYSTEM_DEPS:-0}"
 HEIMGEIST_BOOTSTRAP_ONLY="${HEIMGEIST_BOOTSTRAP_ONLY:-0}"
+HEIMGEIST_STEAMOS_DEVMODE="${HEIMGEIST_STEAMOS_DEVMODE:-auto}"
 HEIMGEIST_TORCH_FLAVOR="${HEIMGEIST_TORCH_FLAVOR:-auto}"
 HEIMGEIST_TORCH_INDEX_URL="${HEIMGEIST_TORCH_INDEX_URL:-}"
 HEIMGEIST_FORCE_BOOTSTRAP="${HEIMGEIST_FORCE_BOOTSTRAP:-0}"
@@ -80,6 +81,72 @@ prepare_steamos_package_install() {
   fi
 }
 
+pacman_keyring_names() {
+  for keyring_file in /usr/share/pacman/keyrings/*.gpg; do
+    [ -e "$keyring_file" ] || continue
+    keyring_name="$(basename "$keyring_file" .gpg)"
+    printf ' %s' "$keyring_name"
+  done
+}
+
+ensure_steamos_pacman_keyring() {
+  if ! is_steamos; then
+    return
+  fi
+  if ! command -v pacman-key >/dev/null 2>&1; then
+    echo "SteamOS package signing cannot be repaired because pacman-key is unavailable." >&2
+    exit 1
+  fi
+
+  echo "Initializing and populating the SteamOS pacman keyring"
+  as_root pacman-key --init
+
+  keyring_names="$(pacman_keyring_names)"
+  if [ -n "$keyring_names" ]; then
+    # shellcheck disable=SC2086
+    as_root pacman-key --populate $keyring_names
+  else
+    as_root pacman-key --populate
+  fi
+}
+
+run_steamos_devmode_bootstrap() {
+  if ! is_steamos || [ "$HEIMGEIST_STEAMOS_DEVMODE" = "0" ]; then
+    return 1
+  fi
+  if ! command -v steamos-devmode >/dev/null 2>&1; then
+    return 1
+  fi
+
+  echo "Pacman still cannot install packages; running SteamOS devmode bootstrap"
+  as_root steamos-devmode enable
+}
+
+install_pacman_packages() {
+  if as_root pacman "$@"; then
+    return
+  fi
+
+  if ! is_steamos; then
+    return 1
+  fi
+
+  echo "Pacman failed on SteamOS. Refreshing package-signing trust and retrying once."
+  ensure_steamos_pacman_keyring
+  if as_root pacman "$@"; then
+    return
+  fi
+
+  if run_steamos_devmode_bootstrap && as_root pacman "$@"; then
+    return
+  fi
+
+  echo "SteamOS pacman package installation still failed." >&2
+  echo "This is usually a broken SteamOS pacman keyring, not a corrupt Heimgeist download." >&2
+  echo "Try running 'sudo steamos-devmode enable' manually, then rerun ./run.sh." >&2
+  return 1
+}
+
 install_arch_native_deps() {
   set -- \
     webkit2gtk-4.1 \
@@ -108,14 +175,15 @@ install_arch_native_deps() {
   prepare_steamos_package_install
   trap 'restore_steamos_readonly' EXIT
   trap 'restore_steamos_readonly; exit 130' HUP INT TERM
+  ensure_steamos_pacman_keyring
 
   install_status=0
   if is_steamos; then
     # SteamOS system updates own the base image, so only install missing packages.
-    as_root pacman -S --needed --noconfirm $missing_packages || install_status=$?
+    install_pacman_packages -S --needed --noconfirm $missing_packages || install_status=$?
   else
     # Arch requires a full upgrade when synchronizing/installing packages.
-    as_root pacman -Syu --needed --noconfirm $missing_packages || install_status=$?
+    install_pacman_packages -Syu --needed --noconfirm $missing_packages || install_status=$?
   fi
 
   restore_steamos_readonly

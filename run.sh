@@ -18,6 +18,7 @@ HEIMGEIST_NODE_MAJOR="${HEIMGEIST_NODE_MAJOR:-22}"
 HEIMGEIST_NODE_DIR="${HEIMGEIST_NODE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/heimgeist/node-v$HEIMGEIST_NODE_MAJOR}"
 HEIMGEIST_TOOL_BIN_DIR="${HEIMGEIST_TOOL_BIN_DIR:-$HOME/.local/bin}"
 HEIMGEIST_SKIP_SYSTEM_DEPS="${HEIMGEIST_SKIP_SYSTEM_DEPS:-0}"
+HEIMGEIST_STRICT_SYSTEM_DEPS="${HEIMGEIST_STRICT_SYSTEM_DEPS:-0}"
 HEIMGEIST_BOOTSTRAP_ONLY="${HEIMGEIST_BOOTSTRAP_ONLY:-0}"
 HEIMGEIST_STEAMOS_DEVMODE="${HEIMGEIST_STEAMOS_DEVMODE:-auto}"
 HEIMGEIST_TORCH_FLAVOR="${HEIMGEIST_TORCH_FLAVOR:-auto}"
@@ -56,6 +57,41 @@ linux_native_deps_usable() {
     && command -v file >/dev/null 2>&1 \
     && command -v pkg-config >/dev/null 2>&1 \
     && pkg-config --exists webkit2gtk-4.1 gtk+-3.0 openssl librsvg-2.0
+}
+
+print_native_dependency_report() {
+  echo "Native dependency preflight report:" >&2
+  for command_name in cc file pkg-config; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+      echo "  ok: command '$command_name' -> $(command -v "$command_name")" >&2
+    else
+      echo "  missing: command '$command_name'" >&2
+    fi
+  done
+
+  if ! command -v pkg-config >/dev/null 2>&1; then
+    return
+  fi
+
+  for pkg_config_name in webkit2gtk-4.1 gtk+-3.0 openssl librsvg-2.0; do
+    if pkg-config --exists "$pkg_config_name"; then
+      pkg_config_version="$(pkg-config --modversion "$pkg_config_name" 2>/dev/null || true)"
+      echo "  ok: pkg-config '$pkg_config_name' ${pkg_config_version}" >&2
+    else
+      echo "  missing: pkg-config '$pkg_config_name'" >&2
+    fi
+  done
+}
+
+handle_incomplete_native_dependencies() {
+  echo "The native Tauri dependency preflight is still incomplete after package installation." >&2
+  print_native_dependency_report
+  if [ "$HEIMGEIST_STRICT_SYSTEM_DEPS" = "1" ]; then
+    exit 1
+  fi
+
+  echo "Continuing because the package manager reported success." >&2
+  echo "If the Tauri build still fails, rerun with HEIMGEIST_STRICT_SYSTEM_DEPS=1 for a hard preflight failure." >&2
 }
 
 STEAMOS_RESTORE_READONLY=0
@@ -151,6 +187,8 @@ install_arch_native_deps() {
   set -- \
     webkit2gtk-4.1 \
     base-devel \
+    pkgconf \
+    gtk3 \
     curl \
     wget \
     file \
@@ -247,8 +285,7 @@ ensure_native_build_dependencies() {
         exit 1
       fi
       if ! linux_native_deps_usable; then
-        echo "The native Tauri dependencies are still incomplete after package installation." >&2
-        exit 1
+        handle_incomplete_native_dependencies
       fi
       ;;
   esac
